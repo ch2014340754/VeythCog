@@ -14,7 +14,7 @@ D:\VeythCog\
 ├── agent.md           本规范
 ├── VeythCog-V         前端（React 18 + TS + Vite + AntD 5 + Zustand）→ :3000
 ├── VeythCog-C         后端（Spring Boot 3.5 + Java 21 + Spring AI Alibaba）→ :8123/api
-│   ├── vc-code        公共模块（BaseResponse / 异常 / 工具）
+│   ├── vc-core        公共模块（BaseResponse / 异常 / 工具）
 │   ├── vc-chat        对话/认证/知识库/LLM 网关主模块
 │   └── vc-learn       预留
 └── README.md

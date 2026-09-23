@@ -67,7 +67,7 @@
         </dependency>
         <dependency>
             <groupId>com.ai</groupId>
-            <artifactId>vc-code</artifactId>
+            <artifactId>vc-core</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>

@@ -8,10 +8,10 @@
         <artifactId>veythcog-c</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <artifactId>vc-code</artifactId>
+    <artifactId>vc-core</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>vc-code</name>
-    <description>vc-code</description>
+    <name>vc-core</name>
+    <description>vc-core</description>
 
     <properties>
         <java.version>21</java.version>

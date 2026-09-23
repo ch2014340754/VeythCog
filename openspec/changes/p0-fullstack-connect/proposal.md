@@ -48,7 +48,7 @@
 - ❌ 数据库迁移到 PostgreSQL（仅保留脚本）。
 
 ## 影响面
-- 后端：`vc-chat` 新增 security/jjwt/jpa/mysql 依赖、模型与绑定接口、模型路由工厂；`vc-code` 不变。
+- 后端：`vc-chat` 新增 security/jjwt/jpa/mysql 依赖、模型与绑定接口、模型路由工厂；`vc-core` 不变。
 - 前端：`api/auth.ts`、`api/chat.ts`、新增 `api/llm.ts`、`types`、`settingsStore`、`Chat/index.tsx`、`Settings/Providers.tsx`、`.env.local`。
 - 无破坏性改动：本地会话数据仍可用；`settingsStore.providers` 收敛为「后端绑定模型列表 + 当前选中」。
 

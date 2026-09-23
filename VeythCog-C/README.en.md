@@ -20,7 +20,7 @@ D:\demo\
 
 ## Modules
 
-- `vc-code` — common lib: unified response, exception framework, CORS.
+- `vc-core` — common lib: unified response, exception framework, CORS.
 - `vc-chat` — runnable app (port 8123, context-path `/api`): `auth` / `chat` / `llm` / `knowledge` / `health` packages.
 
 ## Quick Start

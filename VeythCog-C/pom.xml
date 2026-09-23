@@ -82,7 +82,7 @@
     </dependencies>
 
     <modules>
-        <module>vc-code</module>
+        <module>vc-core</module>
         <module>vc-chat</module>
         <module>vc-learn</module>
     </modules>

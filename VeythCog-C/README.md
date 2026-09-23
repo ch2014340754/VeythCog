@@ -33,7 +33,7 @@ D:\demo\
 ```
 VeythCog-C/
 ├── pom.xml                # 父工程（聚合 + 依赖管理）
-├── vc-code/               # 公共库：通用响应 / 异常体系 / 跨域
+├── vc-core/               # 公共库：通用响应 / 异常体系 / 跨域
 │   └── com.ai.vccode
 │       ├── common/        #   BaseResponse / ResultUtils / PageRequest
 │       ├── config/        #   CorsConfig

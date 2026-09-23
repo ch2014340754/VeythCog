@@ -13,7 +13,7 @@
 ## 后端（vc-chat）
 
 - [x] **T3** pom 引入 security / jjwt / jpa / mysql-connector-j；application.yml 配 datasource、JPA(none)、llm.vendors AK、jwt.secret。
-- [x] **T4** `JwtUtil` + `JwtAuthFilter` + `SecurityConfig`（放行 /auth/**、/health/**、/error，其余 authenticated）。注意：主类已改 `@SpringBootApplication(scanBasePackages="com.vc")`，否则 vc-code 的 GlobalExceptionHandler 不会被扫描、异常会转发 /error 被 Security 拦成 401。
+- [x] **T4** `JwtUtil` + `JwtAuthFilter` + `SecurityConfig`（放行 /auth/**、/health/**、/error，其余 authenticated）。注意：主类已改 `@SpringBootApplication(scanBasePackages="com.vc")`，否则 vc-core 的 GlobalExceptionHandler 不会被扫描、异常会转发 /error 被 Security 拦成 401。
 - [x] **T5** `User` JPA 实体 + `UserRepository`；改造 `AuthServiceImpl`：查库 + BCrypt 校验 + 签 JWT。
 - [x] **T6** `LlmVendor` / `LlmModel` / `UserLlmBinding` 实体 + 三个 Repository。
 - [x] **T7** `LlmModelService` + `LlmModelController`：models / catalog / bindings(POST/DELETE) / bindings/{vendor}/{modelCode}/default(PUT，设默认时清其他默认)。
