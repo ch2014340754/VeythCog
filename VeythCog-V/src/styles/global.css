@@ -1,0 +1,551 @@
+/* ========================================
+   全局样式 - CSS 变量与工具类
+   ======================================== */
+
+/* --- CSS 变量定义 (亮色模式) --- */
+:root {
+  /* 主色调 */
+  --color-primary: #7C3AED;
+  --color-secondary: #A78BFA;
+  --color-cta: #06B6D4;
+  --color-bg: #FAF5FF;
+  --color-text: #1E1B4B;
+  --color-border: #DDD6FE;
+
+  /* 语义色 */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-info: #06B6D4;
+
+  /* 表面与层级 */
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-overlay: rgba(255, 255, 255, 0.85);
+
+  /* 文本层级 */
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  --color-text-inverse: #ffffff;
+
+  /* 边框与分割 */
+  --color-divider: #E5E7EB;
+
+  /* 动画曲线 */
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.83, 0, 0.17, 1);
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+
+  /* 间距 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* 字体 */
+  --font-heading: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* 噪点纹理 */
+  --noise-opacity: 0.03;
+  --noise-url: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+
+  /* 毛玻璃 */
+  --glass-blur: 16px;
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.3);
+
+  /* 过渡时长 */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* z-index 层级 */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+}
+
+/* --- 暗色模式变量覆盖（仅阴影等非颜色变量，颜色变量由 JS 动态注入） --- */
+body.dark {
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+/* ========================================
+   全局基础样式
+   ======================================== */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 噪点纹理背景 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--noise-opacity);
+  background-image: var(--noise-url);
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* 选中色 */
+::selection {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* Firefox 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* ========================================
+   工具类
+   ======================================== */
+
+/* 毛玻璃效果 */
+.glass-effect {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 弹性动画过渡 */
+.transition-spring {
+  transition-timing-function: var(--spring);
+  transition-duration: var(--duration-normal);
+}
+
+/* 指针光标 */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* ========================================
+   响应式断点
+   ======================================== */
+
+/* 移动端优先断点混入（通过 CSS 媒体查询实现） */
+@media (min-width: 640px) {
+  :root {
+    --radius-sm: 8px;
+    --radius-md: 12px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --space-md: 20px;
+    --space-lg: 28px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --space-lg: 32px;
+    --space-xl: 40px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --space-xl: 48px;
+    --space-2xl: 64px;
+  }
+}
+
+/* ========================================
+   Ant Design 暗色模式覆盖
+   ======================================== */
+
+body.dark .ant-layout {
+  background: var(--color-bg);
+}
+
+body.dark .ant-layout-sider {
+  background: var(--color-surface);
+}
+
+body.dark .ant-card {
+  border-color: var(--color-border);
+}
+
+body.dark .ant-input,
+body.dark .ant-select-selector,
+body.dark .ant-picker {
+  background-color: var(--color-surface-elevated) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text) !important;
+}
+
+body.dark .ant-btn-default {
+  background-color: var(--color-surface-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+body.dark .ant-table {
+  background: var(--color-surface);
+}
+
+body.dark .ant-table-thead > tr > th {
+  background: var(--color-surface-elevated);
+  color: var(--color-text-secondary);
+  border-bottom-color: var(--color-border);
+}
+
+body.dark .ant-table-tbody > tr > td {
+  border-bottom-color: var(--color-border);
+}
+
+body.dark .ant-table-tbody > tr:hover > td {
+  background: var(--color-surface-elevated);
+}
+
+body.dark .ant-modal-content {
+  background: var(--color-surface);
+}
+
+body.dark .ant-dropdown {
+  background: var(--color-surface);
+}
+
+body.dark .ant-tooltip-inner {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+
+body.dark .ant-message-notice-content {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+}
+
+body.dark .ant-tabs-tab {
+  color: var(--color-text-secondary);
+}
+
+body.dark .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--color-primary);
+}
+
+/* ========================================
+   标题字体
+   ======================================== */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* ========================================
+   消息动画
+   ======================================== */
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 切换对话时，右侧内容整体淡入 */
+@keyframes chatPanelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.chat-panel-fade-in {
+  animation: chatPanelFadeIn 2s var(--ease-out);
+}
+
+/* ========================================
+   Markdown 渲染样式（AI 回复）
+   ======================================== */
+
+.md-body {
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child { margin-bottom: 0; }
+.md-body p { margin: 0 0 8px; }
+.md-body p:last-child { margin-bottom: 0; }
+.md-body ul, .md-body ol { margin: 4px 0 8px; padding-left: 22px; }
+.md-body li { margin: 2px 0; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 12px 0 6px;
+}
+.md-body code {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 12.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-primary-15);
+  color: var(--color-primary);
+}
+.md-body pre {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #e5e7eb;
+  overflow-x: auto;
+}
+.md-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+.md-body blockquote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid var(--color-primary);
+  opacity: 0.85;
+}
+.md-body a {
+  color: var(--color-cta);
+  text-decoration: none;
+}
+.md-body a:hover { text-decoration: underline; }
+.md-body strong { font-weight: 700; }
+.md-body table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 13px;
+}
+.md-body th, .md-body td {
+  border: 1px solid var(--color-divider);
+  padding: 6px 10px;
+  text-align: left;
+}
+.md-body th { background: var(--color-primary-10); }
+
+/* ========================================
+   全局毛玻璃（body.glass-on）
+   标准毛玻璃：backdrop-filter blur+saturate + rgba 半透底 +
+   细透明边框 + 外阴影 + 顶部内高光，轻薄通透
+   ======================================== */
+
+/* --- 浮层/卡片：真毛玻璃 --- */
+body.glass-on .ant-card,
+body.glass-on .ant-modal-content,
+body.glass-on .ant-popover-inner,
+body.glass-on .ant-dropdown-menu,
+body.glass-on .ant-select-dropdown,
+body.glass-on .ant-picker-dropdown,
+body.glass-on .ant-popconfirm,
+body.glass-on .ant-modal-confirm .ant-modal-content {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 8px 32px rgba(31, 38, 135, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+body.dark.glass-on .ant-card,
+body.dark.glass-on .ant-modal-content,
+body.dark.glass-on .ant-popover-inner,
+body.dark.glass-on .ant-dropdown-menu,
+body.dark.glass-on .ant-select-dropdown,
+body.dark.glass-on .ant-picker-dropdown,
+body.dark.glass-on .ant-popconfirm,
+body.dark.glass-on .ant-modal-confirm .ant-modal-content {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* --- 输入框/默认按钮：边缘毛玻璃（淡） --- */
+body.glass-on .ant-input,
+body.glass-on .ant-input-affix-wrapper,
+body.glass-on .ant-select-selector,
+body.glass-on .ant-picker,
+body.glass-on .ant-input-number,
+body.glass-on textarea.ant-input,
+body.glass-on .ant-btn-default {
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+body.dark.glass-on .ant-input,
+body.dark.glass-on .ant-input-affix-wrapper,
+body.dark.glass-on .ant-select-selector,
+body.dark.glass-on .ant-picker,
+body.dark.glass-on .ant-input-number,
+body.dark.glass-on textarea.ant-input,
+body.dark.glass-on .ant-btn-default {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* --- hover 高亮：轻毛玻璃 --- */
+body.glass-on .ant-table-tbody > tr:hover > td,
+body.glass-on .ant-menu-item:hover,
+body.glass-on .ant-list-item:hover,
+body.glass-on .ant-select-item-option-active {
+  backdrop-filter: blur(8px) saturate(160%);
+  -webkit-backdrop-filter: blur(8px) saturate(160%);
+}
+
+/* --- 业务自绘卡片（Settings section / UserMenu 下拉等）补 backdrop-filter --- */
+body.glass-on .glass-panel {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    0 8px 32px rgba(31, 38, 135, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+body.dark.glass-on .glass-panel {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ========================================
+   输入控件全局发光描边（跟主题 primary 色联动）
+   未聚焦：弱发光；聚焦：强发光 + 外扩
+   ======================================== */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+.ant-picker,
+.ant-select .ant-select-selector,
+textarea.ant-input {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent),
+    0 0 12px color-mix(in srgb, var(--color-primary) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused,
+.ant-input-number-focused,
+.ant-picker-focused,
+.ant-select-focused .ant-select-selector {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--color-primary) 55%, transparent),
+    0 0 22px color-mix(in srgb, var(--color-primary) 38%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+body.dark .ant-input,
+body.dark .ant-input-affix-wrapper,
+body.dark .ant-input-number,
+body.dark .ant-picker,
+body.dark .ant-select .ant-select-selector,
+body.dark textarea.ant-input {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, transparent),
+    0 0 14px color-mix(in srgb, var(--color-primary) 25%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark .ant-input:focus,
+body.dark .ant-input-focused,
+body.dark .ant-input-affix-wrapper-focused,
+body.dark .ant-input-number-focused,
+body.dark .ant-picker-focused,
+body.dark .ant-select-focused .ant-select-selector {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--color-primary) 65%, transparent),
+    0 0 26px color-mix(in srgb, var(--color-primary) 45%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+/* disabled / 只读态不发光 */
+.ant-input[disabled],
+.ant-input-affix-wrapper-disabled,
+.ant-input-number-disabled,
+.ant-picker-disabled,
+.ant-select-disabled .ant-select-selector {
+  box-shadow: none !important;
+}
+
+
+/* composer 容器自身已发光，内部 TextArea 不再单独发光，避免双层 */
+.composer-glow .ant-input,
+.composer-glow textarea.ant-input {
+  box-shadow: none !important;
+}
+
+
+/* affix-wrapper 内部的真实 input 不再单独发光，避免双层 */
+.ant-input-affix-wrapper .ant-input {
+  box-shadow: none !important;
+}

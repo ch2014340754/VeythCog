@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="228" height="228" fill="none">
+  <defs>
+    <!-- 流彩渐变 - 白色沿飘带单向流动 -->
+    <linearGradient id="ribbon-flow" gradientUnits="userSpaceOnUse"
+      x1="10" y1="24" x2="34" y2="24" spreadMethod="repeat">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="50%" stop-color="#374151"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+      <animate attributeName="x1" from="10" to="34" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="x2" from="34" to="58" dur="2s" repeatCount="indefinite"/>
+    </linearGradient>
+    <!-- 发光滤镜 -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- V 字 - 深灰色，主视觉（加粗） -->
+  <path d="M3 6 L16 42 L29 6"
+    stroke="#374151" stroke-width="4.8"
+    stroke-linecap="round" stroke-linejoin="round"
+    fill="none" opacity="0.9"/>
+  <!-- C 字 - 深灰色，较小，开放包容 -->
+  <path d="M43 16 C39 9 30 9 28 24 C26 39 35 41 43 35"
+    stroke="#374151" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"
+    fill="none" opacity="0.55"/>
+  <!-- 流彩丝带 - V 字内柔和翻折交缠，转角圆滑，翻折处略收窄模拟扭转 -->
+  <path d="M2 26
+           C5 23, 8 22, 11 19
+           C13 17, 14 14, 15 13
+           C16 12, 18 13, 20 16
+           C22 19, 24 22, 27 21
+           C30 20, 32 18, 35 21
+           C38 22, 41 21, 44 22
+           C45 23, 45 26, 44 28
+           C42.5 27, 40 26, 38 25
+           C35 25, 33 24, 30 25
+           C27 26, 25 23, 23 24
+           C21 25, 19 20, 17 19
+           C15 18, 14 24, 11 25
+           C8 26, 5 27, 2 28
+           C1 28, 1 27, 2 26 Z"
+    fill="url(#ribbon-flow)"
+    opacity="0.9"
+    filter="url(#glow)"/>
+</svg>

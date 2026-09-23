@@ -1,0 +1,22 @@
+services:
+  # PostgreSQL + pgvector：业务数据 + RAG 向量检索，单库两用（轻量化）
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: veythcog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: veythcog
+      POSTGRES_USER: veythcog
+      POSTGRES_PASSWORD: veythcog
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veythcog -d veythcog"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
