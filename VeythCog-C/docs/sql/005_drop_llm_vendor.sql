@@ -13,3 +13,20 @@ ALTER TABLE llm_model DROP FOREIGN KEY fk_llm_model_vendor;
 
 -- 2) 删除供应商表
 DROP TABLE IF EXISTS llm_vendor;
+
+
+-- =============================================================
+-- ↓↓↓ PostgreSQL 版本（与上方 MySQL 脚本等价） ↓↓↓
+-- 转换要点：
+--   · MySQL: ALTER TABLE ... DROP FOREIGN KEY <约束名>;
+--     PG:    ALTER TABLE ... DROP CONSTRAINT IF EXISTS <约束名>;
+--     （PG 里外键与普通约束统一用 DROP CONSTRAINT 删除，
+--       IF EXISTS 可避免约束不存在时报错，无需提前手工确认）
+--   · DROP TABLE IF EXISTS 语法两者一致
+-- =============================================================
+
+-- 1) 若旧外键存在，先删除（全新部署无需跑本脚本）
+ALTER TABLE llm_model DROP CONSTRAINT IF EXISTS fk_llm_model_vendor;
+
+-- 2) 删除供应商表
+DROP TABLE IF EXISTS llm_vendor;

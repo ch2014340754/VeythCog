@@ -25,6 +25,7 @@ import shieldCheck from '@iconify-icons/lucide/shield-check';
 import binaryIcon from '@iconify-icons/lucide/binary';
 import paletteIcon from '@iconify-icons/lucide/palette';
 import imageIcon from '@iconify-icons/lucide/image';
+import languagesIcon from '@iconify-icons/lucide/languages';
 
 /** 工具分类 */
 export type ToolCategory = 'JSON' | '编码' | '哈希' | '文本' | '时间' | '代码' | '其他';
@@ -158,6 +159,14 @@ export const tools: ToolEntry[] = [
     icon: <Icon icon={replaceIcon} width={16} />,
     category: '文本',
     component: React.lazy(() => import('./tools/TextReplace')),
+  },
+  {
+    id: 'translator',
+    name: '中英翻译',
+    description: '中英互译，自动识别语向，支持发音朗读',
+    icon: <Icon icon={languagesIcon} width={16} />,
+    category: '文本',
+    component: React.lazy(() => import('./tools/TranslatorTool')),
   },
 
   // ---- 时间 ----

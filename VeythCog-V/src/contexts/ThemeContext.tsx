@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useLayoutEffect, useCallback, useMemo } from 'react';
 import type { PresetName, AppearanceMode } from '../types';
 import { getPreset } from '../styles/presets';
+import { resolveBackground } from '../styles/backgrounds';
 import { useSettingsStore } from '../stores/settingsStore';
 
 /** 主题颜色集合 - 供组件 inline style 直接使用，避免 CSS 变量解析延迟 */
@@ -237,6 +238,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [presetName, setPresetName] = useState<PresetName>(getStoredPreset);
   const [appearanceMode, setAppearanceMode] = useState<AppearanceMode>(getStoredAppearance);
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
+  const background = useSettingsStore((s) => s.background);
+  const overlayStrength = useSettingsStore((s) => s.overlayStrength);
 
   const isDark = useMemo(() => computeIsDark(appearanceMode), [appearanceMode]);
 
@@ -253,6 +256,25 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useLayoutEffect(() => {
     document.body.classList.toggle('glass-on', glassEnabled);
   }, [glassEnabled]);
+
+  // 背景：内置渐变 / 自定义图片（随亮暗与遮罩强度联动）
+  useLayoutEffect(() => {
+    const { active, css, overlay } = resolveBackground(background, isDark, overlayStrength);
+    const body = document.body;
+    if (active) {
+      body.classList.add('has-bg');
+      body.style.backgroundImage = css;
+      body.style.backgroundSize = 'cover';
+      body.style.backgroundPosition = 'center';
+      body.style.backgroundRepeat = 'no-repeat';
+      body.style.backgroundAttachment = 'scroll';
+      body.style.setProperty('--bg-overlay', overlay);
+    } else {
+      body.classList.remove('has-bg');
+      body.style.backgroundImage = '';
+      body.style.setProperty('--bg-overlay', 'transparent');
+    }
+  }, [background, overlayStrength, isDark]);
 
   // 监听系统主题变化（仅在 system 模式下生效）
   useLayoutEffect(() => {

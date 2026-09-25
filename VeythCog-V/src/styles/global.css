@@ -123,6 +123,17 @@ body::before {
   background-size: 256px 256px;
 }
 
+/* 自定义背景图遮罩层（body.has-bg 由 ThemeContext 注入）
+   层级：body 背景图 < 遮罩(-2) < 噪点(-1) < 内容 */
+body.has-bg::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: var(--bg-overlay);
+}
+
 /* 选中色 */
 ::selection {
   background-color: var(--color-primary);

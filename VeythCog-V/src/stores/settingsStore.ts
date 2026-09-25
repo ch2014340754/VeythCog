@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { LlmModelItem } from '@/types';
 import { getModels } from '@/api/llm';
+import type { BackgroundValue, OverlayStrength } from '@/styles/backgrounds';
 
 /** 模型唯一 id = vendor:modelCode */
 export function modelId(vendor: string, modelCode: string): string {
@@ -26,6 +27,10 @@ interface SettingsState {
   sidebarCollapsed: boolean;
   /** 全局毛玻璃开关 */
   glassEnabled: boolean;
+  /** 背景（内置渐变 / 自定义 URL）：'none' | 'preset:<id>' | 'url:<地址>' */
+  background: BackgroundValue;
+  /** 自定义图片遮罩强度 */
+  overlayStrength: OverlayStrength;
   /** 加载中 */
   loadingModels: boolean;
 
@@ -36,6 +41,8 @@ interface SettingsState {
   setStreamEnabled: (v: boolean) => void;
   toggleSidebar: () => void;
   setGlassEnabled: (v: boolean) => void;
+  setBackground: (v: BackgroundValue) => void;
+  setOverlayStrength: (v: OverlayStrength) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -46,6 +53,8 @@ export const useSettingsStore = create<SettingsState>()(
       streamEnabled: true,
       sidebarCollapsed: false,
       glassEnabled: false,
+      background: 'none',
+      overlayStrength: 'medium',
       loadingModels: false,
 
       loadModels: async () => {
@@ -70,10 +79,12 @@ export const useSettingsStore = create<SettingsState>()(
       setStreamEnabled: (v) => set({ streamEnabled: v }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setGlassEnabled: (v) => set({ glassEnabled: v }),
+      setBackground: (v) => set({ background: v }),
+      setOverlayStrength: (v) => set({ overlayStrength: v }),
     }),
     {
       name: 'mywork:settings',
-      version: 2,
+      version: 3,
       migrate: (persisted: any, version) => {
         // v1（旧扁平 providers）→ 全新结构：丢弃旧 providers/models，回到空绑定列表
         if (version < 2 && persisted && !Array.isArray(persisted.models)) {
@@ -81,8 +92,18 @@ export const useSettingsStore = create<SettingsState>()(
             streamEnabled: true,
             sidebarCollapsed: !!persisted.sidebarCollapsed,
             glassEnabled: !!persisted.glassEnabled,
+            background: persisted.background ?? 'none',
+            overlayStrength: persisted.overlayStrength ?? 'medium',
             models: [],
             currentModelId: null,
+          };
+        }
+        // v2 → v3：补默认背景字段
+        if (version < 3 && persisted) {
+          return {
+            ...persisted,
+            background: persisted.background ?? 'none',
+            overlayStrength: persisted.overlayStrength ?? 'medium',
           };
         }
         return persisted;

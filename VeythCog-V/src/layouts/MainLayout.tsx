@@ -31,7 +31,8 @@ const MainLayout: React.FC = () => {
         width: '100vw',
         height: '100vh',
         overflow: 'hidden',
-        background: colors.bg,
+        // 外层容器透明，让 body 上的背景（含自定义背景图）透出；无背景时由 body 的 --color-bg 兜底
+        background: 'transparent',
       }}
     >
       {/* 左侧图标导航栏 - 浮动毛玻璃样式 */}

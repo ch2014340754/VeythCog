@@ -46,7 +46,7 @@ const LoginPage: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: colors.bg,
+        background: 'transparent',
         padding: 24,
       }}
     >
