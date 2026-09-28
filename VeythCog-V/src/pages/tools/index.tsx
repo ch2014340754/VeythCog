@@ -107,7 +107,8 @@ const ToolsHome: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: 32, maxWidth: 1200, margin: '0 auto', height: '100%', overflowY: 'auto' }}>
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+      <div style={{ padding: 32, maxWidth: 1200, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontSize: 24, margin: '0 0 8px' }}>开发工具集</h1>
@@ -185,6 +186,7 @@ const ToolsHome: React.FC = () => {
           </div>
         ))
       )}
+      </div>
     </div>
   );
 };

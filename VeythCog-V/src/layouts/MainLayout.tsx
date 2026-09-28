@@ -23,6 +23,7 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const { colors } = useTheme();
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
+  const glassOpacity = useSettingsStore((s) => s.glassOpacity);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
 
@@ -170,9 +171,24 @@ const MainLayout: React.FC = () => {
           flex: 1,
           height: '100vh',
           overflow: 'hidden',
+          padding: '16px 16px 16px 0',
         }}
       >
-        <Outlet />
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: 'var(--radius-xl)',
+            overflow: 'hidden',
+            background: colors.glassBg,
+            backdropFilter: `blur(${Math.round(2 + (glassOpacity / 100) * 28)}px) saturate(160%)`,
+            WebkitBackdropFilter: `blur(${Math.round(2 + (glassOpacity / 100) * 28)}px) saturate(160%)`,
+            border: `1px solid ${colors.glassBorder}`,
+            boxShadow: 'var(--shadow-md)',
+          }}
+        >
+          <Outlet />
+        </div>
       </main>
 
       {/* 全局浮动音乐播放器（mock） */}

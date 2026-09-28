@@ -15,10 +15,10 @@ import AppearanceSettings from '@/pages/Settings/Appearance';
 export type SettingsTab = 'account' | 'providers' | 'lark' | 'appearance';
 
 const MENU: { key: SettingsTab; icon: typeof userIcon; label: string }[] = [
-  { key: 'account', icon: userIcon, label: '账号' },
+  { key: 'account', icon: userIcon, label: '账号设置' },
   { key: 'providers', icon: cpuIcon, label: '模型配置' },
   { key: 'lark', icon: birdIcon, label: '飞书绑定' },
-  { key: 'appearance', icon: paletteIcon, label: '外观' },
+  { key: 'appearance', icon: paletteIcon, label: '外观设置' },
 ];
 
 interface Props {

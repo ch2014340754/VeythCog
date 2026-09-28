@@ -27,6 +27,8 @@ interface SettingsState {
   sidebarCollapsed: boolean;
   /** 全局毛玻璃开关 */
   glassEnabled: boolean;
+  /** 毛玻璃朦胧感（玻璃面板不透明度 10-90，默认 60） */
+  glassOpacity: number;
   /** 背景（内置渐变 / 自定义 URL）：'none' | 'preset:<id>' | 'url:<地址>' */
   background: BackgroundValue;
   /** 自定义图片遮罩强度 */
@@ -48,6 +50,7 @@ interface SettingsState {
   setStreamEnabled: (v: boolean) => void;
   toggleSidebar: () => void;
   setGlassEnabled: (v: boolean) => void;
+  setGlassOpacity: (v: number) => void;
   setBackground: (v: BackgroundValue) => void;
   setOverlayStrength: (v: OverlayStrength) => void;
 }
@@ -60,6 +63,7 @@ export const useSettingsStore = create<SettingsState>()(
       streamEnabled: true,
       sidebarCollapsed: false,
       glassEnabled: false,
+      glassOpacity: 60,
       background: 'none',
       overlayStrength: 'medium',
       loadingModels: false,
@@ -91,12 +95,13 @@ export const useSettingsStore = create<SettingsState>()(
       setStreamEnabled: (v) => set({ streamEnabled: v }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setGlassEnabled: (v) => set({ glassEnabled: v }),
+      setGlassOpacity: (v) => set({ glassOpacity: v }),
       setBackground: (v) => set({ background: v }),
       setOverlayStrength: (v) => set({ overlayStrength: v }),
     }),
     {
       name: 'mywork:settings',
-      version: 3,
+      version: 4,
       migrate: (persisted: any, version) => {
         // v1（旧扁平 providers）→ 全新结构：丢弃旧 providers/models，回到空绑定列表
         if (version < 2 && persisted && !Array.isArray(persisted.models)) {
@@ -116,6 +121,13 @@ export const useSettingsStore = create<SettingsState>()(
             ...persisted,
             background: persisted.background ?? 'none',
             overlayStrength: persisted.overlayStrength ?? 'medium',
+          };
+        }
+        // v3 → v4：补毛玻璃雾氦感默认值
+        if (version < 4 && persisted) {
+          return {
+            ...persisted,
+            glassOpacity: typeof persisted.glassOpacity === 'number' ? persisted.glassOpacity : 60,
           };
         }
         return persisted;

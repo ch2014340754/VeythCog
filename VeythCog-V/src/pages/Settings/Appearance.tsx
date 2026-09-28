@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Input, Segmented, Switch } from 'antd';
+import { Button, Input, Segmented, Slider, Switch } from 'antd';
 import type { InputRef } from 'antd';
 import { Icon } from '@iconify/react';
 import sunIcon from '@iconify-icons/lucide/sun';
@@ -23,6 +23,8 @@ const AppearancePage: React.FC = () => {
   const { presetName, appearanceMode, isDark, setPreset, setAppearance, colors } = useTheme();
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
   const setGlassEnabled = useSettingsStore((s) => s.setGlassEnabled);
+  const glassOpacity = useSettingsStore((s) => s.glassOpacity);
+  const setGlassOpacity = useSettingsStore((s) => s.setGlassOpacity);
   const background = useSettingsStore((s) => s.background);
   const setBackground = useSettingsStore((s) => s.setBackground);
   const overlayStrength = useSettingsStore((s) => s.overlayStrength);
@@ -286,6 +288,22 @@ const AppearancePage: React.FC = () => {
             </div>
           </div>
           <Switch checked={glassEnabled} onChange={setGlassEnabled} />
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: colors.text }}>面板玻璃朦胧感</span>
+            <span style={{ fontSize: 12, color: colors.textTertiary }}>{glassOpacity}%</span>
+          </div>
+          <Slider
+            min={0}
+            max={90}
+            value={glassOpacity}
+            onChange={setGlassOpacity}
+            style={{ maxWidth: 320 }}
+          />
+          <div style={{ marginTop: 4, fontSize: 12, color: colors.textTertiary }}>
+            往左拖背景图越清晰，往右拖毛玻璃感越明显，背景始终隐约透出。
+          </div>
         </div>
       </section>
     </div>

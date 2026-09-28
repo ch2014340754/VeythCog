@@ -97,7 +97,7 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 /** 根据预设和暗色模式计算完整颜色集（供组件 inline style 直接使用） */
-function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnabled: boolean): ThemeColors {
+function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnabled: boolean, glassOpacity: number): ThemeColors {
   const preset = getPreset(presetName, isDark);
   if (isDark) {
     const surface = preset.surface ?? '#1a1a2e';
@@ -131,7 +131,7 @@ function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnable
       warning: '#FBBF24',
       error: '#F87171',
       info: '#22D3EE',
-      glassBg: hexToRgba(surface, 0.6),
+      glassBg: hexToRgba(surface, 0.1 + (glassOpacity / 100) * 0.65),
       glassBorder: 'rgba(255, 255, 255, 0.1)',
     };
   }
@@ -163,13 +163,13 @@ function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnable
     warning: '#F59E0B',
     error: '#EF4444',
     info: '#06B6D4',
-    glassBg: 'rgba(255, 255, 255, 0.6)',
+    glassBg: hexToRgba('#ffffff', 0.1 + (glassOpacity / 100) * 0.65),
     glassBorder: 'rgba(255, 255, 255, 0.3)',
   };
 }
 
 /** 将预设颜色和暗色模式变量注入到 CSS 变量 */
-function applyCSSVariables(presetName: PresetName, isDark: boolean): void {
+function applyCSSVariables(presetName: PresetName, isDark: boolean, glassOpacity: number): void {
   const preset = getPreset(presetName, isDark);
   const root = document.documentElement;
 
@@ -205,7 +205,7 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean): void {
     root.style.setProperty('--color-error', '#F87171');
     root.style.setProperty('--color-info', '#22D3EE');
     root.style.setProperty('--noise-opacity', '0.04');
-    root.style.setProperty('--glass-bg', hexToRgba(surface, 0.6));
+    root.style.setProperty('--glass-bg', hexToRgba(surface, 0.1 + (glassOpacity / 100) * 0.65));
     root.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.1)');
     root.style.setProperty('--shadow-sm', '0 1px 2px 0 rgba(0, 0, 0, 0.3)');
     root.style.setProperty('--shadow-md', '0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3)');
@@ -225,7 +225,7 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean): void {
     root.style.setProperty('--color-error', '#EF4444');
     root.style.setProperty('--color-info', '#06B6D4');
     root.style.setProperty('--noise-opacity', '0.03');
-    root.style.setProperty('--glass-bg', 'rgba(255, 255, 255, 0.6)');
+    root.style.setProperty('--glass-bg', hexToRgba('#ffffff', 0.1 + (glassOpacity / 100) * 0.65));
     root.style.setProperty('--glass-border', 'rgba(255, 255, 255, 0.3)');
     root.style.setProperty('--shadow-sm', '0 1px 2px 0 rgba(0, 0, 0, 0.05)');
     root.style.setProperty('--shadow-md', '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)');
@@ -238,19 +238,20 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [presetName, setPresetName] = useState<PresetName>(getStoredPreset);
   const [appearanceMode, setAppearanceMode] = useState<AppearanceMode>(getStoredAppearance);
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
+  const glassOpacity = useSettingsStore((s) => s.glassOpacity);
   const background = useSettingsStore((s) => s.background);
   const overlayStrength = useSettingsStore((s) => s.overlayStrength);
 
   const isDark = useMemo(() => computeIsDark(appearanceMode), [appearanceMode]);
 
   // 计算当前主题颜色集（供组件 inline style 直接使用）
-  const colors = useMemo(() => computeThemeColors(presetName, isDark, glassEnabled), [presetName, isDark, glassEnabled]);
+  const colors = useMemo(() => computeThemeColors(presetName, isDark, glassEnabled, glassOpacity), [presetName, isDark, glassEnabled, glassOpacity]);
 
   // 主题变化时同步 CSS 变量 + dark 类（使用 useLayoutEffect 避免闪烁）
   useLayoutEffect(() => {
-    applyCSSVariables(presetName, isDark);
+    applyCSSVariables(presetName, isDark, glassOpacity);
     applyDarkClass(isDark);
-  }, [presetName, isDark]);
+  }, [presetName, isDark, glassOpacity]);
 
   // 全局毛玻璃开关：给 body 加 glass-on class，global.css 据此覆盖 AntD 组件
   useLayoutEffect(() => {
@@ -283,11 +284,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => {
       applyDarkClass(e.matches);
-      applyCSSVariables(presetName, e.matches);
+      applyCSSVariables(presetName, e.matches, glassOpacity);
     };
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
-  }, [appearanceMode, presetName]);
+  }, [appearanceMode, presetName, glassOpacity]);
 
   const setPreset = useCallback((name: PresetName) => {
     setPresetName(name);
