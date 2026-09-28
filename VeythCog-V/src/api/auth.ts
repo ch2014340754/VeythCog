@@ -21,11 +21,14 @@ interface LoginData {
 export async function login(username: string, password: string): Promise<LoginResult> {
   if (!username.trim()) throw new Error('请输入用户名');
   const data = await http.post<LoginData>('/auth/login', { username, password });
+  // TODO: 后端应在登录返回体里带 role，前端先按 username 推断，对接后改
+  const role: 'admin' | 'user' = data.username === 'admin' ? 'admin' : 'user';
   return {
     token: data.token,
     user: {
       id: data.username,
       name: data.nickname || data.username,
+      role,
     },
   };
 }

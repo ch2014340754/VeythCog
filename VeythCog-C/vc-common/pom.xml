@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.vc</groupId>
+        <artifactId>veythcog-c</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vc-common</artifactId>
+    <name>vc-common</name>
+    <description>公共基础库：通用响应 / 异常体系 / 工具（纯 POJO，不依赖任何 Spring Starter）</description>
+
+    <!-- 纯公共库：不引入 web / AI / 持久化，避免污染 -->
+    <dependencies>
+    </dependencies>
+</project>

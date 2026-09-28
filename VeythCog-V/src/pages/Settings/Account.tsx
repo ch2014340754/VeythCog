@@ -43,6 +43,7 @@ const AccountPage: React.FC = () => {
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [savingPwd, setSavingPwd] = useState(false);
+  const [pwdExpanded, setPwdExpanded] = useState(false);
 
   const initial = (user?.name ?? '?').trim().charAt(0).toUpperCase();
 
@@ -73,7 +74,15 @@ const AccountPage: React.FC = () => {
     setOldPwd('');
     setNewPwd('');
     setConfirmPwd('');
+    setPwdExpanded(false);
     message.success('密码已更新（mock）');
+  };
+
+  const onCancelPwd = () => {
+    setOldPwd('');
+    setNewPwd('');
+    setConfirmPwd('');
+    setPwdExpanded(false);
   };
 
   return (
@@ -119,20 +128,29 @@ const AccountPage: React.FC = () => {
       </Section>
 
       <Section title="修改密码" desc="mock 阶段仅前端校验，不会真正变更服务端密码">
-        <Form layout="vertical">
-          <Form.Item label="当前密码">
-            <Input.Password value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} />
-          </Form.Item>
-          <Form.Item label="新密码">
-            <Input.Password value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
-          </Form.Item>
-          <Form.Item label="确认新密码" style={{ marginBottom: 20 }}>
-            <Input.Password value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} onPressEnter={onChangePwd} />
-          </Form.Item>
-          <Button type="primary" loading={savingPwd} onClick={onChangePwd}>
-            更新密码
+        {!pwdExpanded ? (
+          <Button type="primary" onClick={() => setPwdExpanded(true)}>
+            修改密码
           </Button>
-        </Form>
+        ) : (
+          <Form layout="vertical">
+            <Form.Item label="当前密码">
+              <Input.Password value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} />
+            </Form.Item>
+            <Form.Item label="新密码">
+              <Input.Password value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
+            </Form.Item>
+            <Form.Item label="确认新密码" style={{ marginBottom: 20 }}>
+              <Input.Password value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} onPressEnter={onChangePwd} />
+            </Form.Item>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button type="primary" loading={savingPwd} onClick={onChangePwd}>
+                应用修改
+              </Button>
+              <Button onClick={onCancelPwd}>取消</Button>
+            </div>
+          </Form>
+        )}
       </Section>
     </div>
   );

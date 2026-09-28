@@ -9,20 +9,37 @@
         <version>3.5.8</version>
         <relativePath /> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.ai</groupId>
+    <groupId>com.vc</groupId>
     <artifactId>veythcog-c</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>VeythCog-C</name>
-    <description>VeythCog-C - 个人全栈工作台后端（Spring Boot 3 + Java 21 + Spring AI）</description>
+    <description>VeythCog-C - 个人全栈工作台后端（Spring Boot 3 + Java 21 + Spring AI）模块化单体</description>
     <packaging>pom</packaging>
 
+    <!-- 统一版本号：所有模块的依赖版本由 BOM 管理，不在各模块重复写死 -->
     <properties>
         <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-ai-alibaba.version>1.1.2.0</spring-ai-alibaba.version>
         <spring-ai.version>1.1.2</spring-ai.version>
+        <knife4j.version>4.5.0</knife4j.version>
+        <pg.version>42.6.1</pg.version>
+        <!-- springdoc 显式锁定 2.8.x（官方兼容 Spring Boot 3.5），覆盖 knife4j 传递的旧版本 -->
+        <springdoc-openapi.version>2.8.9</springdoc-openapi.version>
     </properties>
 
+    <!-- 编译期注解处理器（optional，不进入运行时 classpath，可被所有模块继承） -->
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
 
+    <!-- 依赖管理：只锁版本，不向子模块传递任何依赖（依赖按需写入各模块 pom） -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -32,7 +49,12 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-
+            <!-- dashscope starter 版本不被 BOM 管理，统一在此置管，子模块按需引用 -->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
@@ -40,50 +62,53 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!-- 接口文档：knife4j（jakarta 版）+ springdoc，版本统一在此置管，子模块按需引用 -->
+            <dependency>
+                <groupId>com.github.xiaoymin</groupId>
+                <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+                <version>${knife4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc-openapi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${pg.version}</version>
+            </dependency>
+            <!-- 内部模块版本统一由父 pom 管理 -->
+            <dependency>
+                <groupId>com.vc</groupId>
+                <artifactId>vc-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.vc</groupId>
+                <artifactId>vc-llm</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.vc</groupId>
+                <artifactId>vc-chat</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.vc</groupId>
+                <artifactId>vc-knowledge</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
-
-    <dependencies>
-
-        <!-- Spring Boot Web 起步依赖 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <!-- Spring AI Alibaba DashScope 核心起步依赖 -->
-        <dependency>
-            <groupId>com.alibaba.cloud.ai</groupId>
-            <artifactId>spring-ai-alibaba-agent-framework</artifactId>
-            <!-- 版本由 BOM 管理，无需显式指定 -->
-        </dependency>
-
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <dependency>
-            <groupId>com.alibaba.cloud.ai</groupId>
-            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
-            <version>${spring-ai-alibaba.version}</version>
-        </dependency>
-
-        <!-- Spring Boot DevTools 热部署（仅开发环境，optional=true 不会传递/打进生产包） -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <scope>runtime</scope>
-            <optional>true</optional>
-        </dependency>
-
-    </dependencies>
-
     <modules>
-        <module>vc-core</module>
+        <module>vc-common</module>
+        <module>vc-llm</module>
         <module>vc-chat</module>
+        <module>vc-knowledge</module>
+        <module>vc-app</module>
         <module>vc-learn</module>
     </modules>
 
@@ -103,40 +128,22 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>default-compile</id>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>compile</goal>
-                        </goals>
-                        <configuration>
-                            <annotationProcessorPaths>
-                                <path>
-                                    <groupId>org.projectlombok</groupId>
-                                    <artifactId>lombok</artifactId>
-                                </path>
-                            </annotationProcessorPaths>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>default-testCompile</id>
-                        <phase>test-compile</phase>
-                        <goals>
-                            <goal>testCompile</goal>
-                        </goals>
-                        <configuration>
-                            <annotationProcessorPaths>
-                                <path>
-                                    <groupId>org.projectlombok</groupId>
-                                    <artifactId>lombok</artifactId>
-                                </path>
-                            </annotationProcessorPaths>
-                        </configuration>
-                    </execution>
-                </executions>
+                <configuration>
+                    <release>${java.version}</release>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                        <!-- 生成 @ConfigurationProperties 元数据，消除 IDE 对自定义配置（llm.vendors 等）的 Unknown
+                        property 警告 -->
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
             </plugin>
         </plugins>
     </build>
-
 </project>

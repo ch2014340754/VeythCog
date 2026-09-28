@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.vc</groupId>
+        <artifactId>veythcog-c</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vc-knowledge</artifactId>
+    <name>vc-knowledge</name>
+    <description>知识库域：上传 / 解析 / 分块 / Embedding / 检索（库，无 Controller）</description>
+
+    <dependencies>
+        <!-- 公共基础 -->
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-common</artifactId>
+        </dependency>
+        <!-- JPA：知识库 / 文档实体（Phase 2 接入检索时按需补 vc-llm 做 Embedding） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+    </dependencies>
+</project>

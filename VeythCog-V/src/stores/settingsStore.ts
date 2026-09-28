@@ -34,6 +34,13 @@ interface SettingsState {
   /** 加载中 */
   loadingModels: boolean;
 
+  // ---- 旧版壁纸字段（WallpaperLayer 组件残留，保留兼容，后续清理） ----
+  wallpaperEnabled: boolean;
+  wallpaperPreset: string;
+  wallpaperUrl: string;
+  wallpaperBlur: number;
+  wallpaperBrightness: number;
+
   /** 从后端拉取我的绑定模型；当前模型无效时自动选默认模型 */
   loadModels: () => Promise<void>;
   setModels: (list: LlmModelItem[]) => void;
@@ -56,6 +63,11 @@ export const useSettingsStore = create<SettingsState>()(
       background: 'none',
       overlayStrength: 'medium',
       loadingModels: false,
+      wallpaperEnabled: false,
+      wallpaperPreset: 'none',
+      wallpaperUrl: '',
+      wallpaperBlur: 0,
+      wallpaperBrightness: 1,
 
       loadModels: async () => {
         set({ loadingModels: true });

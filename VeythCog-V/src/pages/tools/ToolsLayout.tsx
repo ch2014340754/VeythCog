@@ -163,7 +163,7 @@ const ToolsLayout: React.FC = () => {
                     padding: '6px 10px',
                     borderRadius: '8px 8px 0 0',
                     cursor: 'pointer',
-                    background: active ? colors.bg : 'transparent',
+                    background: 'transparent',
                     color: active ? colors.primary : colors.textSecondary,
                     fontSize: 12,
                     whiteSpace: 'nowrap',
@@ -193,8 +193,9 @@ const ToolsLayout: React.FC = () => {
           </div>
         )}
 
-        {/* 内容区：所有打开的工具都挂载，非激活隐藏，保留 state。overflow hidden 由工具内部自管滚动 */}
-        <div style={{ flex: 1, overflow: 'hidden', background: colors.bg, position: 'relative' }}>
+        {/* 内容区：所有打开的工具都挂载，非激活隐藏，保留 state。overflow hidden 由工具内部自管滚动。
+            背景透明，让 body 上的壁纸透出（与 Chat / Knowledge 页保持一致） */}
+        <div style={{ flex: 1, overflow: 'hidden', background: 'transparent', position: 'relative' }}>
           {!currentToolId && <ToolsHome />}
           <Suspense
             fallback={

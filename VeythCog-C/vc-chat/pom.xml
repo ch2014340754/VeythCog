@@ -4,87 +4,41 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.ai</groupId>
+        <groupId>com.vc</groupId>
         <artifactId>veythcog-c</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
     <artifactId>vc-chat</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>vc-chat</name>
-    <description>vc-chat</description>
+    <description>对话域：会话 / 消息 / 记忆管理（库，调用 vc-llm，无 Controller）</description>
 
-    <properties>
-        <java.version>21</java.version>
-    </properties>
     <dependencies>
+        <!-- 公共基础 -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-common</artifactId>
         </dependency>
-        <!-- 参数校验（DTO @Valid） -->
+        <!-- LLM 调度网关 -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-llm</artifactId>
         </dependency>
-        <!-- Spring Security：鉴权 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
-        </dependency>
-        <!-- JPA：MySQL 持久化 -->
+        <!-- JPA：Phase 1 会话 / 消息持久化实体 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
-        <!-- Spring AI OpenAI 兼容（DeepSeek 等走 OpenAI 协议；版本由 spring-ai-bom 管理） -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-openai</artifactId>
-        </dependency>
-        <!-- PostgreSQL 驱动 -->
+        <!-- 数据库：PostgreSQL -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
         </dependency>
-        <!-- JWT（jjwt 0.12.x） -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.12.6</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.6</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.ai</groupId>
-            <artifactId>vc-core</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
+        <!-- 单元测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-
 </project>

@@ -158,6 +158,8 @@ export interface User {
   email?: string;
   /** 头像 URL（可选，没有就用首字母 fallback） */
   avatar?: string;
+  /** 角色：管理员 / 普通用户 */
+  role?: 'admin' | 'user';
 }
 
 /** 飞书账号绑定状态 */
@@ -240,4 +242,104 @@ export interface ApiResponse<T = unknown> {
   code: number;
   data: T;
   message: string;
+}
+
+// ============ 系统管理（管理员） ============
+
+/** 管理员视角的用户列表项 */
+export interface AdminUser {
+  id: string;
+  username: string;
+  name: string;
+  email?: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  createdAt: number;
+  lastLoginAt?: number;
+  /** 统计 */
+  conversationCount: number;
+  kbDocumentCount: number;
+}
+
+/** 供应商目录项（管理员控制可见性） */
+export interface AdminVendor {
+  vendor: string;
+  vendorName: string;
+  baseUrl: string;
+  /** 该供应商下模型是否对用户可见 */
+  visible: boolean;
+  models: AdminVendorModel[];
+}
+
+export interface AdminVendorModel {
+  modelCode: string;
+  modelName: string;
+  /** 该模型是否对用户可见 */
+  visible: boolean;
+  /** 是否为新用户默认模型 */
+  isDefault: boolean;
+}
+
+/** 调用统计日项 */
+export interface CallStatDay {
+  date: string;
+  /** 调用次数 */
+  calls: number;
+  /** token 消耗 */
+  tokens: number;
+}
+
+/** 在线会话 */
+export interface OnlineSession {
+  sessionId: string;
+  username: string;
+  name: string;
+  ip: string;
+  loginAt: number;
+  lastActiveAt: number;
+}
+
+/** 错误日志 */
+export interface ErrorLog {
+  id: string;
+  time: number;
+  level: 'error' | 'warn';
+  source: string;
+  message: string;
+}
+
+/** 审计日志 */
+export interface AuditLogEntry {
+  id: string;
+  time: number;
+  username: string;
+  action: string;
+  detail: string;
+  ip: string;
+}
+
+/** 系统配置 */
+export interface SystemConfig {
+  /** 是否允许自助注册 */
+  allowRegister: boolean;
+  /** 系统公告 */
+  announcement: string;
+  /** 新用户默认主题 */
+  defaultPreset: PresetName;
+  /** 新用户默认模型 vendor */
+  defaultVendor: string;
+  /** 新用户默认模型 code */
+  defaultModelCode: string;
+}
+
+/** 定时任务 */
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  description: string;
+  cron: string;
+  enabled: boolean;
+  lastRunAt?: number;
+  nextRunAt?: number;
+  lastStatus: 'success' | 'failed' | 'never';
 }

@@ -4,11 +4,13 @@ import { Icon } from '@iconify/react';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import wrenchIcon from '@iconify-icons/lucide/wrench';
+import shieldIcon from '@iconify-icons/lucide/shield-check';
 import UserMenu from '@/components/UserMenu';
 import FloatingMusicPlayer from '@/components/FloatingMusicPlayer';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useAuthStore } from '@/stores/authStore';
 
 const NAV_ITEMS = [
   { path: '/chat', icon: messageSquareIcon, label: '对话' },
@@ -21,6 +23,8 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const { colors } = useTheme();
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'admin';
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
@@ -122,6 +126,38 @@ const MainLayout: React.FC = () => {
 
         {/* 底部弹性空间 */}
         <div style={{ flex: 1 }} />
+
+        {/* 管理员入口（仅 admin 可见） */}
+        {isAdmin && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/admin')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/admin');
+              }
+            }}
+            style={{
+              width: 48,
+              height: 48,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              marginBottom: 4,
+              background: isActive('/admin') ? colors.primary10 : 'transparent',
+              color: isActive('/admin') ? colors.primary : colors.textSecondary,
+              transition: `all 0.2s var(--spring)`,
+              outline: 'none',
+            }}
+            title="系统管理"
+          >
+            <Icon icon={shieldIcon} width={22} />
+          </div>
+        )}
 
         {/* 用户菜单：头像下拉（账号/模型/飞书/外观/退出） */}
         <UserMenu />

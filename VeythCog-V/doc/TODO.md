@@ -86,6 +86,26 @@
 - [x] 把手只露右半（`overflow:hidden` 裁剪窗口硬裁左半，毛玻璃半透明下不透）
 - [x] 收起状态走 `settingsStore.sidebarCollapsed`（persist），跨页面/刷新保留
 
+### 账号设置优化
+
+- [x] 修改密码表单默认收起，点击「修改密码」按钮后展开
+- [x] 展开后按钮变为「应用修改」+「取消」，取消时清空输入并收起
+- [x] 提交成功后自动收起并清空密码框
+
+### 系统管理后台（本轮完成，全部 mock）
+
+- [x] User 类型加 `role: 'admin' | 'user'`，登录时 admin 用户自动赋管理员角色
+- [x] `RequireAdmin` 路由守卫，非管理员访问 `/admin` 重定向回 `/chat`
+- [x] 左侧导航底部加盾牌图标入口（仅 admin 可见）
+- [x] 管理员后台布局（左侧菜单壳，与设置页风格一致）
+- [x] 用户管理：列表/新增/编辑/禁用启用/重置密码/删除（mock）
+- [x] 模型目录管理：供应商开关、模型可见性、设默认模型（用户自管 Key，管理员只控可选范围）
+- [x] 系统监控：统计卡片 + 7 天调用趋势柱状图、在线会话（可强制下线）、错误日志
+- [x] 审计日志：时间/用户/操作/详情/IP，支持关键词搜索
+- [x] 定时任务：过期对话清理、过期日志清理、调用量统计快照；可启停、立即执行
+- [x] 系统配置：注册开关、系统公告、新用户默认主题/默认模型
+- [x] `api/admin.ts` 统一 mock 层（内存数据 + 延迟模拟），后端对接时替换为真实 http 请求
+
 ---
 
 ## 🔴 高优先级（下一阶段）
@@ -163,6 +183,13 @@
 | 笔记 | （待建） | `GET/POST/PUT /api/notes` | ⬜ |
 | 音乐 | `mockTracks` | `GET /api/music/tracks`、`GET /api/music/stream/:id` | ⬜ |
 | 数据库 | （待建） | `POST /api/query`（执行 SQL） | ⬜ |
+| 管理员 | `getUsers()` / `createUser()` / `updateUser()` / `deleteUser()` | `GET/POST/PUT/DELETE /api/admin/users` | ⬜ mock |
+| 管理员 | `resetUserPassword()` | `POST /api/admin/users/:id/reset-password` | ⬜ mock |
+| 管理员 | `getVendorCatalog()` / `updateVendorVisibility()` / `updateModelVisibility()` / `setDefaultModel()` | `PUT /api/admin/catalog/*` | ⬜ mock |
+| 管理员 | `getCallStats()` / `getOnlineSessions()` / `kickSession()` / `getErrorLogs()` | `GET /api/admin/stats/*`、`GET /api/admin/sessions` | ⬜ mock |
+| 管理员 | `getAuditLogs()` | `GET /api/admin/audit-logs` | ⬜ mock |
+| 管理员 | `getTasks()` / `toggleTask()` / `runTaskNow()` | `GET/PUT /api/admin/tasks/*` | ⬜ mock |
+| 管理员 | `getSystemConfig()` / `saveSystemConfig()` | `GET/PUT /api/admin/config` | ⬜ mock |
 
 **对接步骤**：
 1. `.env.local` 填 `VITE_API_BASE`、`VITE_LLM_BASE`，`VITE_USE_MOCK=false`

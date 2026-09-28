@@ -25,6 +25,17 @@
 
 **设计原则**：单体轻量化（不搞微服务）；前后端解耦、契约先行；单库两用（PostgreSQL + pgvector 同时承载业务表与向量），少一个组件。
 
+**当前实现形态：模块化单体（Modular Monolith）**。域能力拆为库模块，由唯一可运行应用 vc-app 装配：
+
+```
+vc-common(公共基础) → vc-llm(LLM 调度网关/模型管理) → vc-chat(对话域) / vc-knowledge(知识库域) → vc-app(唯一可运行)
+```
+
+- 依赖方向单向：`common ← llm ← (chat, knowledge) ← app`；chat 与 knowledge 相互不依赖。
+- 仅 vc-app 可运行（端口 8123，`/api`）；其余为纯库（无 boot 插件、无 main）。
+- 上图的能力落到包/模块：`auth`、`web`(Controller)、`admin`(系统管理)、`orchestration`(RAG 编排) 在 vc-app；`llm-gateway` 在 vc-llm；`knowledge` 域在 vc-knowledge；`chat` 域在 vc-chat。
+- RAG 组合动作在 vc-app 的 orchestration 层完成（检索→拼上下文+引用→作答），域之间不互相 import。
+
 ## 二、三大深水区（面试核心）
 
 ### 1. llm-gateway · 多模型调度网关（Phase 1）

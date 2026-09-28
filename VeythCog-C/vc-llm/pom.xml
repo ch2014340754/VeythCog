@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.vc</groupId>
+        <artifactId>veythcog-c</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vc-llm</artifactId>
+    <name>vc-llm</name>
+    <description>LLM 调度网关域：多厂商抽象 / 路由 / 模型管理（库，无 Controller）</description>
+
+    <dependencies>
+        <!-- 公共基础 -->
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-common</artifactId>
+        </dependency>
+        <!-- 阿里百炼（DashScope）核心起步：提供 dashScopeChatModel Bean -->
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+        </dependency>
+        <!-- OpenAI 兼容协议（DeepSeek 等，OpenAiChatModel 动态构建） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+        <!-- JPA：模型目录 / 用户绑定实体与仓库 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+    </dependencies>
+</project>

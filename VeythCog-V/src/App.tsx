@@ -16,6 +16,13 @@ import LarkBindSettings from '@/pages/Settings/LarkBind';
 import AppearanceSettings from '@/pages/Settings/Appearance';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useAuthStore } from '@/stores/authStore';
+import AdminPage from '@/pages/Admin';
+import AdminUsers from '@/pages/Admin/Users';
+import AdminModels from '@/pages/Admin/Models';
+import AdminMonitor from '@/pages/Admin/Monitoring';
+import AdminAudit from '@/pages/Admin/AuditLog';
+import AdminTasks from '@/pages/Admin/Tasks';
+import AdminConfig from '@/pages/Admin/Config';
 
 /** 路由守卫：未登录跳 /login，并记录来源以便登录后回跳 */
 const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -23,6 +30,15 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   if (!token) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  return <>{children}</>;
+};
+
+/** 管理员守卫：非管理员重定向回首页 */
+const RequireAdmin: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const user = useAuthStore((s) => s.user);
+  if (user?.role !== 'admin') {
+    return <Navigate to="/chat" replace />;
   }
   return <>{children}</>;
 };
@@ -62,6 +78,24 @@ const AppContent: React.FC = () => {
                 <Route path="providers" element={<ProvidersSettings />} />
                 <Route path="lark" element={<LarkBindSettings />} />
                 <Route path="appearance" element={<AppearanceSettings />} />
+              </Route>
+
+              {/* 系统管理（仅管理员） */}
+              <Route
+                path="/admin"
+                element={
+                  <RequireAdmin>
+                    <AdminPage />
+                  </RequireAdmin>
+                }
+              >
+                <Route index element={<Navigate to="/admin/users" replace />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="models" element={<AdminModels />} />
+                <Route path="monitor" element={<AdminMonitor />} />
+                <Route path="audit" element={<AdminAudit />} />
+                <Route path="tasks" element={<AdminTasks />} />
+                <Route path="config" element={<AdminConfig />} />
               </Route>
             </Route>
 

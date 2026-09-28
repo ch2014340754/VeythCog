@@ -18,16 +18,26 @@ D:\demo\
 - knife4j / OpenAPI 3 · Hutool · Lombok
 - PostgreSQL + pgvector (planned, for RAG)
 
-## Modules
+## Modules (modular monolith)
 
-- `vc-core` — common lib: unified response, exception framework, CORS.
-- `vc-chat` — runnable app (port 8123, context-path `/api`): `auth` / `chat` / `llm` / `knowledge` / `health` packages.
+```
+vc-common   common lib: unified response, exception framework, utils (pure POJO, no web/AI)
+vc-llm      LLM gateway domain: multi-vendor abstraction, routing, model management (lib)
+vc-chat     conversation domain: sessions/messages/memory (lib, depends on vc-llm)
+vc-knowledge knowledge-base domain: ingest/chunk/embed/retrieve (lib)
+vc-app      THE only runnable app (port 8123, context-path /api): auth / web / admin / RAG orchestration
+vc-learn    Spring AI learning sandbox (independent, DashScope only)
+```
+
+Dependency direction (one-way): `vc-common ← vc-llm ← (vc-chat, vc-knowledge) ← vc-app`.
+Only `vc-app` is runnable; the rest are plain libraries (no boot plugin, no main class).
 
 ## Quick Start
 
 ```bash
 export DASHSCOPE_API_KEY=sk-xxx
-cd vc-chat && mvn spring-boot:run
+mvn install -DskipTests            # install internal domain modules first
+cd vc-app && mvn spring-boot:run   # or run com.vc.app.VcAppApplication in IDEA
 ```
 
 - Service: `http://localhost:8123`
