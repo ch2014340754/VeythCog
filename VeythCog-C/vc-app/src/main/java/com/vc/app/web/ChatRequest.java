@@ -19,4 +19,7 @@ public class ChatRequest implements Serializable {
 
     @NotBlank(message = "modelCode 不能为空")
     private String modelCode;
+
+    /** 会话 id：用于会话隔离与记忆（可为空，后端会叠加 userId 生成隔离主键） */
+    private String conversationId;
 }

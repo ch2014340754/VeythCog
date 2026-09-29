@@ -2,6 +2,7 @@ package com.vc.chat;
 
 import com.vc.llm.LlmChatService;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 /**
  * 对话域服务：会话 / 消息 / 记忆管理的领域入口。
@@ -17,8 +18,13 @@ public class ChatService {
         this.llmChatService = llmChatService;
     }
 
-    /** 单次对话（同步） */
-    public String chat(Long userId, String vendor, String modelCode, String message) {
-        return llmChatService.chat(userId, vendor, modelCode, message);
+    /** 单次对话（同步）：携带会话 id，供记忆顾问做会话隔离 */
+    public String chat(Long userId, String vendor, String modelCode, String conversationId, String message) {
+        return llmChatService.chat(userId, vendor, modelCode, conversationId, message);
+    }
+
+    /** 对话（流式）：返回逐 token 增量，用于 SSE 逐字下发降低首响应时延 */
+    public Flux<String> streamChat(Long userId, String vendor, String modelCode, String conversationId, String message) {
+        return llmChatService.stream(userId, vendor, modelCode, conversationId, message);
     }
 }

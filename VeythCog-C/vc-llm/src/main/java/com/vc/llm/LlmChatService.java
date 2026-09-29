@@ -2,6 +2,7 @@ package com.vc.llm;
 
 import com.vc.llm.router.LlmModelRouter;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 /**
  * 大模型对话服务（多模型调度网关）。
@@ -20,13 +21,19 @@ public class LlmChatService {
     /**
      * 单次对话（同步）。
      *
-     * @param userId    当前用户 id
-     * @param vendor    厂商标识
-     * @param modelCode 模型编码
-     * @param message   用户消息
+     * @param userId         当前用户 id
+     * @param vendor         厂商标识
+     * @param modelCode      模型编码
+     * @param conversationId 会话 id（用于会话隔离的记忆主键）
+     * @param message        用户消息
      * @return 模型回复文本
      */
-    public String chat(Long userId, String vendor, String modelCode, String message) {
-        return router.chat(userId, vendor, modelCode, message);
+    public String chat(Long userId, String vendor, String modelCode, String conversationId, String message) {
+        return router.chat(userId, vendor, modelCode, conversationId, message);
+    }
+
+    /** 对话（流式）：返回逐 token 增量，用于 SSE 逐字下发降低首响应时延 */
+    public Flux<String> stream(Long userId, String vendor, String modelCode, String conversationId, String message) {
+        return router.stream(userId, vendor, modelCode, conversationId, message);
     }
 }

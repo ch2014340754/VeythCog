@@ -15,7 +15,7 @@ import globeIcon from '@iconify-icons/lucide/globe';
 import micIcon from '@iconify-icons/lucide/mic';
 import MessageBubble from '@/components/MessageBubble';
 import CollapsibleSidebar from '@/components/CollapsibleSidebar';
-import { getConversations, createConversation, deleteConversation, sendMessage } from '@/api/chat';
+import { getConversations, createConversation, deleteConversation, streamChatMessage } from '@/api/chat';
 import type { Conversation, Message } from '@/types';
 import { formatRelativeTime } from '@/utils/formatTime';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -145,8 +145,67 @@ const ChatPage: React.FC = () => {
     });
   };
 
+  const streamingMsgIdRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // 组件卸载时中断未完成流
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  // 流式回复：SSE 逐 token 增量填充到指定 assistant 消息
+  const streamReply = useCallback(
+    (content: string, vendor: string, modelCode: string, conversationId: string, assistantId: string) => {
+      abortRef.current?.abort();
+      abortRef.current = streamChatMessage({
+        message: content,
+        vendor,
+        modelCode,
+        conversationId,
+        onDelta: (t) => {
+          const id = streamingMsgIdRef.current;
+          if (!id) return;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === conversationId
+                ? { ...c, messages: c.messages.map((m) => (m.id === id ? { ...m, content: m.content + t } : m)) }
+                : c
+            )
+          );
+        },
+        onDone: () => {
+          const id = streamingMsgIdRef.current;
+          streamingMsgIdRef.current = null;
+          abortRef.current = null;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === conversationId
+                ? { ...c, lastMessage: (c.messages.find((m) => m.id === id)?.content) || c.lastMessage, updatedAt: Date.now() }
+                : c
+            )
+          );
+          setSending(false);
+        },
+        onError: (e) => {
+          const id = streamingMsgIdRef.current;
+          streamingMsgIdRef.current = null;
+          abortRef.current = null;
+          // 失败且未生成任何内容时，移除空的 AI 占位气泡
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === conversationId
+                ? { ...c, messages: c.messages.filter((m) => !(m.id === id && !m.content)) }
+                : c
+            )
+          );
+          message.error(e instanceof Error ? e.message : '请求失败，请稍后重试');
+          setSending(false);
+        },
+      });
+    },
+    []
+  );
+
   // 发送消息
-  const handleSend = useCallback(async (text?: string) => {
+  const handleSend = useCallback((text?: string) => {
     const content = (text ?? inputValue).trim();
     if (!content || !activeConvId || sending) return;
 
@@ -166,14 +225,10 @@ const ChatPage: React.FC = () => {
       content,
       timestamp: now,
     };
+    const aiId = `msg-${Date.now()}-ai`;
+    streamingMsgIdRef.current = aiId;
 
-    const aiText = await sendMessage(content, activeModel.vendor, activeModel.modelCode);
-    const aiMsg: Message = {
-      id: `msg-${now}-ai`,
-      role: 'assistant',
-      content: aiText,
-      timestamp: now + 1000,
-    };
+    // 乐观更新：用户消息 + 空 AI 占位立即上屏，随后 SSE 逐 token 填充
     setConversations((prev) =>
       prev.map((c) =>
         c.id === activeConvId
@@ -183,18 +238,19 @@ const ChatPage: React.FC = () => {
               vendor: activeModel.vendor,
               modelCode: activeModel.modelCode,
               modelName: activeModel.modelName,
-              messages: [...c.messages, userMsg, aiMsg],
-              lastMessage: aiText,
-              updatedAt: now + 1000,
+              messages: [...c.messages, userMsg, { id: aiId, role: 'assistant', content: '', timestamp: now }],
+              lastMessage: content,
+              updatedAt: now,
             }
           : c
       )
     );
-    setSending(false);
+
+    streamReply(content, activeModel.vendor, activeModel.modelCode, activeConvId, aiId);
   }, [inputValue, activeConvId, sending, activeModel]);
 
-  // 重新生成：找到该会话最后一条 user 消息内容，再发一次
-  const handleRegenerate = useCallback(async (messageId: string) => {
+  // 重新生成：找到该会话最后一条 user 消息内容，再流式重发
+  const handleRegenerate = useCallback((messageId: string) => {
     if (!activeConv || sending) return;
     if (!activeConv.vendor || !activeConv.modelCode) {
       message.warning('该会话未绑定模型');
@@ -212,21 +268,16 @@ const ChatPage: React.FC = () => {
     }
     if (!userContent) return;
     setSending(true);
-    const aiText = await sendMessage(userContent, activeConv.vendor, activeConv.modelCode);
-    const aiMsg: Message = {
-      id: `msg-${Date.now()}-ai`,
-      role: 'assistant',
-      content: aiText,
-      timestamp: Date.now(),
-    };
+    const aiId = `msg-${Date.now()}-ai`;
+    streamingMsgIdRef.current = aiId;
     setConversations((prev) =>
       prev.map((c) =>
         c.id === activeConv.id
-          ? { ...c, messages: [...c.messages, aiMsg], lastMessage: aiText, updatedAt: Date.now() }
+          ? { ...c, messages: [...c.messages, { id: aiId, role: 'assistant', content: '', timestamp: Date.now() }] }
           : c
       )
     );
-    setSending(false);
+    streamReply(userContent, activeConv.vendor, activeConv.modelCode, activeConv.id, aiId);
   }, [activeConv, sending]);
 
   // 键盘事件

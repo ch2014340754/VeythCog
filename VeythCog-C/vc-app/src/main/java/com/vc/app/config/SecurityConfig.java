@@ -10,12 +10,14 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.DispatcherTypeRequestMatcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vc.app.auth.jwt.JwtAuthFilter;
 import com.vc.common.BaseResponse;
 import com.vc.common.exception.ErrorCode;
 
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
@@ -42,6 +44,8 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // 异步分发（SseEmitter/SSE 流式）已在上层请求完成认证，放行避免二次鉴权
+                        .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
                         .requestMatchers("/auth/**", "/health/**", "/error").permitAll()
                         // 接口文档（knife4j / springdoc）
                         .requestMatchers("/doc.html", "/v3/api-docs/**", "/swagger-ui.html",
