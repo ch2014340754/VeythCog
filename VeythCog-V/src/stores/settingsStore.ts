@@ -77,6 +77,8 @@ export const useSettingsStore = create<SettingsState>()(
         set({ loadingModels: true });
         try {
           const list = await getModels();
+          // 防御：后端未部署时调用方可能返回非数组（历史问题：HTML fallback 被当数据）
+          if (!Array.isArray(list)) return;
           set({ models: list });
           // 当前模型无效时自动选默认模型
           const cur = get().currentModelId;
@@ -85,6 +87,8 @@ export const useSettingsStore = create<SettingsState>()(
             const def = list.find((m) => m.isDefault) ?? list[0];
             set({ currentModelId: def ? modelId(def.vendor, def.modelCode) : null });
           }
+        } catch {
+          // 后端未部署 / 网络不可达：静默保持空 models，页面会显示"去配置模型"提示
         } finally {
           set({ loadingModels: false });
         }
