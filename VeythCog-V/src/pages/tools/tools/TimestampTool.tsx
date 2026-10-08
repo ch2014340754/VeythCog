@@ -34,6 +34,7 @@ const TimestampTool: React.FC = () => {
         <span style={{ fontFamily: 'monospace', fontWeight: 600, color: colors.primary }}>{now}</span>
         <span style={{ color: colors.textTertiary, margin: '0 8px' }}>|</span>
         <button onClick={() => copy(String(now))} style={{ border: 'none', background: 'transparent', color: colors.primary, cursor: 'pointer', fontSize: 12 }}>复制秒级</button>
+        <span style={{ color: colors.textTertiary, margin: '0 8px' }}>|</span>
         <button onClick={() => copy(String(now * 1000))} style={{ border: 'none', background: 'transparent', color: colors.primary, cursor: 'pointer', fontSize: 12 }}>复制毫秒</button>
       </div>
       <Input

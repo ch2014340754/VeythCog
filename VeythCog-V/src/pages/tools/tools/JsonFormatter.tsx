@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { Input, Button, message, Radio } from 'antd';
-import { Icon } from '@iconify/react';
-import copyIcon from '@iconify-icons/lucide/copy';
-import checkIcon from '@iconify-icons/lucide/check';
-import ToolShell from '../ToolShell';
-import JsonHighlight from '../components/JsonHighlight';
 import { useTheme } from '@/contexts/ThemeContext';
+import checkIcon from '@iconify-icons/lucide/check';
+import collapseAllIcon from '@iconify-icons/lucide/chevrons-down-up';
+import expandAllIcon from '@iconify-icons/lucide/chevrons-up-down';
+import copyIcon from '@iconify-icons/lucide/copy';
+import { Icon } from '@iconify/react';
+import { Button, Input, message, Radio, Tooltip } from 'antd';
+import React, { useRef, useState } from 'react';
+import ToolShell from '../ToolShell';
+import JsonTreeView, { JsonTreeHandle } from '../components/JsonTreeView';
 
 const JsonFormatter: React.FC = () => {
   const { colors } = useTheme();
@@ -14,6 +16,7 @@ const JsonFormatter: React.FC = () => {
   const [error, setError] = useState('');
   const [indent, setIndent] = useState<2 | 4>(2);
   const [copied, setCopied] = useState(false);
+  const treeRef = useRef<JsonTreeHandle>(null);
 
   const tryParse = (): any | null => {
     try {
@@ -89,7 +92,30 @@ const JsonFormatter: React.FC = () => {
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>输出</div>
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
+              <span>输出</span>
+              <div style={{ flex: 1 }} />
+              <Tooltip title="展开全部">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<Icon icon={expandAllIcon} width={14} />}
+                  onClick={() => treeRef.current?.expandAll()}
+                  disabled={!output}
+                  style={{ height: 15 }}
+                />
+              </Tooltip>
+              <Tooltip title="折叠全部">
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<Icon icon={collapseAllIcon} width={14} />}
+                  onClick={() => treeRef.current?.collapseAll()}
+                  disabled={!output}
+                  style={{ height: 15 }}
+                />
+              </Tooltip>
+            </div>
             {error ? (
               <div
                 style={{
@@ -107,7 +133,7 @@ const JsonFormatter: React.FC = () => {
                 {error}
               </div>
             ) : (
-              <JsonHighlight code={output} style={{ flex: 1, minHeight: 0 }} />
+              <JsonTreeView ref={treeRef} code={output} style={{ flex: 1, minHeight: 0 }} />
             )}
           </div>
         </div>
