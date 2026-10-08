@@ -20,6 +20,20 @@ interface LoginData {
 /** 登录：调后端，真 JWT */
 export async function login(username: string, password: string): Promise<LoginResult> {
   if (!username.trim()) throw new Error('请输入用户名');
+  // ===== 本地绕过登录（后端未部署时使用）=====
+  // 账密为 admin / admin123 时，直接在前端伪造登录态，不请求后端。
+  // 后端部署完成后，删除此 if 块即可恢复真 JWT 登录。
+  if (username.trim() === 'admin' && password === 'admin123') {
+    return {
+      token: 'dev-bypass-token',
+      user: {
+        id: 'admin',
+        name: 'admin',
+        role: 'admin',
+      },
+    };
+  }
+  // ==========================================
   const data = await http.post<LoginData>('/auth/login', { username, password });
   // TODO: 后端应在登录返回体里带 role，前端先按 username 推断，对接后改
   const role: 'admin' | 'user' = data.username === 'admin' ? 'admin' : 'user';
