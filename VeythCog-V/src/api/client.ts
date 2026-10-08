@@ -8,6 +8,7 @@
 
 import { config } from '@/config';
 import { useAuthStore } from '@/stores/authStore';
+import { DEV_BYPASS_TOKEN } from '@/api/auth';
 
 export class ApiError extends Error {
   status: number;
@@ -65,10 +66,14 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
 
     // 401：token 失效，清掉并跳登录
     if (resp.status === 401) {
-      useAuthStore.getState().logout();
-      // 纯函数模块不能用 react-router，直接整页跳登录
-      if (!location.pathname.startsWith('/login')) {
-        location.href = '/login';
+      // 本地绕过模式（dev-bypass-token）下，后端根本没部署，任何 401 都是预期的，
+      // 不能把前端伪造的登录态清掉、也不能踢回登录页。
+      if (getToken() !== DEV_BYPASS_TOKEN) {
+        useAuthStore.getState().logout();
+        // 纯函数模块不能用 react-router，直接整页跳登录
+        if (!location.pathname.startsWith('/login')) {
+          location.href = '/login';
+        }
       }
       throw new ApiError(401, '未登录或登录已过期');
     }
@@ -82,6 +87,13 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
     if (resp.status === 204) return undefined as T;
 
     const ct = resp.headers.get('content-type') ?? '';
+
+    // 后端未部署时，静态托管（如 EdgeOne）会把 /api/* 的请求 SPA fallback 成 index.html（200 text/html）。
+    // 这种情况绝不能把 HTML 字符串当业务数据返回，否则调用方 .map/.some 直接崩。
+    if (ct.includes('text/html')) {
+      throw new ApiError(502, '后端服务未部署或路由未配置（收到 HTML 响应）', await resp.text().catch(() => ''));
+    }
+
     if (ct.includes('application/json')) {
       const body = await resp.json();
       // 后端统一 { code, data, message } 解包：code===0 返回 data，否则抛业务错误
