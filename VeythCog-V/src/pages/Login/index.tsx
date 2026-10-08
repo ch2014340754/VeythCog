@@ -6,6 +6,7 @@ import userIcon from '@iconify-icons/lucide/user';
 import lockIcon from '@iconify-icons/lucide/lock';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
+import { DEV_BYPASS_TOKEN } from '@/api/auth';
 import VeythCogLogo from '@/components/VeythCogLogo';
 
 const LoginPage: React.FC = () => {
@@ -18,7 +19,11 @@ const LoginPage: React.FC = () => {
 
   // 已登录直接进
   if (token) {
-    const from = (location.state as { from?: string } | null)?.from ?? '/chat';
+    // 本地绕过模式：刷新后默认进工具集，不进强依赖后端的 /chat
+    const from =
+      token === DEV_BYPASS_TOKEN
+        ? '/tools'
+        : ((location.state as { from?: string } | null)?.from ?? '/chat');
     return <Navigate to={from} replace />;
   }
 
@@ -29,7 +34,11 @@ const LoginPage: React.FC = () => {
     }
     try {
       await login(username, password);
-      const from = (location.state as { from?: string } | null)?.from ?? '/chat';
+      // 本地绕过登录（后端未部署）：直接进工具集页，避免 /chat 拉后端数据报错
+      const bypassToken = useAuthStore.getState().token === DEV_BYPASS_TOKEN;
+      const from = bypassToken
+        ? '/tools'
+        : ((location.state as { from?: string } | null)?.from ?? '/chat');
       navigate(from, { replace: true });
     } catch (e) {
       message.error(e instanceof Error ? e.message : '登录失败');
@@ -108,17 +117,6 @@ const LoginPage: React.FC = () => {
             登 录
           </Button>
         </Form>
-
-        <div
-          style={{
-            marginTop: 24,
-            fontSize: 12,
-            color: colors.textTertiary,
-            textAlign: 'center',
-          }}
-        >
-          初始账号：admin / admin123
-        </div>
       </div>
     </div>
   );
