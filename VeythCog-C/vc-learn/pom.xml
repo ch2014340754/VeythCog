@@ -14,15 +14,22 @@
     <description>Spring AI 学习沙箱：独立可运行，只连阿里百炼（DashScope），与业务模块零依赖</description>
 
     <dependencies>
-        <!-- Spring Boot 基础（CLI 演示，不引入 web，保持最小） -->
+        <!-- Web 容器：常驻运行，通过 HTTP 调用 ChatController -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <!-- 阿里百炼（DashScope）起步：提供 ChatModel Bean -->
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+        </dependency>
+        <!-- 热部署：classpath 变化时自动重启（源码保存并编译后生效），不打包进可执行 jar -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
