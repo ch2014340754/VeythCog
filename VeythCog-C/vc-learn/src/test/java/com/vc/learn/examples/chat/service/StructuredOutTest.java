@@ -12,7 +12,12 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.convert.support.DefaultConversionService;
 
 import com.vc.learn.examples.chat.ChatDemo;
+import com.vc.learn.examples.chat.memory.FIleBasedChatMemory;
 import com.vc.learn.examples.chat.service.ChatService.ActorsFilms;
+
+/**
+ * 测试结构化输出
+ */
 
 @SpringBootTest
 public class StructuredOutTest {
@@ -54,4 +59,5 @@ public class StructuredOutTest {
             .entity(new ListOutputConverter(new DefaultConversionService()));
         System.out.println(flavors);
     }
+
 }

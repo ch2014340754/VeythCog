@@ -31,6 +31,14 @@
             <scope>runtime</scope>
             <optional>true</optional>
         </dependency>
+
+        <!-- kryo 序列化：用于 ChatMemory 保存消息 https://github.com/EsotericSoftware/kryo -->
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo</artifactId>
+            <version>5.7.1</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

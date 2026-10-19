@@ -11,8 +11,24 @@ spring:
       chat:
         options:
           model: deepseek-v4-flash-0731
-          
+
 # 日志配置 开启 ANSI 颜色
   output:
     ansi:
       enabled: always # 强制开启，auto是自动检测，有些环境识别失败
+
+# ========== 系统提示词配置 ==========
+vc:
+  learn:
+    system-prompt:
+      # 是否启用系统提示词（关闭后 AI 无角色设定，按通用对话回复）
+      enabled: true
+      # 角色标识，仅用于日志区分
+      role: tcm-doctor
+      # 模板文件位置（classpath 前缀），优先级高于下面的内联 template
+      template-location: classpath:prompts/tcm-doctor.md
+      # 内联模板（template-location 未配置或加载失败时使用）
+      # template: "你是一位{role}，请以专业的态度回答用户的问题。"
+      # 模板变量替换映射，对应模板中的 {变量名}
+      variables:
+        years: "20"
