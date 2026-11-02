@@ -1,0 +1,73 @@
+### AI 工具配置 ###
+.joycode/
+
+### IDE 与系统通用 ###
+.idea/
+*.iws
+*.iml
+*.ipr
+.DS_Store
+Thumbs.db
+
+### VS Code（冲突规则请自行调整）###
+.vscode/
+VeythCog-V/.vscode/*
+!VeythCog-V/.vscode/extensions.json
+
+========================================
+### VeythCog-C（Java / Spring Boot） ###
+========================================
+
+# 本地配置
+VeythCog-C/application-local.yml
+
+# Maven
+VeythCog-C/HELP.md
+VeythCog-C/**/target/
+VeythCog-C/.mvn/wrapper/maven-wrapper.jar
+!VeythCog-C/**/src/main/**/target/
+!VeythCog-C/**/src/test/**/target/
+
+# STS
+VeythCog-C/.apt_generated
+VeythCog-C/.classpath
+VeythCog-C/.factorypath
+VeythCog-C/.project
+VeythCog-C/.settings
+VeythCog-C/.springBeans
+VeythCog-C/.sts4-cache
+
+# NetBeans
+VeythCog-C/nbproject/private/
+VeythCog-C/nbbuild/
+VeythCog-C/dist/
+VeythCog-C/nbdist/
+VeythCog-C/.nb-gradle/
+VeythCog-C/build/
+!VeythCog-C/**/src/main/**/build/
+!VeythCog-C/**/src/test/**/build/
+
+=======================================
+### VeythCog-V（Node.js / Vue） ###
+=======================================
+
+# 依赖
+VeythCog-V/node_modules/
+
+# 构建产物
+VeythCog-V/dist/
+VeythCog-V/dist-ssr/
+VeythCog-V/*.local
+
+# 日志与缓存
+VeythCog-V/*.log
+VeythCog-V/npm-debug.log*
+VeythCog-V/yarn-debug.log*
+VeythCog-V/yarn-error.log*
+VeythCog-V/pnpm-debug.log*
+
+# 环境变量
+VeythCog-V/.env
+VeythCog-V/.env.local
+VeythCog-V/.env.*.local
+**/*-local.yml
