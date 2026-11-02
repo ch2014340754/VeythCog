@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: vc-learn
+  profiles:
+    active: local
   ai:
     dashscope:
       # 阿里百炼 API Key（本地可用环境变量 DASHSCOPE_API_KEY 覆盖；未填时 ChatDemo 调用会失败并给出提示）
@@ -11,7 +13,7 @@ spring:
       chat:
         options:
           model: deepseek-v4-flash-0731
-          
+
 # 日志配置 开启 ANSI 颜色
   output:
     ansi:
