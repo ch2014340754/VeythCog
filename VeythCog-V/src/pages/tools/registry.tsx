@@ -19,6 +19,7 @@ import clockIcon from '@iconify-icons/lucide/clock';
 import globeIcon from '@iconify-icons/lucide/globe';
 import databaseIcon from '@iconify-icons/lucide/database';
 import terminalIcon from '@iconify-icons/lucide/terminal';
+import wrapTextIcon from '@iconify-icons/lucide/wrap-text';
 import alarmClock from '@iconify-icons/lucide/alarm-clock';
 import fingerprint from '@iconify-icons/lucide/fingerprint';
 import shieldCheck from '@iconify-icons/lucide/shield-check';
@@ -203,6 +204,14 @@ export const tools: ToolEntry[] = [
     icon: <Icon icon={terminalIcon} width={16} />,
     category: '代码',
     component: React.lazy(() => import('./tools/CurlConvert')),
+  },
+  {
+    id: 'command-line-wrap',
+    name: '命令行换行处理',
+    description: '多行命令合并为单行，或长命令拆多行，支持 Bash/PowerShell/CMD',
+    icon: <Icon icon={wrapTextIcon} width={16} />,
+    category: '代码',
+    component: React.lazy(() => import('./tools/CommandLineWrap')),
   },
   {
     id: 'cron',
