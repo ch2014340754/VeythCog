@@ -10,7 +10,16 @@ spring:
       api-key: sk-ws-H.PLXEDIP.ha9Q.MEQCIHoBO2MhSEr0-x0eGj6LasoZPWJCe1PelgvKUYw2wuH6AiAmgD948UcSZ-6qbVR5eckLSaTEIvChEHmi5H6fgbkjqw
       chat:
         options:
+<<<<<<< HEAD
           model: deepseek-v4-flash-0731
+=======
+          model: deepseek-v4-pro-0813
+      embedding:
+        options:
+          model: qwen3.7-text-embedding-flash
+          dimensions: 1024
+          text-type: document
+>>>>>>> e3a5baad47acb41a206070e7ae6132a78e995fd4
 
 # 日志配置 开启 ANSI 颜色
   output:
