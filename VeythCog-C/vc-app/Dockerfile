@@ -4,39 +4,47 @@
 # 后端唯一可运行应用为 vc-app，依赖 vc-common / vc-llm / vc-chat / vc-knowledge。
 # 技术栈：Java 21 + Spring Boot 3.5 + Maven 多模块（聚合根 pom）。
 #
-# 构建上下文必须为「项目根目录」（需含父 pom 与全部模块）：
+# 构建上下文须为「项目根目录」，至少包含：
+#     pom.xml + vc-common / vc-llm / vc-chat / vc-knowledge / vc-app
+#   vc-learn（学习沙箱）无需进入生产构建上下文，本 Dockerfile 不引用它。
+#
+# 用法（在项目根目录执行）：
 #     docker build -f vc-app/Dockerfile -t veythcog/vc-app .
 #
-# 关键注意：
-#   根 pom.xml 的 <modules> 包含 vc-learn，Maven reactor 必须能读到
-#   vc-learn/pom.xml，否则即使 -pl vc-app 也会因缺少模块而构建失败。
-#   （现有根目录 Dockerfile 未 COPY vc-learn，存在该缺陷。）
+# 构建要点：
+#   根 pom.xml 的 <modules> 引用了 vc-learn；若用聚合 reactor（-pl vc-app -am），
+#   Maven 必须读到 vc-learn/pom.xml，缺它即报 "/vc-learn: not found"。
+#   因此改用「-f <模块>/pom.xml」逐个构建：根 pom 仅作为 parent 解析，
+#   不触发聚合 modules 遍历，从而彻底摆脱对 vc-learn 的依赖。
 # =============================================================================
 
 # ---------- 阶段 1：编译打包 ----------
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
-# 1) 先复制全部 pom 以拉取依赖（利用 Docker 层缓存）
+# 1) 复制根 pom 与生产模块 pom（不含 vc-learn）
 COPY pom.xml .
 COPY vc-common/pom.xml      vc-common/
 COPY vc-llm/pom.xml         vc-llm/
 COPY vc-chat/pom.xml        vc-chat/
 COPY vc-knowledge/pom.xml   vc-knowledge/
 COPY vc-app/pom.xml         vc-app/
-COPY vc-learn/pom.xml       vc-learn/
-RUN mvn -q -B dependency:go-offline
 
-# 2) 复制源码（vc-learn 为学习沙箱，不参与生产打包，仅保证 reactor 完整）
+# 2) 复制生产模块源码（vc-learn 不需要）
 COPY vc-common      vc-common
 COPY vc-llm         vc-llm
 COPY vc-chat        vc-chat
 COPY vc-knowledge   vc-knowledge
 COPY vc-app         vc-app
-COPY vc-learn       vc-learn
 
-# 3) 打包 vc-app 及其依赖模块（-am：连同上游模块一起构建），跳过测试
-RUN mvn -q -B -pl vc-app -am package -DskipTests
+# 3) 按依赖拓扑逐个构建并安装到本地仓库，最后打包 vc-app：
+#    vc-common → vc-llm → vc-knowledge → vc-chat → vc-app
+#    （逐个 -f 构建，避免聚合 reactor 对 vc-learn 的依赖）
+RUN mvn -q -B -f vc-common/pom.xml    install -DskipTests \
+ && mvn -q -B -f vc-llm/pom.xml       install -DskipTests \
+ && mvn -q -B -f vc-knowledge/pom.xml install -DskipTests \
+ && mvn -q -B -f vc-chat/pom.xml      install -DskipTests \
+ && mvn -q -B -f vc-app/pom.xml       package -DskipTests
 
 # ---------- 阶段 2：精简运行镜像 ----------
 FROM eclipse-temurin:21-jre
