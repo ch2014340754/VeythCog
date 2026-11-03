@@ -2,12 +2,32 @@ spring:
   application:
     name: vc-app
   profiles:
-    active: prod
+    active: local
   jpa:
     hibernate:
       ddl-auto: none      # 表结构由 docs/sql/*.sql 脚本管理，不用 Hibernate 自动建
     open-in-view: false
-
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME}
+  ai:
+    dashscope:
+      # 阿里百炼 API Key（本地可用环境变量 DASHSCOPE_API_KEY 覆盖；未填时 ChatDemo 调用会失败并给出提示）
+      api-key: ${DASHSCOPE_API_KEY}
+      chat:
+        options:
+          model: ${DASHSCOPE_MODEL}
+llm:
+  vendors:
+    dashscope:
+      # 阿里百炼 AK（与 spring.ai.dashscope.api-key 保持一致，后期统一迁 Nacos）
+      api-key: ${DASHSCOPE_API_KEY}
+    deepseek:
+      # DeepSeek AK（你稍后填写，留空时该模型可绑定但对话会报「未配置密钥」）
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com/v1
 server:
   port: 8123
   servlet:
