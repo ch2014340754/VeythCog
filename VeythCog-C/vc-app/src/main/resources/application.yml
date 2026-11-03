@@ -2,7 +2,7 @@ spring:
   application:
     name: vc-app
   profiles:
-    active: local
+    active: prod
   jpa:
     hibernate:
       ddl-auto: none      # 表结构由 docs/sql/*.sql 脚本管理，不用 Hibernate 自动建

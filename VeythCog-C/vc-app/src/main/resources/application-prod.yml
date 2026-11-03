@@ -1,0 +1,25 @@
+# 本地开发环境配置
+# 注意：本文件已被 .gitignore 忽略，不会提交到仓库
+# 复制 .env.example 或直接设置系统环境变量后使用
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db.vekgjdocbwfbzvdpzhuq.supabase.co:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:nORAsQwRmY5Xi4yg}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  ai:
+    dashscope:
+      # 阿里百炼 API Key（本地可用环境变量 DASHSCOPE_API_KEY 覆盖；未填时 ChatDemo 调用会失败并给出提示）
+      api-key: ${DASHSCOPE_API_KEY:sk-ws-H.PLXEDIP.ha9Q.MEQCIHoBO2MhSEr0-x0eGj6LasoZPWJCe1PelgvKUYw2wuH6AiAmgD948UcSZ-6qbVR5eckLSaTEIvChEHmi5H6fgbkjqw}
+      chat:
+        options:
+          model: ${DASHSCOPE_MODEL:deepseek-v4-pro-0813}
+llm:
+  vendors:
+    dashscope:
+      # 阿里百炼 AK（与 spring.ai.dashscope.api-key 保持一致，后期统一迁 Nacos）
+      api-key: ${DASHSCOPE_API_KEY:sk-ws-H.PLDMHHL.0l2M.MEUCIQDGcdpXRcO0HLxzKrnMmq9MakNY1h9Z7nxB5QLyCwRo0gIgGR-nPJpmKSHyWvxNvy1gcPqmnIxxuKdHLL1LNXbbSTc}
+    deepseek:
+      # DeepSeek AK（你稍后填写，留空时该模型可绑定但对话会报「未配置密钥」）
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: https://api.deepseek.com/v1

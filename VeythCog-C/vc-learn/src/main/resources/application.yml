@@ -12,7 +12,6 @@ spring:
       api-key: sk-ws-H.PLXEDIP.ha9Q.MEQCIHoBO2MhSEr0-x0eGj6LasoZPWJCe1PelgvKUYw2wuH6AiAmgD948UcSZ-6qbVR5eckLSaTEIvChEHmi5H6fgbkjqw
       chat:
         options:
-
           model: deepseek-v4-pro-0813
       embedding:
         options:

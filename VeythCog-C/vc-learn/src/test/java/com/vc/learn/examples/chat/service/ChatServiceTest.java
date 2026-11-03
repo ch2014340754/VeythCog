@@ -4,8 +4,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import com.vc.learn.examples.chat.service.ChatService.ChatResponse;
-
 @SpringBootTest
 public class ChatServiceTest {
 
