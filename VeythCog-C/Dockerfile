@@ -37,7 +37,10 @@ COPY vc-app         vc-app
 # 3) 按依赖拓扑逐个构建并安装到本地仓库，最后打包 vc-app：
 #    vc-common → vc-llm → vc-knowledge → vc-chat → vc-app
 #    （逐个 -f 构建，避免聚合 reactor 对 vc-learn 的依赖）
-RUN mvn -q -B -f vc-common/pom.xml    install -DskipTests \
+#    先 install -N 根聚合 pom：子模块 pom 的 parent 是根 pom，解析依赖时
+#    必须在本地仓库找到它，否则报 "Could not find artifact com.vc:veythcog-c:pom"
+RUN mvn -q -B -f pom.xml install -N -DskipTests \
+ && mvn -q -B -f vc-common/pom.xml    install -DskipTests \
  && mvn -q -B -f vc-llm/pom.xml       install -DskipTests \
  && mvn -q -B -f vc-knowledge/pom.xml install -DskipTests \
  && mvn -q -B -f vc-chat/pom.xml      install -DskipTests \
