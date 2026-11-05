@@ -183,14 +183,29 @@ docker logs -f veyth-cog-backend  # 等待 "Started VcAppApplication"
 ```
 > 关键点：backend 与 pg-vector 同网络，数据库连接地址写 `pg-vector:5432` 即可，无需改宿主机 IP
 
-### 4. 验证 + 对外暴露
-1. 服务器本机验证（绕过防火墙问题）：`curl http://127.0.0.1:8123/api/swagger-ui.html`（或 `POST /api/auth/login`）
-2. 放行公网：腾讯云控制台 + 宝塔防火墙放行 TCP `8123`
-3. 公网直连测试：`http://服务器公网IP:8123/api/swagger-ui.html`
-4. 上线后建议走宝塔 Nginx 反代（可同时把 pgadmin 也反代掉）：
-   - 宝塔 → 网站 → 反向代理 → 目标 `http://127.0.0.1:8123`
-   - location 保留 `/api` 前缀透传（如 `location /api { proxy_pass http://127.0.0.1:8123; }`，后端 context-path 自带 `/api`）
-   - 配 SSL 证书 → EdgeOne 回源域名指向该域名
+### 4. 对外暴露（单域名 `/api` 路径分流，推荐）
+前端已部署在 EdgeOne 域名 `https://www.veythcog.top`（监听 Gitee 自动构建）；
+前端 `.env.production` 的 `VITE_API_BASE` **已是相对路径 `/api`**（同源，无需改前端代码、无需 CORS）。
+只需让该域名下的 `/api` 请求回源到后端即可：
+
+1. **宝塔 Nginx（服务器）反代 `/api` → 后端**（backend 容器映射 `8123:8123`，宿主机 `127.0.0.1:8123` 即后端）：
+   ```
+   location /api {
+       proxy_pass http://127.0.0.1:8123;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+   }
+   ```
+   > `proxy_pass` 不带尾部 `/`，会原样透传 `/api/...`，正好匹配后端 context-path `/api`。
+2. **EdgeOne 路径规则**：对 `www.veythcog.top` 增加规则「路径 `/api/*` → 回源到 `http://服务器公网IP`（保留 URI）」，
+   其余路径继续服务前端静态资源。效果：
+   - 页面 `https://www.veythcog.top/` → 前端静态
+   - 接口 `https://www.veythcog.top/api/...` → EdgeOne → 服务器 Nginx → `127.0.0.1:8123`
+3. **验证**：浏览器/`curl https://www.veythcog.top/api/health`（或 `/api/swagger-ui.html`）应返回后端响应。
+4. **端口收敛**：EdgeOne 回源走 `http://80` 即可，**无需**对公网开放 `8123`（后端只让 Nginx 在服务器内访问）；
+   同源方案后端 SecurityConfig 的 `.cors(withDefaults())` 无需改动，兜底足够。
 
 ### 5. 版本迭代流程（改代码后再发版）
 ```bash
@@ -198,9 +213,13 @@ docker logs -f veyth-cog-backend  # 等待 "Started VcAppApplication"
 # 服务器：
 cd /opt/veyth_cog/veyth-cog/VeythCog-C && git pull
 docker build -t veyth-cog-backend:v2 .     # 版本号递增，保留旧镜像可回滚
-sed -i 's/veyth-cog-backend:v1/veyth-cog-backend:v2/' <compose路径>/docker-compose.yml
-docker compose up -d backend
+sed -i 's/veyth-cog-backend:v1/veyth-cog-backend:v2/' <compose路径>/docker-compose.yml   # 同步 compose 的 image 引用
+docker compose up -d --no-deps backend     # 只重建 backend，不动 pg-vector/pgadmin
 ```
+> ⚠️ 升级**不要** `docker compose down` 全停（会连带移除 pg-vector/pgadmin 容器，没必要）；
+> 只重建 backend 即可。若用覆盖式 tag（如一直 `:v1`）重新 build，需加 `--force-recreate` 强制重建：
+> `docker compose up -d --no-deps --force-recreate backend`
+> 数据库数据在 named volume `pgdata`，up/down 不丢；**切勿 `docker compose down -v`**（-v 会删数据卷）。
 
 ### 备选方案：本地打包镜像上传（服务器无法联网构建 Docker Hub 时）
 本地 `podman build -t veyth-cog-backend:v1 .`（本机无 docker，用 podman）→ `podman save -o veyth-cog-backend-v1.tar` → 宝塔上传 → 服务器 `docker load -i` → compose 引用镜像名启动

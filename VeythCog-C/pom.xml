@@ -24,7 +24,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-ai-alibaba.version>1.1.2.0</spring-ai-alibaba.version>
         <spring-ai.version>1.1.2</spring-ai.version>
-        <knife4j.version>4.5.0</knife4j.version>
+        <!-- knife4j-next 社区 fork，适配 springdoc 2.8.x + Spring Boot 3.5 -->
+        <knife4j.version>5.8.1</knife4j.version>
         <pg.version>42.6.1</pg.version>
         <!-- springdoc 显式锁定 2.8.x（官方兼容 Spring Boot 3.5），覆盖 knife4j 传递的旧版本 -->
         <springdoc-openapi.version>2.8.9</springdoc-openapi.version>
@@ -63,9 +64,9 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- 接口文档：knife4j（jakarta 版）+ springdoc，版本统一在此置管，子模块按需引用 -->
+            <!-- 接口文档：knife4j-next（社区 fork，适配 springdoc 2.8.x）+ springdoc -->
             <dependency>
-                <groupId>com.github.xiaoymin</groupId>
+                <groupId>com.baizhukui</groupId>
                 <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
                 <version>${knife4j.version}</version>
             </dependency>
