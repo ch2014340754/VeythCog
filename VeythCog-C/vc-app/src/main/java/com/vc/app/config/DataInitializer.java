@@ -1,6 +1,8 @@
 package com.vc.app.config;
 
+import com.vc.app.auth.entity.Role;
 import com.vc.app.auth.entity.User;
+import com.vc.app.auth.repository.RoleRepository;
 import com.vc.app.auth.repository.UserRepository;
 import com.vc.app.auth.util.PasswordUtil;
 import com.vc.llm.entity.LlmModel;
@@ -26,13 +28,16 @@ public class DataInitializer implements CommandLineRunner {
 
     private final LlmModelRepository modelRepository;
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final UserLlmBindingRepository bindingRepository;
 
     public DataInitializer(LlmModelRepository modelRepository,
                            UserRepository userRepository,
+                           RoleRepository roleRepository,
                            UserLlmBindingRepository bindingRepository) {
         this.modelRepository = modelRepository;
         this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
         this.bindingRepository = bindingRepository;
     }
 
@@ -70,11 +75,29 @@ public class DataInitializer implements CommandLineRunner {
         if (userRepository.count() > 0) {
             return;
         }
+        // 确保内置角色存在
+        Role adminRole = roleRepository.findByCode("admin").orElseGet(() -> {
+            Role r = new Role();
+            r.setCode("admin");
+            r.setName("管理员");
+            r.setDescription("系统管理员");
+            return roleRepository.save(r);
+        });
+        Role userRole = roleRepository.findByCode("user").orElseGet(() -> {
+            Role r = new Role();
+            r.setCode("user");
+            r.setName("普通用户");
+            r.setDescription("基础用户");
+            return roleRepository.save(r);
+        });
+
         User admin = new User();
         admin.setUsername("admin");
         admin.setPassword(PasswordUtil.encode("admin123"));
         admin.setNickname("管理员");
         admin.setEmail("admin@veythcog.local");
+        admin.setStatus("active");
+        admin.setRoles(java.util.Set.of(adminRole, userRole));
         admin = userRepository.save(admin);
 
         // 绑定 dashscope/qwen-plus 为默认模型

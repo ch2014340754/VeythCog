@@ -6,9 +6,9 @@
  * - 401：清登录态并跳 /login
  */
 
-import { config } from '@/config';
+import { config, MOCK_TOKEN } from '@/config';
 import { useAuthStore } from '@/stores/authStore';
-import { DEV_BYPASS_TOKEN } from '@/api/auth';
+import { useModeStore } from '@/stores/modeStore';
 
 export class ApiError extends Error {
   status: number;
@@ -31,7 +31,9 @@ interface RequestOptions {
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']): string {
-  const url = path.startsWith('http') ? path : config.apiBase + path;
+  // 联调模式下允许从 modeStore 覆盖后端地址（登录页可改），否则用 env 默认
+  const base = useModeStore.getState().apiBase || config.apiBase;
+  const url = path.startsWith('http') ? path : base + path;
   if (!query) return url;
   const qs = new URLSearchParams();
   Object.entries(query).forEach(([k, v]) => {
@@ -66,9 +68,9 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
 
     // 401：token 失效，清掉并跳登录
     if (resp.status === 401) {
-      // 本地绕过模式（dev-bypass-token）下，后端根本没部署，任何 401 都是预期的，
-      // 不能把前端伪造的登录态清掉、也不能踢回登录页。
-      if (getToken() !== DEV_BYPASS_TOKEN) {
+      // 本地绕过模式（dev-bypass-token）下后端未部署，任何 401 都是预期，不清登录态、不踢回登录页
+      const bypass = useModeStore.getState().bypassMode;
+      if (!(bypass && getToken() === MOCK_TOKEN)) {
         useAuthStore.getState().logout();
         // 纯函数模块不能用 react-router，直接整页跳登录
         if (!location.pathname.startsWith('/login')) {

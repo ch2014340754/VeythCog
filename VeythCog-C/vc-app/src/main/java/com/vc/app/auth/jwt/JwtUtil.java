@@ -23,12 +23,13 @@ public class JwtUtil {
         this.expireMillis = props.getExpireHours() * 3_600_000L;
     }
 
-    /** 签发 token，subject 为 userId，附带 username 声明 */
-    public String generate(Long userId, String username) {
+    /** 签发 token，subject 为 userId，附带 username + roles 声明 */
+    public String generate(Long userId, String username, java.util.Set<String> roles) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
+                .claim("roles", roles == null ? java.util.List.of() : roles)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expireMillis))
                 .signWith(key)
@@ -43,5 +44,20 @@ public class JwtUtil {
                 .parseSignedClaims(token)
                 .getPayload();
         return Long.valueOf(claims.getSubject());
+    }
+
+    /** 解析 token 返回角色 code 列表 */
+    @SuppressWarnings("unchecked")
+    public java.util.Set<String> parseRoles(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        Object roles = claims.get("roles");
+        if (roles instanceof java.util.List) {
+            return new java.util.HashSet<>((java.util.List<String>) roles);
+        }
+        return java.util.Set.of();
     }
 }

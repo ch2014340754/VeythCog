@@ -3,10 +3,10 @@
  *   login  → POST /auth/login  { username, password } → { token, username, nickname }
  */
 import { http } from '@/api/client';
+import { MOCK_TOKEN } from '@/config';
+import { useModeStore } from '@/stores/modeStore';
+import { mockUsers, addMockUser } from '@/mock/users';
 import type { User } from '@/types';
-
-/** 本地绕过登录的伪 token（后端未部署时使用）。后端部署好后删除 auth.ts 里的绕过分支即可。 */
-export const DEV_BYPASS_TOKEN = 'dev-bypass-token';
 
 export interface LoginResult {
   token: string;
@@ -18,30 +18,44 @@ interface LoginData {
   token: string;
   username: string;
   nickname?: string;
+  /** 角色：admin / user（后端下发） */
+  role?: string;
 }
 
-/** 登录：调后端，真 JWT */
+/** 登录 */
 export async function login(username: string, password: string): Promise<LoginResult> {
   if (!username.trim()) throw new Error('请输入用户名');
 
-  // ===== 本地绕过登录（后端未部署时使用）=====
-  // 账密为 admin / admin123 时，直接在前端伪造登录态，不请求后端。
-  // 后端部署完成后，删除此 if 块及 DEV_BYPASS_TOKEN 即可恢复真 JWT 登录。
-  if (username.trim() === 'admin' && password === 'admin123') {
+  // ===== 本地绕过模式（后端未部署，登录页默认）=====
+  // 本地伪造登录态：admin/admin123 为管理员；其余账号需先在 mock 用户存储中存在。
+  if (useModeStore.getState().bypassMode) {
+    const u = username.trim();
+    if (u === 'admin' && password === 'admin123') {
+      return {
+        token: MOCK_TOKEN,
+        user: { id: 'admin', name: 'admin', role: 'admin' },
+      };
+    }
+    const m = mockUsers.find((x) => x.username === u);
+    if (!m || !password || password.length < 6) {
+      throw new Error('用户名或密码错误');
+    }
+    if (m.status === 'disabled') {
+      throw new Error('该账号已被禁用，请联系管理员');
+    }
     return {
-      token: DEV_BYPASS_TOKEN,
+      token: MOCK_TOKEN,
       user: {
-        id: 'admin',
-        name: 'admin',
-        role: 'admin',
+        id: m.id,
+        name: m.nickname || m.username,
+        role: m.role,
       },
     };
   }
-  // ==========================================
+  // =================================================
 
   const data = await http.post<LoginData>('/auth/login', { username, password });
-  // TODO: 后端应在登录返回体里带 role，前端先按 username 推断，对接后改
-  const role: 'admin' | 'user' = data.username === 'admin' ? 'admin' : 'user';
+  const role: 'admin' | 'user' = data.role === 'admin' ? 'admin' : 'user';
   return {
     token: data.token,
     user: {
@@ -50,6 +64,34 @@ export async function login(username: string, password: string): Promise<LoginRe
       role,
     },
   };
+}
+
+/** 注册：调 POST /auth/register，成功返回（后端返回用户 id，前端不取用） */
+export interface RegisterParams {
+  username: string;
+  password: string;
+  nickname?: string;
+}
+
+export async function register(params: RegisterParams): Promise<void> {
+  // ===== 本地绕过模式（后端未部署）：写入本地 mock 用户存储，供 Admin 可见 =====
+  if (useModeStore.getState().bypassMode) {
+    const u = params.username.trim();
+    if (!u) throw new Error('请输入用户名');
+    if (!params.password || params.password.length < 6) throw new Error('密码至少 6 位');
+    if (u === 'admin' || mockUsers.some((x) => x.username === u)) {
+      throw new Error('用户名已存在');
+    }
+    addMockUser({ username: u, nickname: params.nickname?.trim() || u, role: 'user' });
+    return;
+  }
+  // =================================================
+
+  await http.post<number>('/auth/register', {
+    username: params.username.trim(),
+    password: params.password,
+    nickname: params.nickname?.trim() || undefined,
+  });
 }
 
 /** 获取当前用户（后端暂未提供 /auth/me，返回 null） */

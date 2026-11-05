@@ -13,4 +13,7 @@ public class LoginResponse implements Serializable {
     private String username;
 
     private String nickname;
+
+    /** 角色：admin / user */
+    private String role;
 }

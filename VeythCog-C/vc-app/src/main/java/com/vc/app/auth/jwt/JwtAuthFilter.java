@@ -34,11 +34,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String auth = request.getHeader("Authorization");
         if (auth != null && auth.startsWith("Bearer ")) {
             try {
-                Long userId = jwtUtil.parseUserId(auth.substring(7));
+                String token = auth.substring(7);
+                Long userId = jwtUtil.parseUserId(token);
+                java.util.Set<String> roles = jwtUtil.parseRoles(token);
+                java.util.List<org.springframework.security.core.authority.SimpleGrantedAuthority> authorities =
+                        roles.stream()
+                                .map(r -> new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + r.toUpperCase()))
+                                .toList();
                 var authentication = new UsernamePasswordAuthenticationToken(
                         userId,
                         null,
-                        List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                        authorities);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (Exception ignored) {
                 // token 无效：不设置认证，后续返回 401

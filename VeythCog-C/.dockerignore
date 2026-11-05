@@ -7,3 +7,5 @@ target/
 Dockerfile
 docker-compose.yml
 README.md
+dist/
+*.tar

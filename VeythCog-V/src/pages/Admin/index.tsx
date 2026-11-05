@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import usersIcon from '@iconify-icons/lucide/users';
+import shieldIcon from '@iconify-icons/lucide/shield-check';
 import brainIcon from '@iconify-icons/lucide/brain';
 import monitorIcon from '@iconify-icons/lucide/activity';
 import listIcon from '@iconify-icons/lucide/list-checks';
@@ -11,6 +12,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 const MENU = [
   { path: '/admin/users', icon: usersIcon, label: '用户管理' },
+  { path: '/admin/roles', icon: shieldIcon, label: '角色管理' },
   { path: '/admin/models', icon: brainIcon, label: '模型目录' },
   { path: '/admin/monitor', icon: monitorIcon, label: '系统监控' },
   { path: '/admin/audit', icon: listIcon, label: '审计日志' },

@@ -18,6 +18,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { useAuthStore } from '@/stores/authStore';
 import AdminPage from '@/pages/Admin';
 import AdminUsers from '@/pages/Admin/Users';
+import AdminRoles from '@/pages/Admin/Roles';
 import AdminModels from '@/pages/Admin/Models';
 import AdminMonitor from '@/pages/Admin/Monitoring';
 import AdminAudit from '@/pages/Admin/AuditLog';
@@ -91,6 +92,7 @@ const AppContent: React.FC = () => {
               >
                 <Route index element={<Navigate to="/admin/users" replace />} />
                 <Route path="users" element={<AdminUsers />} />
+                <Route path="roles" element={<AdminRoles />} />
                 <Route path="models" element={<AdminModels />} />
                 <Route path="monitor" element={<AdminMonitor />} />
                 <Route path="audit" element={<AdminAudit />} />

@@ -20,3 +20,6 @@ export const config = {
   /** 是否 mock 模式（P0 已切真实后端） */
   useMock: (import.meta.env.VITE_USE_MOCK ?? 'false') === 'true',
 } as const;
+
+/** 本地 mock 登录使用的伪 token（后端未部署、VITE_USE_MOCK=true 时使用） */
+export const MOCK_TOKEN = 'dev-bypass-token';

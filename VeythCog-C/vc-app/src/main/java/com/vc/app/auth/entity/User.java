@@ -2,14 +2,19 @@ package com.vc.app.auth.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 /**
  * 用户实体 → app_user 表（避开 user 保留字）。
@@ -35,6 +40,19 @@ public class User implements Serializable {
 
     @Column(length = 128)
     private String email = "";
+
+    /** 状态：active / disabled */
+    @Column(length = 16)
+    private String status = "active";
+
+    /** 角色：多对多（通过 user_role 关联表） */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "user_role",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    private Set<Role> roles;
 
     @Column(name = "create_time", insertable = false, updatable = false)
     private LocalDateTime createTime;

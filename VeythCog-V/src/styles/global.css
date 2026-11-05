@@ -560,3 +560,18 @@ body.dark .ant-select-focused .ant-select-selector {
 .ant-input-affix-wrapper .ant-input {
   box-shadow: none !important;
 }
+
+/* 登录页 登录/注册 内切 tab 面板切换动画：淡入 + 上移 */
+@keyframes vc-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.vc-tab-pane {
+  animation: vc-fade-up 0.28s ease-out;
+}

@@ -1,8 +1,7 @@
 /**
- * 系统管理 API（mock 阶段，后端对接时替换为真实请求）
- *
- * 所有函数返回 Promise，用 setTimeout 模拟网络延迟。
- * 数据在模块内内存维护，刷新页面重置。
+ * 系统管理 API
+ * - 用户管理：已对接真实后端（GET/POST/PUT/DELETE /admin/users）
+ * - 模型目录 / 监控 / 审计 / 系统配置 / 定时任务：仍为 mock（后端未实现）
  */
 import type {
   AdminUser,
@@ -14,59 +13,12 @@ import type {
   SystemConfig,
   ScheduledTask,
 } from '@/types';
+import { http } from '@/api/client';
+import { useModeStore } from '@/stores/modeStore';
+import { mockUsers, addMockUser } from '@/mock/users';
+import type { MockUser } from '@/mock/users';
 
-// ---------- 内存数据 ----------
-
-let mockUsers: AdminUser[] = [
-  {
-    id: 'u-1',
-    username: 'admin',
-    name: '管理员',
-    email: 'admin@veythcog.dev',
-    role: 'admin',
-    status: 'active',
-    createdAt: Date.now() - 90 * 86400_000,
-    lastLoginAt: Date.now() - 3600_000,
-    conversationCount: 128,
-    kbDocumentCount: 45,
-  },
-  {
-    id: 'u-2',
-    username: 'chenjie',
-    name: '陈杰',
-    email: 'chenjie@veythcog.dev',
-    role: 'user',
-    status: 'active',
-    createdAt: Date.now() - 45 * 86400_000,
-    lastLoginAt: Date.now() - 7200_000,
-    conversationCount: 56,
-    kbDocumentCount: 12,
-  },
-  {
-    id: 'u-3',
-    username: 'zhangwei',
-    name: '张伟',
-    email: 'zhangwei@example.com',
-    role: 'user',
-    status: 'active',
-    createdAt: Date.now() - 20 * 86400_000,
-    lastLoginAt: Date.now() - 86400_000 * 3,
-    conversationCount: 23,
-    kbDocumentCount: 5,
-  },
-  {
-    id: 'u-4',
-    username: 'liming',
-    name: '李明',
-    email: 'liming@example.com',
-    role: 'user',
-    status: 'disabled',
-    createdAt: Date.now() - 60 * 86400_000,
-    lastLoginAt: Date.now() - 86400_000 * 15,
-    conversationCount: 8,
-    kbDocumentCount: 2,
-  },
-];
+// ---------- 内存数据（非用户管理的 mock 数据） ----------
 
 let mockVendors: AdminVendor[] = [
   {
@@ -199,11 +151,58 @@ let mockTasks: ScheduledTask[] = [
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
-// ---------- 用户管理 ----------
+// ---------- 用户管理（mock 模式走本地存储；真实模式对接 /admin/users） ----------
+
+/** 后端 /admin/users 返回项 */
+interface AdminUserDto {
+  id: number;
+  username: string;
+  nickname: string;
+  email: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  createTime: string;
+}
+
+function mapUser(d: AdminUserDto): AdminUser {
+  return {
+    id: String(d.id),
+    username: d.username,
+    name: d.nickname || d.username,
+    email: d.email || undefined,
+    role: d.role,
+    status: d.status,
+    createdAt: d.createTime ? new Date(d.createTime).getTime() : Date.now(),
+    // 对话数 / 文档数 / 最后登录：后端本期不聚合，置默认
+    lastLoginAt: undefined,
+    conversationCount: 0,
+    kbDocumentCount: 0,
+  };
+}
+
+/** mock 用户 → AdminUser（mock 模式下 id=1 视为当前登录的 admin，用于自我保护） */
+function mapMockUser(m: MockUser): AdminUser {
+  return {
+    id: m.id,
+    username: m.username,
+    name: m.nickname || m.username,
+    email: m.email || undefined,
+    role: m.role,
+    status: m.status,
+    createdAt: m.createTime,
+    lastLoginAt: undefined,
+    conversationCount: 0,
+    kbDocumentCount: 0,
+  };
+}
 
 export async function getUsers(): Promise<AdminUser[]> {
-  await delay();
-  return [...mockUsers];
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return mockUsers.map(mapMockUser);
+  }
+  const list = await http.get<AdminUserDto[]>('/admin/users');
+  return list.map(mapUser);
 }
 
 export async function createUser(input: {
@@ -213,9 +212,27 @@ export async function createUser(input: {
   role: 'admin' | 'user';
   password: string;
 }): Promise<AdminUser> {
-  await delay();
-  const newUser: AdminUser = {
-    id: `u-${Date.now()}`,
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    if (mockUsers.some((m) => m.username === input.username)) {
+      throw new Error('用户名已存在');
+    }
+    return mapMockUser(
+      addMockUser({ username: input.username, nickname: input.name, email: input.email, role: input.role }),
+    );
+  }
+  await http.post<number>('/admin/users', {
+    username: input.username,
+    nickname: input.name,
+    email: input.email,
+    role: input.role,
+    password: input.password,
+  });
+  const list = await getUsers();
+  const created = list.find((u) => u.username === input.username);
+  if (created) return created;
+  return {
+    id: String(Date.now()),
     username: input.username,
     name: input.name,
     email: input.email,
@@ -225,25 +242,60 @@ export async function createUser(input: {
     conversationCount: 0,
     kbDocumentCount: 0,
   };
-  mockUsers = [newUser, ...mockUsers];
-  return newUser;
 }
 
 export async function updateUser(id: string, patch: Partial<Pick<AdminUser, 'name' | 'email' | 'role' | 'status'>>): Promise<void> {
-  await delay();
-  mockUsers = mockUsers.map((u) => (u.id === id ? { ...u, ...patch } : u));
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    const m = mockUsers.find((x) => x.id === id);
+    if (!m) throw new Error('用户不存在');
+    if ('status' in patch && patch.status) {
+      if (id === '1' && patch.status === 'disabled') {
+        throw new Error('不能禁用当前登录账号');
+      }
+      m.status = patch.status;
+    } else {
+      if (patch.name !== undefined) m.nickname = patch.name || m.username;
+      if (patch.email !== undefined) m.email = patch.email ?? '';
+      if (patch.role !== undefined) {
+        if (id === '1' && patch.role !== 'admin') {
+          throw new Error('不能撤销当前登录账号的 admin 角色');
+        }
+        m.role = patch.role;
+      }
+    }
+    return;
+  }
+  if ('status' in patch && patch.status) {
+    await http.put(`/admin/users/${id}/status`, { status: patch.status });
+  } else {
+    await http.put(`/admin/users/${id}`, {
+      nickname: patch.name,
+      email: patch.email,
+      role: patch.role,
+    });
+  }
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  await delay();
-  mockUsers = mockUsers.filter((u) => u.id !== id);
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    const i = mockUsers.findIndex((m) => m.id === id);
+    if (i < 0) throw new Error('用户不存在');
+    if (id === '1') throw new Error('不能删除当前登录账号');
+    mockUsers.splice(i, 1);
+    return;
+  }
+  await http.del(`/admin/users/${id}`);
 }
 
 export async function resetUserPassword(id: string, newPassword: string): Promise<void> {
-  await delay();
-  // mock: 不实际存密码
-  void id;
-  void newPassword;
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    if (!mockUsers.some((m) => m.id === id)) throw new Error('用户不存在');
+    return; // mock 不存密码
+  }
+  await http.put(`/admin/users/${id}/password`, { password: newPassword });
 }
 
 // ---------- 模型目录 ----------
@@ -333,4 +385,24 @@ export async function runTaskNow(id: string): Promise<void> {
   mockTasks = mockTasks.map((t) =>
     t.id === id ? { ...t, lastRunAt: Date.now(), lastStatus: 'success' } : t,
   );
+}
+
+// ---------- 角色管理 ----------
+
+export interface RoleItem {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+}
+
+export async function getRoles(): Promise<RoleItem[]> {
+  if (useModeStore.getState().bypassMode) {
+    await delay(200);
+    return [
+      { id: 1, code: 'admin', name: '管理员', description: '系统管理员，拥有全部权限' },
+      { id: 2, code: 'user', name: '普通用户', description: '基础用户，可使用对话/知识库功能' },
+    ];
+  }
+  return http.get<RoleItem[]>('/admin/roles');
 }

@@ -40,6 +40,7 @@ private final ResourcePatternResolver resourcePatternResolver;
                         .build();
                 MarkdownDocumentReader reader = new MarkdownDocumentReader(resource, config);
                 allDocuments.addAll(reader.get());
+                log.info("成功加载文档: {}", fileName);
             }
         } catch (IOException e) {
             log.error("Markdown 文档加载失败", e);

@@ -24,8 +24,8 @@ public class VcVectorStoreConfig {
         SimpleVectorStore simpleVectorStore = SimpleVectorStore.builder(dashscopeEmbeddingModel)
                 .build();
         // 加载文档
-        List<Document> documents = vcDocumentLoader.loadMarkdowns();
-        simpleVectorStore.add(documents);
+     //   List<Document> documents = vcDocumentLoader.loadMarkdowns();
+      //  simpleVectorStore.add(documents);
         return simpleVectorStore;
     }
 }
