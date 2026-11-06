@@ -147,7 +147,8 @@ cmd_release() {
   cd "$REPO_DIR"
   local branch; branch="$(git rev-parse --abbrev-ref HEAD)"
   if [ "$branch" = "HEAD" ]; then die "当前处于 detached HEAD，请先 git checkout 分支"; fi
-  if ! git diff --quiet || ! git diff --cached --quiet; then
+  # 用 core.fileMode=false 判断，忽略 chmod 造成的权限位差异（服务器上非常常见）
+  if ! git -c core.fileMode=false diff --quiet || ! git -c core.fileMode=false diff --cached --quiet; then
     git status --short
     die "仓库存在未提交改动，已中止。请先 git stash 或 commit 后再发版"
   fi

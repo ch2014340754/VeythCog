@@ -6,6 +6,17 @@
 
 ---
 
+## 文档索引（AI 协作文档）
+
+> 本仓库已规范化 AI 协作文档，Agent 协作时按需读取：
+> - `PROJECT_MEMORY.md`：本文件，全局项目记忆（最重要，现状权威）
+> - `.ai-context/global-rule.md`：编码规范 / 命名规约 / 错误处理 / 返回体格式（怎么做）
+> - `.ai-context/current-tasks.md`：当前任务分配表（谁 / 做什么 / 状态 / 输出文件 / 依赖）
+> - `.ai-context/change-log.md`：spec 变更记录（改了哪个接口 / 表，通知所有 Agent）
+> - `openspec/knowledge-prd.md`：知识库 PRD（优化版 v0.2）
+> - `openspec/api-spec.md`：知识库 API 契约
+> - `openspec/sql/knowledge-init.sql`：知识库建表脚本
+
 ## 0. 一句话定位
 
 VeythCog（渡思）——**个人全栈工作台 / 面试作品集**：一处聚合开发工具、代码片段、笔记与 AI 能力的自用门户；以「Java 后端 × LLM 工程化」为面试深水区。Monorepo，OpenSpec（规范驱动开发）工作流。
@@ -37,7 +48,7 @@ VeythCog/                      # 仓库根（本项目记忆文档所在）
 | 后端 | Spring AI（ChatClient / ChatMemory / Advisor） | LLM 统一抽象，流式走 `reactor` Flux |
 | 后端 | Spring Security + JWT（jjwt 0.12.6）+ BCrypt | 无状态鉴权 |
 | 后端 | Spring Data JPA / JDBC | 业务实体 + 记忆仓库 |
-| 数据库 | **PostgreSQL（当前 active，本地走 Supabase 云端）** | `ddl-auto=none`，表由 `docs/sql/*.sql` 管理；vc-app 仍残留 MySQL 驱动未清理 |
+| 数据库 | **PostgreSQL（当前 active，个人服务器 docker 容器）** | `ddl-auto=none`，表由 `docs/sql/*.sql` 管理；vc-app 仍残留 MySQL 驱动未清理 |
 | 接口文档 | springdoc + knife4j（springdoc 2.8.9 显式锁定） | `/api/doc.html`、`/api/v3/api-docs` |
 | 前端 | React 18 / TS / Vite 5 / AntD 5 / Zustand(persist) / React Router 6 | fetch+ReadableStream 封装 SSE |
 
@@ -167,7 +178,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 ### 8.1 后端
 - 配置文件：`vc-app/src/main/resources/application.yml`（通用）+ `application-local.yml`（**本地环境，已被 .gitignore 忽略，不入库**）。
-- **当前 active：PostgreSQL（Supabase 云端连接串在 application-local.yml）**；`docs/architecture.md` 记的"MySQL 先行"已过时。
+- **当前 active：PostgreSQL（个人服务器 docker 容器，连接串在 application-local.yml）**；`docs/architecture.md` 记的"MySQL 先行"已过时。
 - **安全红线**：`application-local.yml` 含**真实 DashScope AK 与数据库密码，严禁写入任何文档/提交 Git**；密钥一律环境变量注入（`DASHSCOPE_API_KEY` / `DEEPSEEK_API_KEY` / `JWT_SECRET` / DB 密码）。
 - AK 未配置时：可绑定但对话报「该模型未配置密钥」（`ErrorCode.SYSTEM_ERROR`）。
 - 启动：`mvn -pl vc-app -am spring-boot:run`（或 `-pl vc-chat -am` 编译）。
@@ -178,7 +189,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 启动：`npm install && npm run dev`（:3000）；构建：`npm run build`（tsc + vite）。
 
 ### 8.3 数据库
-- `docker-compose.yml`：`pgvector/pgvector:pg16`（本地单库两用备选，当前实际用 Supabase 云端）。
+- `docker-compose.yml`：`pgvector/pgvector:pg16`（个人服务器 docker 容器，单库两用，已启用 pgvector 扩展）。
 - `ddl-auto=none`：新表需手动执行 `docs/sql/*.sql`（`chat_message` 建表后记忆才生效）。
 
 ---

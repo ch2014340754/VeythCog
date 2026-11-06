@@ -156,6 +156,15 @@ services:
 13. ❌ 坑13：EdgeOne「云项目」控制台没有路径规则 / 回源规则入口，无法在同一域名下用 `/api` 分流
     ✅ 结论：放弃「`www` 同域 /api 分流」，改用后端独立子域名 `api.veythcog.top`（DNS 指向服务器 + 宝塔 Nginx 反代）。前端继续留在 EdgeOne 不动。
 
+14. ❌ 坑14：服务器上 `chmod +x deploy.sh` 后，`git pull` 报「有本地改动未提交」，发版脚本也中止；服务器又没配 git 用户信息，没法 commit
+    ✅ 原因：`chmod` 把文件权限位 644→755，git（默认 `core.fileMode=true`）把权限位变化视为本地修改。
+    ✅ 解决（服务器执行一次）：
+    ```bash
+    cd /opt/veyth-cog && git config core.fileMode false && git status --short   # 变干净后即可 git pull
+    ```
+    脚本的脏工作区检查已改为 `git -c core.fileMode=false diff --quiet`，以后 chmod 不再误判。
+    ✅ 长期根治（本地仓库，让仓库记录 100755）：`git update-index --chmod=+x VeythCog-C/deploy.sh` 后 commit+push，服务器 pull 下来自带可执行位，无需再 chmod。
+
 ## 五、后端部署流程（首选：服务器 git 拉源码 → 服务器构建 → compose 启动）
 
 > 源码已通过 git 克隆到服务器 `/opt/veyth_cog/veyth-cog/`，后端根目录为 `/opt/veyth_cog/veyth-cog/VeythCog-C`（含 pom.xml / Dockerfile / vc-* 模块）。直接在服务器构建，省去本地打包+传大文件。
@@ -359,6 +368,7 @@ echo "BACKEND_TAG=v1" >> /opt/.env
 ### 8.2 一键脚本用法
 安装（`git pull` 后脚本已在 `VeythCog-C/deploy.sh`）：
 ```bash
+cd /opt/veyth-cog && git config core.fileMode false   # 关键：忽略 chmod 造成的权限位差异，避免被当成"本地改动"
 chmod +x /opt/veyth-cog/VeythCog-C/deploy.sh
 echo "alias deploy='bash /opt/veyth-cog/VeythCog-C/deploy.sh'" >> ~/.bashrc && source ~/.bashrc
 ```
