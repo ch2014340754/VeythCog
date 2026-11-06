@@ -183,12 +183,13 @@ docker logs -f veyth-cog-backend  # 等待 "Started VcAppApplication"
 ```
 > 关键点：backend 与 pg-vector 同网络，数据库连接地址写 `pg-vector:5432` 即可，无需改宿主机 IP
 
-### 4. 对外暴露（单域名 `/api` 路径分流，推荐）
-前端已部署在 EdgeOne 域名 `https://www.veythcog.top`（监听 Gitee 自动构建）；
-前端 `.env.production` 的 `VITE_API_BASE` **已是相对路径 `/api`**（同源，无需改前端代码、无需 CORS）。
-只需让该域名下的 `/api` 请求回源到后端即可：
+### 4. 对外暴露（子域名 `api.veythcog.top` 直连后端，已选方案）
+前端 `https://www.veythcog.top`（EdgeOne 云项目，git 自动构建）负责页面；
+后端通过子域名 `https://api.veythcog.top` 对外。前后端跨域，后端已配 CORS 放行 `www.veythcog.top`。
 
-1. **宝塔 Nginx（服务器）反代 `/api` → 后端**（backend 容器映射 `8123:8123`，宿主机 `127.0.0.1:8123` 即后端）：
+1. **DNS**：在域名 DNS 控制台添加 A 记录 `api.veythcog.top` → `服务器公网IP`
+2. **宝塔建站 + SSL**：添加站点 `api.veythcog.top` → 申请免费 SSL（Let's Encrypt）→ 强制 HTTPS
+3. **宝塔反向代理** `/api` → 后端（backend 容器映射 `8123:8123`，宿主机 `127.0.0.1:8123` 即后端）：
    ```
    location /api {
        proxy_pass http://127.0.0.1:8123;
@@ -199,13 +200,10 @@ docker logs -f veyth-cog-backend  # 等待 "Started VcAppApplication"
    }
    ```
    > `proxy_pass` 不带尾部 `/`，会原样透传 `/api/...`，正好匹配后端 context-path `/api`。
-2. **EdgeOne 路径规则**：对 `www.veythcog.top` 增加规则「路径 `/api/*` → 回源到 `http://服务器公网IP`（保留 URI）」，
-   其余路径继续服务前端静态资源。效果：
-   - 页面 `https://www.veythcog.top/` → 前端静态
-   - 接口 `https://www.veythcog.top/api/...` → EdgeOne → 服务器 Nginx → `127.0.0.1:8123`
-3. **验证**：浏览器/`curl https://www.veythcog.top/api/health`（或 `/api/swagger-ui.html`）应返回后端响应。
-4. **端口收敛**：EdgeOne 回源走 `http://80` 即可，**无需**对公网开放 `8123`（后端只让 Nginx 在服务器内访问）；
-   同源方案后端 SecurityConfig 的 `.cors(withDefaults())` 无需改动，兜底足够。
+4. **前端指向新后端地址**：`.env.production` 设 `VITE_API_BASE=https://api.veythcog.top/api`，commit+push 后 EdgeOne 自动重新构建
+5. **验证**：`curl https://api.veythcog.top/api/health` 应返回后端响应；浏览器访问 `https://www.veythcog.top` 登录/对话正常
+6. **CORS**：后端 `SecurityConfig` 已加 `corsConfigurationSource` bean，放行 `https://www.veythcog.top` 及本地开发源（localhost:5173/3000）；认证走 Authorization 头，无需 Cookie 凭据
+7. **端口收敛**：后端 `8123` 无需对公网开放，只经宝塔 Nginx（443）对外
 
 ### 5. 版本迭代流程（改代码后再发版）
 ```bash
@@ -276,5 +274,9 @@ docker logs veyth-cog-backend | grep -i 'external|config'   # 可看到 external
 | VeythCog-C后端 | http://公网IP:8123/api | - | 接口文档 /api/swagger-ui.html |
 
 ---
+
+cd /opt/veyth_cog/veyth-cog/VeythCog-C
+docker build -t veyth-cog-backend:v1 .
+docker compose up -d --no-deps backend
 
 > 本文档为部署唯一归档入口：镜像版本、compose 改动、踩坑记录持续在此维护更新。

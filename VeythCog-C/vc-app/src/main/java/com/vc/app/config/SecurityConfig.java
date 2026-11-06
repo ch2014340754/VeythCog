@@ -20,6 +20,12 @@ import com.vc.common.exception.ErrorCode;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 
+import java.util.List;
+
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 /**
  * Spring Security 配置：无状态 + JWT 过滤器。
  * 放行 /auth/**、/health/**，其余接口需携带有效 JWT。
@@ -34,6 +40,26 @@ public class SecurityConfig {
     public SecurityConfig(JwtAuthFilter jwtAuthFilter, ObjectMapper objectMapper) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.objectMapper = objectMapper;
+    }
+
+    /**
+     * CORS 放行前端来源：生产为 EdgeOne 上的 https://www.veythcog.top，另加本地开发源方便联调。
+     * 前端已改用子域名 https://api.veythcog.top 访问后端，属跨域请求，必须放行 Origin。
+     * 认证走 Authorization 请求头（非 Cookie），无需 allowCredentials。
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of(
+                "https://www.veythcog.top",
+                "http://localhost:5173",
+                "http://localhost:3000"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+        config.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     @Bean
