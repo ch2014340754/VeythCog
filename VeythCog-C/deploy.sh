@@ -103,6 +103,7 @@ cmd_release() {
   [ -n "$tag" ] || tag="v$(date +%Y%m%d-%H%M)"
   local start_ts; start_ts=$(date +%s)
 
+  log "开始发版（tag=${tag}）"
   precheck
   [ -d "$REPO_DIR/.git" ] || die "不是 git 仓库: $REPO_DIR"
   [ -f "$BACKEND_DIR/Dockerfile" ] || die "未找到 Dockerfile: $BACKEND_DIR"
@@ -178,7 +179,13 @@ case "$ACTION" in
   -h|--help|help)            usage ;;
   list|tags)                 cmd_list ;;
   current|status)            cmd_current ;;
-  rollback)                  shift; cmd_rollback "${1:-}" ;;
-  release|deploy)            shift; cmd_release "${1:-}" ;;
+  rollback)
+      if [ "$#" -gt 0 ]; then shift; fi
+      cmd_rollback "${1:-}"
+      ;;
+  release|deploy)
+      if [ "$#" -gt 0 ]; then shift; fi
+      cmd_release "${1:-}"
+      ;;
   *)                         cmd_release "$ACTION" ;;   # 兼容 `deploy.sh v2`
 esac
