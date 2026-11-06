@@ -1,6 +1,7 @@
 # VeythCog渡思｜腾讯轻量宝塔+Docker+pgvector 部署归档文档
 > 环境：腾讯轻量云服务器，宝塔Ubuntu系统，Docker Compose编排
 > 目标：PG15+pgvector向量库 + pgAdmin4网页管理工具 + VeythCog-C后端服务（SpringAI）
+> 最后全链路验证：2026-11-06 —— 443 已监听、Let's Encrypt 证书已签发（至 2027-02-04）、`https://api.veythcog.top/api/health` 返回 200 `healthy`、`/api` 反代正常
 
 ## 一、服务清单 & 访问信息
 1. **pg-vector（PostgreSQL15 + pgvector扩展）**
@@ -38,7 +39,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 - 容器名：`veyth-cog-backend`
 - 容器内部访问地址：`127.0.0.1:8123`，context-path 为 `/api`
 - 宿主机映射端口：`8123:8123`
-- 接口文档（swagger/knife4j）：`http://服务器公网IP:8123/api/swagger-ui.html`
+- 对外地址：`https://api.veythcog.top/api`（宝塔 Nginx 443 反代 → `127.0.0.1:8123`，见第五章第4节）
+- 接口文档（swagger/knife4j）：`https://api.veythcog.top/api/doc.html`、`.../api/swagger-ui.html`（内网可直连 `http://服务器公网IP:8123/api/doc.html`）
 - 数据库连接：compose 同网络下写 `jdbc:postgresql://pg-vector:5432/veyth_cog`（compose 环境变量覆盖镜像默认值）
 - 配置热改：`./backend-config` 挂载到 `/app/config`，改配置免重建镜像（见第六章）
 - 自启动策略：`unless-stopped`
@@ -82,9 +84,9 @@ services:
     depends_on:
       - pg-vector
 
-  # ===== VeythCog-C 后端（本地构建导入的镜像，v1 版本）=====
+  # ===== VeythCog-C 后端（镜像 tag 由 /opt/.env 的 BACKEND_TAG 决定，见第八章一键发版）=====
   backend:
-    image: veyth-cog-backend:v1
+    image: veyth-cog-backend:${BACKEND_TAG:-v1}
     container_name: veyth-cog-backend
     restart: unless-stopped
     environment:
@@ -115,8 +117,9 @@ services:
 - 查看日志：`docker logs -f 容器名`
 
 ## 三、宝塔 & 腾讯云防火墙配置（必做）
-1. 腾讯云轻量控制台防火墙：放行TCP `5432`、`5050`、`8123`
-2. 宝塔面板 → 安全 → 防火墙：放行TCP `5432`、`5050`、`8123`
+1. 腾讯云轻量控制台防火墙：放行 TCP `80`、`443`、`5432`、`5050`、`8123`
+2. 宝塔面板 → 安全 → 防火墙：放行 TCP `80`、`443`、`5432`、`5050`、`8123`
+> `80` 是 Let's Encrypt「文件验证」所需；`443` 是 HTTPS 对外必需——两者都必须放行，否则 SSL 申请或访问会失败。
 > ⚠️ 安全提醒：5050、5432不建议长期对公网开放；8123 上线后建议改用域名+宝塔Nginx反向代理（见第五章第6步），关闭裸端口
 
 ## 四、踩坑记录（重点留存，避免重复踩）
@@ -139,6 +142,19 @@ services:
    ✅ 解决：podman 兼容 docker 命令，构建/导出用 `podman build/save`；服务器端仍用 `docker load` 导入，两套 CLI 产物互认
 9. ❌ 坑9：8123 端口未放行时，公网访问超时但服务器本机 curl 正常
    ✅ 解决：腾讯云控制台 + 宝塔防火墙都要放行 TCP 8123；上线后建议关裸端口走 Nginx 反代
+
+10. ❌ 坑10：宝塔 Let's Encrypt 报 `DNS problem: SERVFAIL looking up A for api.veythcog.top - the domain's nameservers may be malfunctioning; no valid AAAA records found` → 「验证失败」
+    ✅ 排查结论：**不是 DNSSEC、也不是记录错**。用公共解析器（1.1.1.1 / 8.8.8.8 / 百度 180.76.76.76）+ Cloudflare 两个权威 NS（`ariadne/vasilii.ns.cloudflare.com`）直接查询，均能返回正确 A `111.230.146.233`，且 `DS=0`（未启用 DNSSEC）。该报错是**申请那一刻 DNS/缓存尚未稳定，或 LE 解析 Cloudflare NS 的瞬时故障**。
+    ✅ 解决：确认 DNS 生效（80 端口通、站点根目录返回 200）后，**验证方法改用「文件验证」重新申请即一次成功**。注意报错里的 `no valid AAAA records found` 只是提示「没有 IPv6 记录」，**不是失败原因**，本域名本来就不需要 AAAA。
+
+11. ❌ 坑11：本机一直解析到 Cloudflare 旧地址，误以为域名没生效 / 以为存在 AAAA
+    ✅ 解决：本机/运营商 DNS 缓存残留（刚把 api 从「已代理」改成「仅 DNS」时的旧解析）。用 `Resolve-DnsName -Server 1.1.1.1 / 8.8.8.8` 交叉验证（应只返回 A=`111.230.146.233`、无 AAAA），再 `Clear-DnsClientCache`（Windows）清本机缓存后复测。**判断「有没有 AAAA」必须看 Cloudflare 面板记录（api 只有一条 A、仅 DNS），不能只凭本机 nslookup。**
+
+12. ❌ 坑12：在宝塔「网站列表」页找不到 Let's Encrypt 入口
+    ✅ 正确位置：**网站列表 → 站点行右侧「设置」→ 左侧菜单「SSL」页签**。品牌选 Let's Encrypt、算法 RSA2048、**验证方法选「文件验证」**最省事；若选「DNS验证」，必须勾「手动解析」（去 Cloudflare 加 TXT，仅 DNS/灰云）或点「配置DNS」填 Cloudflare API Token，否则必然失败。
+
+13. ❌ 坑13：EdgeOne「云项目」控制台没有路径规则 / 回源规则入口，无法在同一域名下用 `/api` 分流
+    ✅ 结论：放弃「`www` 同域 /api 分流」，改用后端独立子域名 `api.veythcog.top`（DNS 指向服务器 + 宝塔 Nginx 反代）。前端继续留在 EdgeOne 不动。
 
 ## 五、后端部署流程（首选：服务器 git 拉源码 → 服务器构建 → compose 启动）
 
@@ -183,27 +199,76 @@ docker logs -f veyth-cog-backend  # 等待 "Started VcAppApplication"
 ```
 > 关键点：backend 与 pg-vector 同网络，数据库连接地址写 `pg-vector:5432` 即可，无需改宿主机 IP
 
-### 4. 对外暴露（子域名 `api.veythcog.top` 直连后端，已选方案）
-前端 `https://www.veythcog.top`（EdgeOne 云项目，git 自动构建）负责页面；
-后端通过子域名 `https://api.veythcog.top` 对外。前后端跨域，后端已配 CORS 放行 `www.veythcog.top`。
+### 4. 对外暴露（子域名 `api.veythcog.top`，已实测跑通 2026-11-06）
 
-1. **DNS**：在域名 DNS 控制台添加 A 记录 `api.veythcog.top` → `服务器公网IP`
-2. **宝塔建站 + SSL**：添加站点 `api.veythcog.top` → 申请免费 SSL（Let's Encrypt）→ 强制 HTTPS
-3. **宝塔反向代理** `/api` → 后端（backend 容器映射 `8123:8123`，宿主机 `127.0.0.1:8123` 即后端）：
+> 前端 `https://www.veythcog.top`（EdgeOne 云项目，git 自动构建）负责页面；后端通过子域名 `https://api.veythcog.top` 对外；后端已配 CORS 放行 `www.veythcog.top`。
+> 实测结果：443 已监听、证书 Let's Encrypt 签发、`https://api.veythcog.top/api/health` 返回 200 `healthy`、`/api/doc.html` 返回 200。
+
+**⚠️ 顺序很关键：先 DNS → 再 SSL → 再反代 → 最后前端指向。DNS 没确认生效前不要申请证书。**
+
+#### 4.1 DNS（Cloudflare）——最容易翻车，务必先做
+1. Cloudflare → DNS → 给 `api.veythcog.top` 添加 **A 记录 → 服务器公网 IP `111.230.146.233`**；
+2. 代理状态必须选 **「仅 DNS」（灰云）**，**不要开橙云**。开橙云会让流量绕 Cloudflare（未配好时 HTTPS 回 `521`），并可能干扰 Let's Encrypt 验证；
+3. **确认 api 没有 AAAA 记录**（本域名不需要 IPv6）。浏览器优先走 IPv6，一旦 AAAA 残留指向 Cloudflare，请求会被拽回 CF，浏览器表现为「响应标头 0」或 `521`；
+4. **用公共解析器交叉验证 DNS 是否真的生效**（不要只看本机缓存）：
+   ```powershell
+   Resolve-DnsName api.veythcog.top -Server 1.1.1.1 | ? {$_.Type -in 'A','AAAA'}
+   Resolve-DnsName api.veythcog.top -Server 8.8.8.8 | ? {$_.Type -in 'A','AAAA'}
    ```
-   location /api {
-       proxy_pass http://127.0.0.1:8123;
-       proxy_set_header Host $host;
-       proxy_set_header X-Real-IP $remote_addr;
-       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-       proxy_set_header X-Forwarded-Proto $scheme;
-   }
-   ```
-   > `proxy_pass` 不带尾部 `/`，会原样透传 `/api/...`，正好匹配后端 context-path `/api`。
-4. **前端指向新后端地址**：`.env.production` 设 `VITE_API_BASE=https://api.veythcog.top/api`，commit+push 后 EdgeOne 自动重新构建
-5. **验证**：`curl https://api.veythcog.top/api/health` 应返回后端响应；浏览器访问 `https://www.veythcog.top` 登录/对话正常
-6. **CORS**：后端 `SecurityConfig` 已加 `corsConfigurationSource` bean，放行 `https://www.veythcog.top` 及本地开发源（localhost:5173/3000）；认证走 Authorization 头，无需 Cookie 凭据
-7. **端口收敛**：后端 `8123` 无需对公网开放，只经宝塔 Nginx（443）对外
+   期望**只返回 A = `111.230.146.233`、无 AAAA**。若本机/运营商仍返回旧 Cloudflare 地址，执行 `Clear-DnsClientCache` 后复测（属缓存残留，不是记录配错）。
+   > 实测环境：Cloudflare 权威 NS = `ariadne.ns.cloudflare.com` / `vasilii.ns.cloudflare.com`；**未启用 DNSSEC（DS=0）**；两权威 NS 直接查询均返回正确 A。
+
+#### 4.2 宝塔建站 + SSL（一次成功流程）
+1. 宝塔 → 网站 → **添加站点** `api.veythcog.top`（PHP 选「静态」即可，根目录用默认）；
+2. 站点行右侧点 **「设置」** → 左侧菜单进 **「SSL」**（**Let's Encrypt 入口在站点「设置」里，不在网站列表页**）；
+3. 申请免费证书（弹窗「申请免费证书」）：
+   - 品牌：**Let's Encrypt**；算法：**RSA2048**；
+   - 验证方法：**「文件验证」**（DNS 已生效 + 80 端口通 + 站点根目录 200 时，文件验证一次过，**不需要 API Token、无需手动加 TXT**）；
+   - 勾选域名 `api.veythcog.top` → **申请证书**；
+4. 成功后打开 **「强制 HTTPS」**；宝塔会自动监听 443（`Test-NetConnection 443` 应变为 True）。
+   > ✅ 实测签发：Issuer `Let's Encrypt (YR1)`，CN `api.veythcog.top`，有效期至 **2027-02-04**（3 个月自动续期，宝塔会定时续签）。
+
+#### 4.3 Nginx 反向代理 `/api` → 后端
+- 宝塔 → 站点设置 → **「反向代理」** → 添加：
+  - 目标 URL：`http://127.0.0.1:8123`
+  - 发送域名：`$host`
+- 或手动改站点配置（等价写法）：
+  ```
+  location /api {
+      proxy_pass http://127.0.0.1:8123;      # 不带尾部 /
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+  }
+  ```
+  > `proxy_pass` 不带尾部 `/` 才会原样透传 `/api/...`，正好匹配后端 context-path `/api`。
+- **未配反代时的典型现象**：`http(s)://api.veythcog.top/api/health` 返回 **404**（请求落到空的静态目录）。
+
+#### 4.4 验证（三条都要过）
+```bash
+curl -I https://api.veythcog.top/api/health      # 期望 200
+curl https://api.veythcog.top/api/health          # 期望 healthy
+curl -I https://api.veythcog.top/api/doc.html     # 期望 200
+```
+浏览器打开 `https://www.veythcog.top` 登录 / 对话正常。
+
+#### 4.5 前端指向
+`.env.production` 设 `VITE_API_BASE=https://api.veythcog.top/api`，commit+push 后 EdgeOne 自动重新构建。
+> `VITE_*` 是 **Vite 构建时**注入，改后必须重新构建/重部署才生效。
+
+#### 4.6 CORS 与端口收敛
+- 后端 `SecurityConfig` 已加 `corsConfigurationSource` bean：放行 `https://www.veythcog.top`、`http://localhost:5173`、`http://localhost:3000`；headers 含 `Authorization`，methods 含 `OPTIONS`，`maxAge=3600`；认证走 Authorization 头，**不开 credentials**；
+- 后端 `8123` 无需对公网开放，只经宝塔 Nginx（443）对外；上线后建议关掉裸端口 8123。
+
+#### 4.7 排障速查（按「解析 → 传输 → 端口 → 配置」四层定位）
+| 现象 | 含义 / 下一步 |
+| --- | --- |
+| 浏览器「响应标头 (0)」 | 服务器没回包；**别查后端日志/CORS**，先看 DNS 与端口 |
+| `521` | 流量仍经 Cloudflare 代理且回源失败 → 把 api 改「仅 DNS」 |
+| 「目标计算机积极拒绝」 | 已直达服务器，但 **443 端口未监听**（SSL 未装） |
+| `Test-NetConnection 443 = False` | SSL 没装 / 未监听；去宝塔 SSL 页签申请 |
+| 80 返回 `404` | 站点已建但**反向代理未配**（请求落到空静态目录） |
 
 ### 5. 版本迭代流程（改代码后再发版）
 ```bash
@@ -271,12 +336,65 @@ docker logs veyth-cog-backend | grep -i 'external|config'   # 可看到 external
 | pgadmin网页 | http://公网IP:5050 | admin@veyth.cog | Admin@123456 |
 | PostgreSQL数据库（容器内） | pg-vector:5432 | postgres | 123456 |
 | PostgreSQL数据库（宿主机） | 127.0.0.1:5432 | postgres | 123456 |
-| VeythCog-C后端 | http://公网IP:8123/api | - | 接口文档 /api/swagger-ui.html |
+| VeythCog-C后端（内网/直连） | http://公网IP:8123/api | - | 接口文档 /api/doc.html |
+| **VeythCog-C 对外 API（HTTPS）** | **https://api.veythcog.top/api** | - | 宝塔 Nginx 反代 → 127.0.0.1:8123；文档 /api/doc.html |
+| SSL 证书 | `api.veythcog.top` | Let's Encrypt（YR1） | 2026-11-06 签发，至 2027-02-04，宝塔自动续签 |
 
 ---
 
-cd /opt/veyth_cog/veyth-cog/VeythCog-C
-docker build -t veyth-cog-backend:v1 .
-docker compose up -d --no-deps backend
+## 八、日常发版（时间戳 tag + 一键脚本，不手改 compose.yml）
+
+### 8.1 一次性准备：把 compose 的 tag 变量化
+把 `/opt/docker-compose.yml` 里 backend 的镜像改成变量引用：
+```yaml
+  backend:
+    image: veyth-cog-backend:${BACKEND_TAG:-v1}
+```
+在 compose 同目录建 `.env`（**docker compose 会自动读取同目录的 `.env`**）：
+```bash
+echo "BACKEND_TAG=v1" >> /opt/.env
+```
+> 之后每次换 tag **只改 `/opt/.env`**（由脚本自动改），`docker-compose.yml` 永不再动。
+
+### 8.2 一键脚本用法
+安装（`git pull` 后脚本已在 `VeythCog-C/deploy.sh`）：
+```bash
+chmod +x /opt/veyth-cog/VeythCog-C/deploy.sh
+echo "alias deploy='bash /opt/veyth-cog/VeythCog-C/deploy.sh'" >> ~/.bashrc && source ~/.bashrc
+```
+```bash
+deploy                           # 发版，tag 自动 = vYYYYMMDD-HHMM（时间戳）
+deploy v2                        # 发版，指定 tag
+deploy list                      # 列出所有 tag（挑回滚点）
+deploy current                   # 查看当前生效 tag / 运行镜像
+deploy rollback v20261106-1430   # 回滚到指定 tag
+```
+流程（任一步失败立即中止）：
+1. 环境检查：docker / compose 插件 / 仓库 / Dockerfile / docker-compose.yml；
+2. `git pull --ff-only`：**有未提交改动会先中止**（不会覆盖手改文件），打印前后 commit；
+3. `DOCKER_BUILDKIT=1 docker build -t veyth-cog-backend:<tag> .`（沿用 BuildKit 依赖缓存）；
+4. 写 `/opt/.env` 的 `BACKEND_TAG=<tag>` → `docker compose config` 校验变量生效 → `docker compose up -d --no-deps backend`；
+5. 轮询 `http://127.0.0.1:8123/api/health` 直到 200，失败自动打印 `docker logs --tail=80 backend`。
+
+> **为何不用手改 yml**：compose 的 `${BACKEND_TAG:-v1}` 在每次 `docker compose up` 时都会按 `.env` 重新求值。
+> **防呆校验**：脚本会跑 `docker compose config` 确认解析出的是目标 tag；若 compose 里 tag 写死，脚本会直接报错并提示改法（避免「换了 tag 仍在跑旧镜像」）。
+
+### 8.3 回滚
+```bash
+deploy list                       # 找到要回的旧 tag
+deploy rollback v20261106-1430    # 自动改 .env + 重建 + 健康检查
+```
+> 建议保留最近几个旧镜像即可随时回滚；空间紧张时清理 7 天前未用镜像：
+> `docker image prune -a --filter "until=168h"`（注意别删掉当前正在用的 tag）。
+
+### 8.4 手动命令（无脚本时等价操作）
+```bash
+cd /opt/veyth-cog && git pull
+cd /opt/veyth-cog/VeythCog-C && docker build -t "veyth-cog-backend:v$(date +%Y%m%d-%H%M)" .
+sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=<刚构建的tag>/" /opt/.env
+cd /opt && docker compose up -d --no-deps backend
+```
+> 早期克隆位置为 `/opt/veyth_cog/veyth-cog/`（下划线+连字符）；现已简化为 `/opt/veyth-cog`。脚本按自身位置向上定位仓库根，正常无需改；异常时用 `REPO_DIR=... BACKEND_DIR=... bash deploy.sh` 显式指定。
 
 > 本文档为部署唯一归档入口：镜像版本、compose 改动、踩坑记录持续在此维护更新。
+> 最近更新：2026-11-06 —— SSL 全链路打通；发版改为「时间戳 tag + `.env` 驱动」，`deploy.sh` 支持 release/list/current/rollback。
