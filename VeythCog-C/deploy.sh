@@ -8,6 +8,7 @@
 #   bash deploy.sh list               # 列出已有镜像 tag（便于挑回滚点）
 #   bash deploy.sh current            # 查看当前生效的 tag / 运行镜像
 #   bash deploy.sh rollback v20261106-1430   # 回滚到指定 tag
+#   bash deploy.sh clean              # 手动清理旧镜像（保留最近 KEEP_IMAGES 个，默认 3）
 #
 # 前置（一次性，在 compose 所在目录）：
 #   1) docker-compose.yml 里 backend.image 写成：
@@ -31,6 +32,7 @@ TAG_VAR="${TAG_VAR:-BACKEND_TAG}"                              # 对应 compose 
 ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"                      # docker compose 自动读取
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8123/api/health}"
 HEALTH_TRIES="${HEALTH_TRIES:-10}"
+KEEP_IMAGES="${KEEP_IMAGES:-3}"                                # 发版后保留最近 N 个 tag（含当前版）
 # ------------------------------
 
 log()  { printf '\n\033[1;36m[%s] %s\033[0m\n' "$(date '+%H:%M:%S')" "$*"; }
@@ -38,7 +40,7 @@ ok()   { printf '\033[1;32m  ✔ %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m  ! %s\033[0m\n' "$*"; }
 die()  { printf '\n\033[1;31m[失败] %s\033[0m\n' "$*" >&2; exit 1; }
 
-usage() { sed -n '3,20p' "$0" | sed 's/^# \{0,1\}/  /'; }
+usage() { sed -n '3,24p' "$0" | sed 's/^# \{0,1\}/  /'; }
 
 # ---------- 工具函数 ----------
 precheck() {
@@ -97,6 +99,39 @@ health_check() {
   return 1
 }
 
+prune_images() {  # 保留最近 keep 个 tag（并强制保留 keep_tag），其余删除 + 清悬空镜像
+  local keep="${1:-3}" keep_tag="${2:-}" removed=0
+  local all keep_list tag
+
+  # 1) 先清悬空镜像（<none> tag，多为重复构建残留），不碰已打 tag 的版本
+  docker image prune -f >/dev/null 2>&1 || true
+
+  # 2) 按创建时间倒序取前 keep 个 tag（CreatedAt 零填充，字典序即时间序）
+  all="$(docker images "$IMAGE" --format '{{.CreatedAt}}|{{.Tag}}' 2>/dev/null | grep -v '|<none>$' | sort -r || true)"
+  keep_list="$(printf '%s\n' "$all" | head -n "$keep" | cut -d'|' -f2 | sed '/^$/d')"
+  if [ -n "$keep_tag" ]; then
+    keep_list="$(printf '%s\n%s\n' "$keep_list" "$keep_tag" | sed '/^$/d' | sort -u)"
+  fi
+
+  # 3) 删除不在保留名单里的 tag
+  while IFS= read -r tag; do
+    if [ -z "$tag" ] || [ "$tag" = "<none>" ]; then continue; fi
+    if printf '%s\n' "$keep_list" | grep -qx "$tag"; then continue; fi
+    if docker rmi "${IMAGE}:${tag}" >/dev/null 2>&1; then
+      printf '  - 已删除旧镜像 %s:%s\n' "$IMAGE" "$tag"
+      removed=$((removed + 1))
+    else
+      printf '  ! 跳过（仍被容器引用）%s:%s\n' "$IMAGE" "$tag"
+    fi
+  done <<< "$(docker images "$IMAGE" --format '{{.Tag}}' 2>/dev/null | grep -v '^<none>$' || true)"
+
+  if [ "$removed" -eq 0 ]; then
+    printf '  （无需删除）当前保留 %s 个版本：%s\n' "$(printf '%s\n' "$keep_list" | sed '/^$/d' | wc -l | tr -d ' ')" "$(printf '%s ' $keep_list)"
+  else
+    ok "已清理 ${removed} 个旧镜像，保留：$(printf '%s ' $keep_list)"
+  fi
+}
+
 # ---------- 子命令 ----------
 cmd_release() {
   local tag="${1:-}"
@@ -108,7 +143,7 @@ cmd_release() {
   [ -d "$REPO_DIR/.git" ] || die "不是 git 仓库: $REPO_DIR"
   [ -f "$BACKEND_DIR/Dockerfile" ] || die "未找到 Dockerfile: $BACKEND_DIR"
 
-  log "1/4 拉取最新代码（$REPO_DIR）"
+  log "1/5 拉取最新代码（$REPO_DIR）"
   cd "$REPO_DIR"
   local branch; branch="$(git rev-parse --abbrev-ref HEAD)"
   if [ "$branch" = "HEAD" ]; then die "当前处于 detached HEAD，请先 git checkout 分支"; fi
@@ -123,17 +158,20 @@ cmd_release() {
   after="$(git rev-parse --short HEAD)"
   if [ "$before" = "$after" ]; then warn "已是最新（$before），按当前代码构建"; else ok "代码更新 $before -> $after"; fi
 
-  log "2/4 构建镜像 ${IMAGE}:${tag}"
+  log "2/5 构建镜像 ${IMAGE}:${tag}"
   ( cd "$BACKEND_DIR" && DOCKER_BUILDKIT=1 docker build -t "${IMAGE}:${tag}" . ) || die "镜像构建失败"
   ok "镜像构建完成：${IMAGE}:${tag}"
 
-  log "3/4 切换 tag 并重建 ${SERVICE}"
+  log "3/5 切换 tag 并重建 ${SERVICE}"
   write_env_tag "$tag"
   assert_compose_uses_var "$tag"
   up_service
 
-  log "4/4 健康检查"
+  log "4/5 健康检查"
   health_check || die "健康检查未通过，请检查上方日志"
+
+  log "5/5 清理旧镜像（保留最近 ${KEEP_IMAGES} 个 tag）"
+  prune_images "$KEEP_IMAGES" "$tag"
 
   log "发版成功，用时 $(( $(date +%s) - start_ts ))s，当前 tag=${tag}"
   echo "  外网验证：curl -I https://api.veythcog.top/api/health"
@@ -152,6 +190,12 @@ cmd_rollback() {
   up_service
   health_check || die "回滚后健康检查未通过，请检查日志"
   ok "已回滚到 ${tag}"
+}
+
+cmd_clean() {
+  precheck
+  log "清理旧镜像（保留最近 ${KEEP_IMAGES} 个 tag，当前生效 tag=$(env_tag)）"
+  prune_images "$KEEP_IMAGES" "$(env_tag)"
 }
 
 cmd_list() {
@@ -179,6 +223,7 @@ case "$ACTION" in
   -h|--help|help)            usage ;;
   list|tags)                 cmd_list ;;
   current|status)            cmd_current ;;
+  clean|prune)               cmd_clean ;;
   rollback)
       if [ "$#" -gt 0 ]; then shift; fi
       cmd_rollback "${1:-}"

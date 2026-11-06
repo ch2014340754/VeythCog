@@ -384,10 +384,16 @@ deploy rollback v20261106-1430   # 回滚到指定 tag
 deploy list                       # 找到要回的旧 tag
 deploy rollback v20261106-1430    # 自动改 .env + 重建 + 健康检查
 ```
-> 建议保留最近几个旧镜像即可随时回滚；空间紧张时清理 7 天前未用镜像：
-> `docker image prune -a --filter "until=168h"`（注意别删掉当前正在用的 tag）。
 
-### 8.4 手动命令（无脚本时等价操作）
+### 8.4 镜像保留策略（自动清理，避免占满硬盘）
+- 每次 `deploy` 成功后的 `5/5` 步骤自动清理：**保留最近 3 个 tag（当前版 + 之前两版）**，并强制保留正在运行的 tag；
+- 同时清理悬空镜像（`<none>` tag，重复 build 的残留层）；
+- 调整保留数量：临时用 `KEEP_IMAGES=5 deploy`，永久改脚本顶部 `KEEP_IMAGES="${KEEP_IMAGES:-3}"`；
+- 手动清理：`deploy clean`；
+- 被容器引用的镜像会**跳过**（输出「仍被容器引用」），不会删掉在用的镜像；
+- 结论：可回滚的旧版最多保留 2 个；若要回更早的版本，需重新 build 对应代码。
+
+### 8.5 手动命令（无脚本时等价操作）
 ```bash
 cd /opt/veyth-cog && git pull
 cd /opt/veyth-cog/VeythCog-C && docker build -t "veyth-cog-backend:v$(date +%Y%m%d-%H%M)" .
