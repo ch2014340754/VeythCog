@@ -19,10 +19,25 @@
             <groupId>com.vc</groupId>
             <artifactId>vc-common</artifactId>
         </dependency>
-        <!-- JPA：知识库 / 文档实体（Phase 2 接入检索时按需补 vc-llm 做 Embedding） -->
+        <!-- MyBatis-Plus：知识库域数据访问（PostgreSQL + pgvector），替代 JPA -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+        <!-- PostgreSQL 驱动：VectorTypeHandler 依赖 PGobject -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <!-- 参数校验：@NotBlank / @NotEmpty（jakarta.validation） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- 阿里百炼（DashScope）起步：提供 EmbeddingModel Bean（向量化/检索用） -->
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
         </dependency>
     </dependencies>
 </project>

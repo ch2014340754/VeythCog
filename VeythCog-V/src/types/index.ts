@@ -37,6 +37,8 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** RAG 召回片段（用户消息携带，用于渲染引用卡片） */
+  references?: RetrieveChunk[];
 }
 
 // 对话
@@ -46,6 +48,8 @@ export interface Conversation {
   lastMessage: string;
   messages: Message[];
   knowledgeBaseId: string | null;
+  /** 会话选中的知识库文档 id 列表（RAG 召回范围） */
+  knowledgeDocIds?: number[];
   /** 会话绑定的模型（vendor:modelCode） */
   vendor?: string;
   modelCode?: string;
@@ -342,4 +346,74 @@ export interface ScheduledTask {
   lastRunAt?: number;
   nextRunAt?: number;
   lastStatus: 'success' | 'failed' | 'never';
+}
+
+// ============ 知识库（后端 P0 契约） ============
+
+/** 库类型：私有库 / 演示库 */
+export type LibType = 'private' | 'demo';
+
+/** 块结构（block_data 内的单个块，P0 以 markdown 为主，块结构预留） */
+export interface Block {
+  id: string;
+  type: string;
+  props?: Record<string, unknown>;
+  content?: string | unknown[];
+  level?: number;
+}
+
+/** 文档列表项 */
+export interface DocListItem {
+  id: number;
+  title: string;
+  summary: string;
+  tags: string[];
+  libType: LibType;
+  isVectorized: boolean;
+  updatedAt: number;
+}
+
+/** 文档详情 */
+export interface DocDetail {
+  id: number;
+  libType: LibType;
+  title: string;
+  summary: string;
+  tags: string[];
+  /** 块结构数组（JSON 字符串，权威源） */
+  blockData: string;
+  /** 派生 Markdown 缓存 */
+  markdownText: string;
+  isVectorized: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** RAG 召回片段 */
+export interface RetrieveChunk {
+  chunkText: string;
+  docId: number;
+  title: string;
+  /** 文档内分片序号（从 0 起），用于引用溯源 */
+  chunkIndex: number;
+  /** L2 距离，越小越相似 */
+  score: number;
+}
+
+/** 分页返回结构 */
+export interface PageResult<T> {
+  records: T[];
+  total: number;
+  current: number;
+  pageSize: number;
+}
+
+/** 新建 / 更新文档请求体 */
+export interface DocSavePayload {
+  libType: LibType;
+  title: string;
+  summary?: string;
+  tags?: string[];
+  blockData?: string;
+  markdownText?: string;
 }

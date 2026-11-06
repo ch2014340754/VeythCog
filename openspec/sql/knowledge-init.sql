@@ -4,7 +4,7 @@
 -- 环境：PostgreSQL 16 + pgvector（个人服务器 docker 容器，pgvector/pgvector:pg16）
 -- 前置：目标库必须已启用 pgvector 扩展（见文末 CREATE EXTENSION）。
 --       若扩展未启用，knowledge_embedding 表可建但向量写入会失败。
--- 版本：v0.2-P0（相对 PRD v0.1 的修正见 change-log.md）
+-- 版本：v0.3-P0（v0.2 → 增加 embedding_model 标识；向量索引 HNSW/余弦 → IVFFlat/L2）
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -51,12 +51,14 @@ CREATE TABLE IF NOT EXISTS knowledge_embedding (
     chunk_index  INT          NOT NULL,                    -- 文档内分片序号（从 0 起）
     chunk_text   TEXT         NOT NULL,                    -- 分片原文（用于溯源/展示）
     embedding    vector(1024) NOT NULL,                    -- 向量，维度=1024（v0.2 修正）
+    embedding_model VARCHAR(100) NOT NULL,                 -- embedding 模型标识（禁止不同模型向量混查）
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
     UNIQUE (doc_id, chunk_index)                           -- 幂等键：同一文档同一分片唯一
 );
 
 COMMENT ON TABLE  knowledge_embedding IS '文档向量分片表（pgvector）';
 COMMENT ON COLUMN knowledge_embedding.embedding   IS '向量，维度 1024，与 qwen3.7-text-embedding-flash 一致';
+COMMENT ON COLUMN knowledge_embedding.embedding_model IS '生成向量的模型标识；检索时强制一致，禁止不同模型向量混查';
 COMMENT ON COLUMN knowledge_embedding.chunk_index IS '分片序号；向量化接口以 (doc_id) 为幂等键先删后插';
 
 -- -----------------------------------------------------------------------------
@@ -78,9 +80,13 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_doc_text_gin
 CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_doc
     ON knowledge_embedding (doc_id);
 
--- 向量相似度检索索引：HNSW + 余弦距离（v0.2 新增；小数据集 HNSW 比 IVFFlat 省心）
+-- 检索限定 docIds + embedding_model，复合索引加速过滤
+CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_doc_model
+    ON knowledge_embedding (doc_id, embedding_model);
+
+-- 向量近邻检索索引：IVFFlat + L2 距离（适配轻量服务器；小数据量建议先有数据再建索引）
 CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_vec
-    ON knowledge_embedding USING hnsw (embedding vector_cosine_ops);
+    ON knowledge_embedding USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
 
 -- -----------------------------------------------------------------------------
 -- 4. 分块/检索参数常量（与 docs/architecture.md 对齐，代码与文档统一）

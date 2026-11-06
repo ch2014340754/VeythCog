@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Input, Button, Empty, Spin, Popconfirm, Dropdown, Modal, message, Tooltip, Select } from 'antd';
+import {
+  Input,
+  Button,
+  Empty,
+  Spin,
+  Popconfirm,
+  Dropdown,
+  Modal,
+  message,
+  Tooltip,
+  Select,
+  Drawer,
+  Checkbox,
+  Segmented,
+  Tag,
+} from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import { Icon } from '@iconify/react';
 import searchIcon from '@iconify-icons/lucide/search';
@@ -13,10 +28,13 @@ import pencilIcon from '@iconify-icons/lucide/pencil';
 import paperclipIcon from '@iconify-icons/lucide/paperclip';
 import globeIcon from '@iconify-icons/lucide/globe';
 import micIcon from '@iconify-icons/lucide/mic';
+import databaseIcon from '@iconify-icons/lucide/database';
+import zapIcon from '@iconify-icons/lucide/zap';
 import MessageBubble from '@/components/MessageBubble';
 import CollapsibleSidebar from '@/components/CollapsibleSidebar';
 import { getConversations, createConversation, deleteConversation, streamChatMessage } from '@/api/chat';
-import type { Conversation, Message } from '@/types';
+import { listDocs, retrieve } from '@/api/knowledge';
+import type { Conversation, Message, DocListItem, RetrieveChunk, LibType } from '@/types';
 import { formatRelativeTime } from '@/utils/formatTime';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore, modelId } from '@/stores/settingsStore';
@@ -48,6 +66,12 @@ const ChatPage: React.FC = () => {
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<TextAreaRef>(null);
+
+  // 知识库抽屉状态
+  const [kbDrawerOpen, setKbDrawerOpen] = useState(false);
+  const [kbLibType, setKbLibType] = useState<LibType>('private');
+  const [kbDocs, setKbDocs] = useState<DocListItem[]>([]);
+  const [kbLoading, setKbLoading] = useState(false);
 
   // 当前活跃会话
   const activeConv = conversations.find((c) => c.id === activeConvId) || null;
@@ -81,6 +105,38 @@ const ChatPage: React.FC = () => {
       setActiveConvId(data[0].id);
     }
     setLoading(false);
+  };
+
+  // 打开知识库抽屉并加载文档
+  const openKbDrawer = () => {
+    setKbDrawerOpen(true);
+    void loadKbDocs(kbLibType);
+  };
+
+  const loadKbDocs = async (lib: LibType) => {
+    setKbLoading(true);
+    try {
+      const page = await listDocs({ libType: lib, current: 1, pageSize: 100 });
+      setKbDocs(page.records ?? []);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '加载知识库文档失败');
+    } finally {
+      setKbLoading(false);
+    }
+  };
+
+  // 切换抽屉库类型
+  const changeKbLibType = (v: LibType) => {
+    setKbLibType(v);
+    void loadKbDocs(v);
+  };
+
+  // 更新当前会话选中的知识库文档
+  const setSelectedDocIds = (ids: number[]) => {
+    if (!activeConvId) return;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === activeConvId ? { ...c, knowledgeDocIds: ids } : c))
+    );
   };
 
   // 滚动到底部
@@ -204,8 +260,8 @@ const ChatPage: React.FC = () => {
     []
   );
 
-  // 发送消息
-  const handleSend = useCallback((text?: string) => {
+  // 发送消息（若会话绑定了知识库文档，先 RAG 召回并作为引用卡片上屏）
+  const handleSend = useCallback(async (text?: string) => {
     const content = (text ?? inputValue).trim();
     if (!content || !activeConvId || sending) return;
 
@@ -213,6 +269,17 @@ const ChatPage: React.FC = () => {
     if (!activeModel) {
       message.warning('请先到「设置 → 模型配置」绑定并选择模型');
       return;
+    }
+
+    // RAG 召回：会话选中知识库文档时，先取引用片段（失败不阻塞普通对话）
+    const docIds = activeConv?.knowledgeDocIds ?? [];
+    let references: RetrieveChunk[] = [];
+    if (docIds.length > 0) {
+      try {
+        references = await retrieve({ docIds, query: content, topN: 5 });
+      } catch (e) {
+        message.warning('知识库召回失败，已按普通对话继续');
+      }
     }
 
     setInputValue('');
@@ -224,6 +291,7 @@ const ChatPage: React.FC = () => {
       role: 'user',
       content,
       timestamp: now,
+      references: references.length > 0 ? references : undefined,
     };
     const aiId = `msg-${Date.now()}-ai`;
     streamingMsgIdRef.current = aiId;
@@ -247,7 +315,7 @@ const ChatPage: React.FC = () => {
     );
 
     streamReply(content, activeModel.vendor, activeModel.modelCode, activeConvId, aiId);
-  }, [inputValue, activeConvId, sending, activeModel]);
+  }, [inputValue, activeConvId, sending, activeModel, activeConv]);
 
   // 重新生成：找到该会话最后一条 user 消息内容，再流式重发
   const handleRegenerate = useCallback((messageId: string) => {
@@ -621,12 +689,53 @@ const ChatPage: React.FC = () => {
                 </div>
               ) : (
                 activeConv.messages.map((msg, idx) => (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    showAvatar={shouldShowAvatar(idx, activeConv.messages)}
-                    onRegenerate={handleRegenerate}
-                  />
+                  <React.Fragment key={msg.id}>
+                    {msg.references && msg.references.length > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          margin: '0 0 12px 48px',
+                          maxWidth: 'min(680px, 72%)',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, color: colors.textTertiary, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icon icon={databaseIcon} width={12} />
+                          引用自知识库（{msg.references.length} 条）
+                        </div>
+                        {msg.references.map((r, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              padding: '10px 12px',
+                              borderRadius: 'var(--radius-md)',
+                              background: colors.surface,
+                              border: `1px solid ${colors.divider}`,
+                              fontSize: 12,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                              <Icon icon={zapIcon} width={12} style={{ color: colors.primary }} />
+                              <span style={{ fontWeight: 600, color: colors.text }}>{r.title}</span>
+                               <Tag style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
+                                分片 #{r.chunkIndex} · 距离 {r.score.toFixed(3)}
+                               </Tag>
+                            </div>
+                            <div style={{ color: colors.textSecondary, wordBreak: 'break-word' }}>
+                              {r.chunkText.length > 200 ? `${r.chunkText.slice(0, 200)}…` : r.chunkText}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <MessageBubble
+                      message={msg}
+                      showAvatar={shouldShowAvatar(idx, activeConv.messages)}
+                      onRegenerate={handleRegenerate}
+                    />
+                  </React.Fragment>
                 ))
               )}
               {sending && (
@@ -741,6 +850,25 @@ const ChatPage: React.FC = () => {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Tooltip title="知识库（RAG）">
+                      <button
+                        onClick={openKbDrawer}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          color:
+                            (activeConv?.knowledgeDocIds?.length ?? 0) > 0
+                              ? colors.primary
+                              : colors.textSecondary,
+                          padding: 6,
+                          borderRadius: 6,
+                          display: 'flex',
+                        }}
+                      >
+                        <Icon icon={databaseIcon} width={16} />
+                      </button>
+                    </Tooltip>
                     <Tooltip title="附件（demo）">
                       <button
                         style={{
@@ -829,6 +957,73 @@ const ChatPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* 知识库选择抽屉（RAG 召回范围） */}
+      <Drawer
+        title="选择知识库文档（RAG）"
+        placement="right"
+        width={360}
+        open={kbDrawerOpen}
+        onClose={() => setKbDrawerOpen(false)}
+      >
+        <Segmented
+          block
+          value={kbLibType}
+          onChange={(v) => changeKbLibType(v as LibType)}
+          options={[
+            { label: '私有库', value: 'private' },
+            { label: '演示库', value: 'demo' },
+          ]}
+        />
+        <div style={{ margin: '16px 0 8px', fontSize: 12, color: colors.textTertiary }}>
+          已选 {activeConv?.knowledgeDocIds?.length ?? 0} 篇（仅已向量化文档可召回）
+        </div>
+        {kbLoading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        ) : kbDocs.length === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无文档" style={{ marginTop: 40 }} />
+        ) : (
+          <Checkbox.Group
+            style={{ width: '100%' }}
+            value={activeConv?.knowledgeDocIds ?? []}
+            onChange={(vals) => setSelectedDocIds(vals as number[])}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {kbDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    background: colors.surface,
+                    border: `1px solid ${colors.divider}`,
+                  }}
+                >
+                  <Checkbox value={doc.id} disabled={!doc.isVectorized}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{doc.title}</span>
+                  </Checkbox>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, paddingLeft: 24 }}>
+                    {doc.isVectorized ? (
+                      <Tag color="success" icon={<Icon icon={zapIcon} width={12} />} style={{ margin: 0 }}>
+                        已向量化
+                      </Tag>
+                    ) : (
+                      <Tag color="default" style={{ margin: 0 }}>未向量化</Tag>
+                    )}
+                    {doc.tags && doc.tags.length > 0 && (
+                      <span style={{ fontSize: 11, color: colors.textTertiary }}>
+                        {doc.tags.slice(0, 3).join(' / ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Checkbox.Group>
+        )}
+      </Drawer>
     </div>
   );
 };

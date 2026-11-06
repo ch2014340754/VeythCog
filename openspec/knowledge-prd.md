@@ -7,7 +7,7 @@
 > 版本：v0.2-P0
 > 复杂度：中
 > 依赖：`openspec/api-spec.md`、`openspec/sql/knowledge-init.sql`
-> 澄清记录：① 访客只读演示库采用「匿名只读接口 + 后端强制只读」；② 向量存储采用自定义 `knowledge_embedding` 表（方案A）
+> 澄清记录：① 访客只读演示库采用「匿名只读接口 + 后端强制只读」；② 向量存储采用自定义 `knowledge_embedding` 表（方案A）；③ 向量索引用 IVFFlat + L2 距离（适配轻量服务器）；④ 增加 `embedding_model` 标识禁止不同模型向量混查；⑤ DB 层用 MyBatis-Plus（普通 CRUD 走 LambdaWrapper，PG 特有语法收拢 XML）；⑥ 切片用自定义 `RecursiveCharacterTextSplitter`（不依赖 Alibaba splitter）
 > 修订记录：见「变更记录表」
 >
 > ⚠️ 本文件为优化版，取代 `openspec/changes/p0/知识库设计PRD.md`（v0.1）。旧文件保留仅供对照，不再作为落地依据。
@@ -18,6 +18,7 @@
 |---|---|
 | v0.1 | 初版（`openspec/changes/p0/知识库设计PRD.md`） |
 | v0.2 | ✏️ 向量维度 `vector(1536)` → `vector(1024)`（对齐 qwen3.7-text-embedding-flash）；✏️ 中文全文检索 `english` → `simple`；✏️ 软删除与 `ON DELETE CASCADE` 语义理清（软删除 + 显式清理 embedding）；🆕 向量 HNSW 索引；🆕 `summary` 列；🆕 分块参数常量（512/64/top5）；🆕 访客机制澄清；🆕 双存储权威源澄清；🆕 向量存储选型说明；🆕 需核查的动态配置/环境点 |
+| v0.3 | 🆕 `embedding_model` 标识（禁止不同模型向量混查）；✏️ 向量索引 HNSW/余弦 → IVFFlat/L2；✏️ 检索改 L2 `<->` + distance 阈值 + 限定勾选 docIds；🆕 自定义 `RecursiveCharacterTextSplitter`（优先保留代码块）；🆕 `EmbeddingProvider` 抽象；✏️ DB 层 JPA → MyBatis-Plus（LambdaWrapper + XML） |
 
 ## 1. 概述
 
@@ -118,6 +119,7 @@ CREATE TABLE knowledge_embedding (
     chunk_index INT    NOT NULL,
     chunk_text  TEXT   NOT NULL,
     embedding   vector(1024) NOT NULL,                  -- ✏️ v0.2 1536→1024
+    embedding_model VARCHAR(100) NOT NULL,              -- 🆕 v0.3 模型标识（禁止混查）
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (doc_id, chunk_index)
 );
@@ -128,7 +130,8 @@ CREATE INDEX idx_knowledge_doc_text_gin ON knowledge_doc USING gin(
     to_tsvector('simple', title || ' ' || coalesce(summary,'') || ' ' || coalesce(markdown_text,''))
 );  -- ✏️ v0.2 'english'→'simple'（中文分词）
 CREATE INDEX idx_knowledge_embedding_doc ON knowledge_embedding(doc_id);
-CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING hnsw(embedding vector_cosine_ops); -- 🆕 v0.2
+CREATE INDEX idx_knowledge_embedding_doc_model ON knowledge_embedding(doc_id, embedding_model); -- 🆕 v0.3
+CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(embedding vector_l2_ops) WITH (lists = 100); -- ✏️ v0.3 HNSW/余弦 → IVFFlat/L2
 ```
 
 ### 4.1 关键修正说明（相对 v0.1）
@@ -137,7 +140,7 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING hnsw(embed
 | ✏️ `vector(1024)` | 项目实际 Embedding 为 `qwen3.7-text-embedding-flash` + `dimensions:1024`，1536 是 OpenAI 维度，写入会报错 |
 | ✏️ `simple` 检索 | 内容是中文，`english` 不切中文词，GIN 索引失效 |
 | ✏️ 软删除语义 | 软删除不触发 FK 级联，需接口显式清理 embedding |
-| 🆕 HNSW 向量索引 | 无向量索引则相似度检索全表扫描 |
+| 🆕 IVFFlat + L2 向量索引 | 无向量索引则相似度检索全表扫描；轻量服务器用 IVFFlat 更省内存 |
 | 🆕 `summary` 列 | 列表页要展示摘要，原表缺列 |
 
 ## 5. 向量化与检索方案（选型说明）
@@ -149,17 +152,22 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING hnsw(embed
 
 > 决策：P0 走方案A；若后续想快速验证，可先按 `vc-learn` 示例用 `PgVectorStore` 做原型，再迁移到自定义表。
 
-### 5.2 分块与检索参数（常量，与 `docs/architecture.md` 对齐）
+### 5.2 分块与检索参数（配置化，`knowledge.chunk/retrieve`）
 | 参数 | 值 |
 |---|---|
-| CHUNK_SIZE | 512（字符） |
-| CHUNK_OVERLAP | 64（字符） |
-| TOP_K | 5 |
+| 切片大小 | 512（字符，`knowledge.chunk.size`） |
+| 切片重叠 | 64（字符，`knowledge.chunk.overlap`） |
+| 默认召回条数 | 5（`knowledge.retrieve.top-n`） |
+| L2 距离阈值 | 0.8（`knowledge.retrieve.distance-threshold`，需按实际向量分布核查） |
+
+切片用自定义 `RecursiveCharacterTextSplitter`：分隔符优先级 `\n\n > \n > 句号 > 逗号 > 空格`，优先保留 fenced code block 不被切碎；输入源为 `markdown_text`（P0 不基于 Block 块结构切片）。
 
 ### 5.3 检索流程
 ```
-查询文本 → EmbeddingModel(query) → ORDER BY embedding <=> $query LIMIT topN
-        → 强制按 lib_type 过滤（不跨库混合召回）→ 返回 chunkText/docId/title/score
+查询文本 → EmbeddingProvider(query) → 限定本次勾选 docIds 集合
+        → ORDER BY embedding <-> $query（L2 距离）+ distance 阈值过滤
+        → embedding_model 标识校验 + 关联文档软删除过滤（禁止全库向量搜索）
+        → 强制同库（不跨库混合召回）→ 返回 chunkText/docId/title/chunkIndex/score
 ```
 
 ## 6. 接口清单（RESTful）
@@ -227,7 +235,7 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING hnsw(embed
 
 ## 12. 面试亮点说明（可直接放进 README）
 > 知识库采用块级编辑器，对标语雀交互，支持块拖拽重排、`/` 斜杠快捷插入组件；双存储设计：JSON 块结构支撑富交互，同步生成标准 Markdown，兼顾编辑体验、格式兼容与 RAG 检索。
-> 架构上区分私有库与演示库，物理隔离数据与向量；向量存储用 pgvector 原生 `vector(1024)` + HNSW 余弦索引，手动管控向量化；预留批量操作、块级向量、飞书索引层扩展位点；定位轻量化 RAG 实验库，主力文档归档飞书，减轻自建存储/备份压力，适配轻量服务器资源约束。
+> 架构上区分私有库与演示库，物理隔离数据与向量；向量存储用 pgvector 原生 `vector(1024)` + IVFFlat L2 索引，手动管控向量化；预留批量操作、块级向量、飞书索引层扩展位点；定位轻量化 RAG 实验库，主力文档归档飞书，减轻自建存储/备份压力，适配轻量服务器资源约束。
 
 ## 13. 动态配置/环境点（3 项已确认，1 项待落地）
 
@@ -239,6 +247,6 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING hnsw(embed
 4. **访客只读路径**：需在 `SecurityConfig` 放行 `GET /api/knowledge/demo/**`，并确认 JWT 过滤器对未登录请求不拦截（当前 `anyRequest().authenticated()` 需改）。
 
 ## 14. 附录：落地依赖缺口（编码前必须补）
-- 后端 `vc-knowledge/pom.xml`：补 `spring-ai-alibaba-starter-dashscope`（拿 `EmbeddingModel`）、`postgresql`；`Document`/`KnowledgeBase` 实体需加 JPA 注解，`KnowledgeServiceImpl` 需实现。
+- 后端 `vc-knowledge/pom.xml`：补 `spring-ai-alibaba-starter-dashscope`（拿 `EmbeddingModel`）、`mybatis-plus-spring-boot3-starter`、`postgresql`；实体/Mapper/XML 用 MyBatis-Plus 对齐 `openspec/sql/knowledge-init.sql` 表结构（`KnowledgeDoc`/`KnowledgeEmbedding`）。
 - 前端 `package.json`：补 `@blocknote/*` 依赖。
 - SQL：执行 `openspec/sql/knowledge-init.sql`（`ddl-auto=none`，表靠脚本管理）。

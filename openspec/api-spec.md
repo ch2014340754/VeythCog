@@ -76,7 +76,8 @@
 | chunkText | string | 分片原文 |
 | docId | number | 来源文档 id |
 | title | string | 来源文档标题 |
-| score | number | 相似度得分（余弦距离，越小越相似） |
+| chunkIndex | number | 文档内分片序号（从 0 起），用于引用溯源 |
+| score | number | L2 距离（越小越相似） |
 
 ## 3. 接口清单
 
@@ -116,8 +117,7 @@
 
 ### 3.3 向量相关
 
-**8. 向量化** `POST /api/knowledge/doc/{docId}/vectorize`
-- 流程：读 `markdown_text` → 按 `CHUNK_SIZE=512 / CHUNK_OVERLAP=64` 切片 → `EmbeddingModel` 编码 → **先删该 docId 旧向量再插入**（幂等，以 `doc_id` 为幂等键）→ 置 `is_vectorized=true`
+- 流程：读 `markdown_text` → 自定义 `RecursiveCharacterTextSplitter` 切片（`\n\n > \n > 句号 > 逗号 > 空格`，优先保留代码块）→ `EmbeddingProvider` 编码（qwen3.7-text-embedding-flash，维度 1024）→ **事务内先删该 docId 旧向量再 saveBatch 插入**（幂等，以 `doc_id` 为幂等键，写入 `embedding_model` 标识）→ 置 `is_vectorized=true`
 - 返回：`data = { chunkCount }`
 - 失败：embedding 超时/超限不阻塞文档保存，返回 `OPERATION_ERROR` + 提示
 
@@ -127,7 +127,7 @@
 **10. RAG 召回** `POST /api/knowledge/rag/retrieve`
 - body：`{ docIds: number[], query: string, topN: number }`
 - 返回：`data = RetrieveChunk[]`
-- 说明：查询向量化 → `ORDER BY embedding <=> $query LIMIT topN`，**强制按 `lib_type` 过滤**（不跨库混合召回）；P0 固定 `TOP_K=5`，P2 开放参数
+- 说明：查询向量化 → **限定本次勾选的 `docIds` 集合**做 L2 距离检索 `embedding <-> $query`，加 `distance` 阈值过滤 + `embedding_model` 标识校验 + 关联文档软删除过滤，禁止全库向量搜索；**强制同库**（不跨库混合召回）；返回片段/文档 ID/标题/chunk 索引/距离，用于引用溯源
 
 ### 3.4 扩展预留（P0 不实现，仅占位）
 - `POST /api/knowledge/batch/vectorize` / `batch/move` / `batch/tag` / `batch/delete`

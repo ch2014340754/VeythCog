@@ -47,7 +47,7 @@ VeythCog/                      # 仓库根（本项目记忆文档所在）
 | 后端 | Spring Boot 3.5.8 / Java 21 / Maven | 模块化单体，父 pom 管版本（BOM：spring-ai-alibaba 1.1.2.0 / spring-ai 1.1.2） |
 | 后端 | Spring AI（ChatClient / ChatMemory / Advisor） | LLM 统一抽象，流式走 `reactor` Flux |
 | 后端 | Spring Security + JWT（jjwt 0.12.6）+ BCrypt | 无状态鉴权 |
-| 后端 | Spring Data JPA / JDBC | 业务实体 + 记忆仓库 |
+| 后端 | Spring Data JPA / JDBC / MyBatis-Plus | 业务实体 + 记忆仓库；知识库域走 MP + pgvector |
 | 数据库 | **PostgreSQL（当前 active，个人服务器 docker 容器）** | `ddl-auto=none`，表由 `docs/sql/*.sql` 管理；vc-app 仍残留 MySQL 驱动未清理 |
 | 接口文档 | springdoc + knife4j（springdoc 2.8.9 显式锁定） | `/api/doc.html`、`/api/v3/api-docs` |
 | 前端 | React 18 / TS / Vite 5 / AntD 5 / Zustand(persist) / React Router 6 | fetch+ReadableStream 封装 SSE |
@@ -87,11 +87,14 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 **vc-app**（`com.vc.app`）—— 唯一可运行，装配全部：
 - `auth/*`：JWT 鉴权（`JwtUtil` / `JwtAuthFilter` / `AuthServiceImpl` / `PasswordUtil` / `User`）。
-- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE）、`LlmModelController`、`AuthController`、`HealthController`、`KnowledgeController`（骨架）、`GlobalExceptionHandler`。
+- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE）、`LlmModelController`、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`GlobalExceptionHandler`。
 - `config/*`：`SecurityConfig`（无状态，放行 `/auth/**`、`/health/**`、接口文档、ASYNC 分发）、`CorsConfig`、`DataInitializer`（幂等种子：模型目录 + admin 用户 + 默认绑定 qwen-plus）。
 - `admin` / `orchestration`：占位（系统管理后端未实现）。
 
-**vc-knowledge**（`com.vc.knowledge`）—— **仅骨架**（`KnowledgeServiceImpl` 返回空，TODO(Phase 2)）。
+**vc-knowledge**（`com.vc.knowledge`）—— 知识库域（无 Controller）：
+- `entity/KnowledgeDoc` + `entity/KnowledgeEmbedding`（MyBatis-Plus 注解实体，含 `tags text[]`/`embedding vector(1024)` 的 TypeHandler 映射）、`mapper/KnowledgeDocMapper` + `mapper/KnowledgeEmbeddingMapper`（XML 承载 PG 特有语法）。
+- `service/KnowledgeService` + `impl/KnowledgeServiceImpl`：文档 CRUD / 导入导出（普通 CRUD 用 MP BaseMapper + LambdaWrapper）；关键词列表检索（`to_tsvector('simple', ...)` + `plainto_tsquery`）与 tags 数组过滤收拢到 XML。
+- `service/VectorizeService` + `impl/VectorizeServiceImpl`：自定义 `RecursiveCharacterTextSplitter`（512/64，优先保留代码块）→ `EmbeddingProvider` 批量编码（qwen3.7-text-embedding-flash，维度 1024）→ pgvector `<->` L2 检索（IVFFlat）；先删后插幂等（`doc_id` 为幂等键）+ `embedding_model` 标识校验。
 
 **vc-learn**（`com.vc.learn`）—— **Spring AI 学习沙箱**：独立可运行、只连 DashScope、与业务模块零依赖。含 `examples/chat`（`ChatDemo` / `ChatController` / Advisor：`RereadingAdvisor` / `SimpleLoggerAdvisor`）、结构化输出测试（`StructuredOutTest`）等。**git status 有未提交改动**（ChatController 修改 + 新增 service/ 与测试）。
 
@@ -104,7 +107,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | ① llm-gateway 多模型调度 | Phase 1 | ✅ 已落地：供应商抽象+工厂+路由+实例缓存；DashScope 与 OpenAI 兼容双工厂 |
 | ② SSE 流式全链路 | Phase 1 待办 | ✅ **已落地**：`POST /chat/stream`（SseEmitter + Flux 逐 token，`[DONE]` 结尾，客户端断开取消上游）；前端 `api/chat.ts` `streamChatMessage()` |
 | ③ 会话/消息持久化 | Phase 1 待办 | ✅ **已落地（记忆层）**：Spring AI `ChatMemory` + `JdbcChatMessageRepository`（`chat_message` 表）；⚠️ 无独立会话表，会话元数据仍在前端本地（Zustand persist） |
-| RAG 知识库 | Phase 2 | ⭕ 仅骨架（vc-knowledge + KnowledgeController），未实现 |
+| RAG 知识库 | Phase 2 | ✅ **已落地（P0）**：文档 CRUD + 导入导出 + 向量化（pgvector `<->` L2）+ RAG 召回 + 访客只读演示库；前端知识库页 + 对话侧 RAG 引用卡片 |
 
 > **重要**：`docs/architecture.md` 与 `agent.md` 仍把 SSE 流式/会话持久化列为待办——**文档滞后于代码**。新增迭代前先读代码，别信旧文档。
 
@@ -118,6 +121,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | `llm_model` | 模型目录（vendor_code 仅存字符串，供应商为枚举不建表） | unique(vendor_code, model_code) |
 | `user_llm_binding` | 用户-模型绑定中间表 | unique(user_id, vendor_code, model_code)；is_default 应用层保证每用户至多 1 个 |
 | `chat_message` | 对话记忆（Spring AI JDBC 落库） | unique(conversation_id, seq)；conversation_id=`userId:conversationId` |
+| `knowledge_doc` | 知识库文档 | lib_type ∈ {private, demo}；block_data JSONB 权威源；markdown_text 派生缓存；tags text[]；deleted 软删除；summary ≤500 |
+| `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ embedding_model 标识；doc_id 外键（软删除时显式清理，不依赖级联） |
 
 > `llm_vendor` 表已**下线**（`005_drop_llm_vendor.sql`），改后端枚举。脚本含 MySQL/PG 双语差异注释。
 
@@ -135,7 +140,16 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | PUT | `/llm/bindings/{vendor}/{modelCode}/default` | - | 是 |
 | POST | `/chat/message` | {message, vendor, modelCode, conversationId?} | 是（同步返回 string） |
 | POST | `/chat/stream` | {message, vendor, modelCode, conversationId?} | 是（SSE：`data: <token>`，末尾 `data: [DONE]`，错误 `event:error`） |
-| GET/POST | `/knowledge` | - | 是（骨架） |
+| GET | `/knowledge/list` | query: libType, keyword?, tag?, sortField?, sortOrder?, current?, pageSize? | 否（private 需登录，Service 层校验） |
+| GET | `/knowledge/doc/{docId}` | - | 否（private 需登录） |
+| POST | `/knowledge/doc` | {libType, title, summary?, tags?, blockData?, markdownText?} | 是（demo 写 403） |
+| PUT | `/knowledge/doc/{docId}` | 同新建 | 是（demo 写 403） |
+| DELETE | `/knowledge/doc/{docId}` | - | 是（demo 写 403） |
+| POST | `/knowledge/import/md` | multipart: file(.md≤500KB), libType, title?, tags? | 是（demo 写 403） |
+| GET | `/knowledge/doc/{docId}/export/md` | - | 否（下载流） |
+| POST | `/knowledge/doc/{docId}/vectorize` | - | 是（返回分片数） |
+| POST | `/knowledge/doc/{docId}/unvectorize` | - | 是 |
+| POST | `/knowledge/rag/retrieve` | {docIds, query, topN?} | 否（private 需登录；限定 docIds + embedding_model + L2 距离阈值，强制同库召回） |
 | GET | `/health` | - | 否 |
 
 统一返回 `BaseResponse<T>`：`{ code, data, message }`，`code===0` 成功；未登录 401（`ErrorCode.NOT_LOGIN_ERROR`）。
@@ -213,7 +227,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 **待办/演进**（源自架构文档 + 现状）：
 1. 会话元数据持久化（现仅记忆层落库，会话列表在前端本地）。
-2. RAG 知识库实现（vc-knowledge 骨架 → 分块/Embedding/pgvector/带引用回答）。
+2. ~~RAG 知识库实现~~ ✅ 已完成 P0（文档 CRUD/导入导出/向量化/RAG 召回/前端知识库页 + 对话侧引用卡片）；P1 待办：BlockNote 块编辑器、批量向量化/移动/打标。
 3. Admin 后台后端对接（现全 mock，`api/admin.ts`）。
 4. 真实 `role` 字段由后端 `/auth/me` 下发。
 5. vc-app 清理残留 MySQL 驱动与过时注释。

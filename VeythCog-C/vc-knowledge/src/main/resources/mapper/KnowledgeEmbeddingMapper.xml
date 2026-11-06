@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vc.knowledge.mapper.KnowledgeEmbeddingMapper">
+
+    <select id="retrieveByDocIds" resultType="com.vc.knowledge.dto.RetrieveChunk">
+        SELECT e.chunk_text AS chunkText,
+               e.doc_id AS docId,
+               d.title AS title,
+               e.chunk_index AS chunkIndex,
+               (e.embedding &lt;-&gt; #{queryVector,typeHandler=com.vc.knowledge.handler.VectorTypeHandler}) AS score
+        FROM knowledge_embedding e
+        JOIN knowledge_doc d ON d.id = e.doc_id
+        WHERE d.deleted = false
+          AND e.doc_id IN
+          <foreach collection="docIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+          AND e.embedding_model = #{embeddingModel}
+          AND (e.embedding &lt;-&gt; #{queryVector,typeHandler=com.vc.knowledge.handler.VectorTypeHandler}) &lt;= #{distanceThreshold}
+        ORDER BY score ASC
+        LIMIT #{limit}
+    </select>
+</mapper>

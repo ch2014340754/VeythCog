@@ -2,6 +2,7 @@ package com.vc.app.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -73,6 +74,9 @@ public class SecurityConfig {
                         // 异步分发（SseEmitter/SSE 流式）已在上层请求完成认证，放行避免二次鉴权
                         .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
                         .requestMatchers("/auth/**", "/health/**", "/error").permitAll()
+                        // 知识库：演示库只读（GET）+ RAG 召回放行，private 校验在 Service 层完成
+                        .requestMatchers(HttpMethod.GET, "/knowledge/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/knowledge/rag/retrieve").permitAll()
                         // 接口文档（knife4j / springdoc）
                         .requestMatchers("/doc.html", "/v3/api-docs/**", "/swagger-ui.html",
                                 "/swagger-ui/**", "/webjars/**", "/favicon.ico")

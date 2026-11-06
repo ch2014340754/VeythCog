@@ -19,6 +19,11 @@ spring:
       chat:
         options:
           model: ${DASHSCOPE_MODEL}
+      embedding:
+        options:
+          model: qwen3.7-text-embedding-flash
+          dimensions: 1024
+          text-type: document
 llm:
   vendors:
     dashscope:
@@ -55,3 +60,26 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# MyBatis-Plus：知识库域数据访问（PostgreSQL + pgvector）
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.vc.knowledge.entity
+  type-handlers-package: com.vc.knowledge.handler
+  configuration:
+    map-underscore-to-camel-case: true
+
+# 知识库业务配置（切片 / 检索 / embedding）
+knowledge:
+  chunk:
+    size: 512
+    overlap: 64
+  retrieve:
+    top-n: 5
+    # L2 距离阈值：超过该距离的片段被过滤；需按实际向量分布核查调整
+    distance-threshold: 0.8
+  embedding:
+    # 必须与 spring.ai.dashscope.embedding.options.model 保持一致
+    model-id: qwen3.7-text-embedding-flash
+    dimensions: 1024
+    batch-size: 10

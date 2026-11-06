@@ -4,6 +4,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.mybatis.spring.annotation.MapperScan;
 
 /**
  * 唯一可运行应用（装配层）。
@@ -14,6 +15,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @SpringBootApplication(scanBasePackages = "com.vc")
 @EnableJpaRepositories(basePackages = "com.vc")
 @EntityScan(basePackages = "com.vc")
+@MapperScan("com.vc.knowledge.mapper")
 public class VcAppApplication {
 
     public static void main(String[] args) {
