@@ -19,8 +19,6 @@ public class DocListItem implements Serializable {
 
     private List<String> tags;
 
-    private String libType;
-
     private Boolean isVectorized;
 
     /** epoch 毫秒 */

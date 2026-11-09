@@ -350,9 +350,6 @@ export interface ScheduledTask {
 
 // ============ 知识库（后端 P0 契约） ============
 
-/** 库类型：私有库 / 演示库 */
-export type LibType = 'private' | 'demo';
-
 /** 块结构（block_data 内的单个块，P0 以 markdown 为主，块结构预留） */
 export interface Block {
   id: string;
@@ -368,7 +365,6 @@ export interface DocListItem {
   title: string;
   summary: string;
   tags: string[];
-  libType: LibType;
   isVectorized: boolean;
   updatedAt: number;
 }
@@ -376,7 +372,6 @@ export interface DocListItem {
 /** 文档详情 */
 export interface DocDetail {
   id: number;
-  libType: LibType;
   title: string;
   summary: string;
   tags: string[];
@@ -410,7 +405,6 @@ export interface PageResult<T> {
 
 /** 新建 / 更新文档请求体 */
 export interface DocSavePayload {
-  libType: LibType;
   title: string;
   summary?: string;
   tags?: string[];

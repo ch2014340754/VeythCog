@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Form, Input, Button, message, Radio, Divider } from 'antd';
+import { Form, Input, Button, message, Radio } from 'antd';
 import { Icon } from '@iconify/react';
 import userIcon from '@iconify-icons/lucide/user';
 import lockIcon from '@iconify-icons/lucide/lock';
+import chevronDownIcon from '@iconify-icons/lucide/chevron-down';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
 import { useModeStore } from '@/stores/modeStore';
@@ -38,6 +39,7 @@ const LoginPage: React.FC = () => {
   const bypassMode = useModeStore((s) => s.bypassMode);
   const apiBase = useModeStore((s) => s.apiBase);
   const [apiBaseInput, setApiBaseInput] = useState(apiBase);
+  const [runModeOpen, setRunModeOpen] = useState(false);
 
   const onModeChange = (e: any) => {
     const v = e.target.value;
@@ -158,17 +160,35 @@ const LoginPage: React.FC = () => {
   return (
     <div
       style={{
+        position: 'relative',
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         background: 'transparent',
         padding: 24,
+        overflow: 'hidden',
       }}
     >
+      {/* 装饰光斑：与登录后页面的背景预设风格统一，纯色/背景图下都有层次 */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          background: [
+            `radial-gradient(1200px 800px at 12% 8%, ${colors.primary15}, transparent 55%)`,
+            `radial-gradient(1000px 700px at 88% 12%, ${colors.primary10}, transparent 55%)`,
+            `radial-gradient(900px 900px at 50% 100%, ${colors.primary15}, transparent 60%)`,
+          ].join(', '),
+        }}
+      />
       <div
         className="glass-effect"
         style={{
+          position: 'relative',
+          zIndex: 1,
           width: 380,
           maxWidth: '100%',
           borderRadius: 'var(--radius-xl)',
@@ -335,42 +355,72 @@ const LoginPage: React.FC = () => {
           </div>
         )}
 
-        {/* 运行模式开关：本地绕过 / 真实后端联调 */}
-        <Divider style={{ margin: '20px 0 14px', fontSize: 12, color: colors.textSecondary }}>运行模式</Divider>
-        <Radio.Group
-          value={bypassMode ? 'bypass' : 'real'}
-          onChange={onModeChange}
-          size="small"
-          style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}
-        >
-          <Radio value="bypass" style={{ color: colors.text }}>
-            本地绕过演示
-            <span style={{ marginLeft: 6, fontSize: 11, color: colors.textSecondary }}>
-              （默认，不连后端，开箱即用）
-            </span>
-          </Radio>
-          <Radio value="real" style={{ color: colors.text }}>
-            真实后端联调
-            <span style={{ marginLeft: 6, fontSize: 11, color: colors.textSecondary }}>
-              （后端部署后切换）
-            </span>
-          </Radio>
-        </Radio.Group>
-        {!bypassMode && (
-          <div style={{ marginTop: 8 }}>
-            <Input
-              size="small"
-              placeholder="后端地址，如 http://1.2.3.4:8123/api"
-              value={apiBaseInput}
-              onChange={(e) => setApiBaseInput(e.target.value)}
-              onBlur={onApiBaseBlur}
-              style={{ fontSize: 12 }}
+        {/* 运行模式（默认收起，展开后通过单选切换） */}
+        <div style={{ marginTop: 20, borderTop: `1px solid ${colors.divider}`, paddingTop: 14 }}>
+          <button
+            type="button"
+            onClick={() => setRunModeOpen((v) => !v)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              padding: '4px 0',
+              cursor: 'pointer',
+              fontSize: 12,
+              color: colors.textSecondary,
+            }}
+          >
+            <span>运行模式</span>
+            <Icon
+              icon={chevronDownIcon}
+              width={14}
+              style={{ transition: 'transform .2s ease', transform: runModeOpen ? 'rotate(180deg)' : 'none' }}
             />
-            <div style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
-              联调用真实账号登录（如 admin / admin123）
+          </button>
+          {runModeOpen && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: '12px',
+                borderRadius: 'var(--radius-md)',
+                background: colors.surface ?? 'rgba(0,0,0,0.04)',
+              }}
+            >
+              <Radio.Group
+                value={bypassMode ? 'bypass' : 'real'}
+                onChange={onModeChange}
+                size="small"
+                style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}
+              >
+                <Radio value="real" style={{ color: colors.text }}>
+                  正常登录（真实后端）
+                  <span style={{ marginLeft: 6, fontSize: 11, color: colors.textSecondary }}>默认</span>
+                </Radio>
+                <Radio value="bypass" style={{ color: colors.text }}>
+                  本地绕过（mock，不连后端）
+                </Radio>
+              </Radio.Group>
+              {!bypassMode && (
+                <div style={{ marginTop: 8 }}>
+                  <Input
+                    size="small"
+                    placeholder="后端地址，如 http://1.2.3.4:8123/api"
+                    value={apiBaseInput}
+                    onChange={(e) => setApiBaseInput(e.target.value)}
+                    onBlur={onApiBaseBlur}
+                    style={{ fontSize: 12 }}
+                  />
+                  <div style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
+                    使用真实账号登录（如 admin / admin123）
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

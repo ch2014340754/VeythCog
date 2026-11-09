@@ -4,10 +4,10 @@
 > 需求名：知识库模块（路线A，轻量 RAG 实验库）
 > 技术栈：React 18 + TS + Vite + AntD 5 + Zustand + BlockNote / Spring Boot 3.5 + Java 21 + Spring AI 1.1.2 + PostgreSQL 16 + pgvector
 > 模块：知识库（暂不接入飞书同步）
-> 版本：v0.2-P0
+> 版本：v0.4-P0
 > 复杂度：中
-> 依赖：`openspec/api-spec.md`、`openspec/sql/knowledge-init.sql`
-> 澄清记录：① 访客只读演示库采用「匿名只读接口 + 后端强制只读」；② 向量存储采用自定义 `knowledge_embedding` 表（方案A）；③ 向量索引用 IVFFlat + L2 距离（适配轻量服务器）；④ 增加 `embedding_model` 标识禁止不同模型向量混查；⑤ DB 层用 MyBatis-Plus（普通 CRUD 走 LambdaWrapper，PG 特有语法收拢 XML）；⑥ 切片用自定义 `RecursiveCharacterTextSplitter`（不依赖 Alibaba splitter）
+> 依赖：`openspec/api-spec.md`、`VeythCog-C/docs/sql/009~011`（唯一权威建表脚本）
+> 澄清记录：① RAG 检索与引用**由后端统一执行**（前端只消费 `references`）；② 向量存储采用自定义 `knowledge_embedding` 表（方案A）；③ 向量索引用 IVFFlat + L2 距离（适配轻量服务器）；④ 增加 `embedding_model` 标识禁止不同模型向量混查；⑤ DB 层用 MyBatis-Plus（普通 CRUD 走 LambdaWrapper，PG 特有语法收拢 XML）；⑥ 切片用自定义 `RecursiveCharacterTextSplitter`（不依赖 Alibaba splitter）；⑦ 「私有库 / 演示库」概念已废弃，本阶段不做按用户隔离
 > 修订记录：见「变更记录表」
 >
 > ⚠️ 本文件为优化版，取代 `openspec/changes/p0/知识库设计PRD.md`（v0.1）。旧文件保留仅供对照，不再作为落地依据。
@@ -19,6 +19,7 @@
 | v0.1 | 初版（`openspec/changes/p0/知识库设计PRD.md`） |
 | v0.2 | ✏️ 向量维度 `vector(1536)` → `vector(1024)`（对齐 qwen3.7-text-embedding-flash）；✏️ 中文全文检索 `english` → `simple`；✏️ 软删除与 `ON DELETE CASCADE` 语义理清（软删除 + 显式清理 embedding）；🆕 向量 HNSW 索引；🆕 `summary` 列；🆕 分块参数常量（512/64/top5）；🆕 访客机制澄清；🆕 双存储权威源澄清；🆕 向量存储选型说明；🆕 需核查的动态配置/环境点 |
 | v0.3 | 🆕 `embedding_model` 标识（禁止不同模型向量混查）；✏️ 向量索引 HNSW/余弦 → IVFFlat/L2；✏️ 检索改 L2 `<->` + distance 阈值 + 限定勾选 docIds；🆕 自定义 `RecursiveCharacterTextSplitter`（优先保留代码块）；🆕 `EmbeddingProvider` 抽象；✏️ DB 层 JPA → MyBatis-Plus（LambdaWrapper + XML） |
+| v0.4 | 🔥 移除「私有库 / 演示库」全部设计（`lib_type` 列、访客只读、demo 403、库切换、库隔离）；🏗 权限改为「登录即可访问、暂不按用户隔离，用户级赋权由统一中间件承担」；🏗 RAG 检索与引用改为**后端统一处理**（SSE `references` 事件），前端不再自行检索；✏️ 建表依赖改指 `docs/sql/009~011` |
 
 ## 1. 概述
 
@@ -29,13 +30,13 @@ VeythCog（渡思）定位为个人一站式工作台，包含 AI 对话、知�
 
 ### 1.2 目标
 1. P0 交付最小可用知识库：文档 CRUD、块级编辑、md 导入导出
-2. 支持私有库（自用）、演示库（访客只读、面试演示）物理隔离
-3. 打通 AI 对话模块：选择文档集合做 RAG 检索、引用溯源
+2. 文档库为登录账号共享（本阶段不做按用户隔离，用户级赋权由统一中间件后续承担）
+3. 打通 AI 对话模块：选择文档集合做 RAG 检索、引用溯源（检索、上下文注入、引用产出均由后端完成）
 4. 架构预留扩展点：批量操作、块级元数据、飞书索引层
 5. 适配轻量云服务器：控制存储/向量资源，手动管控向量化，不自动 embedding
 
 ### 1.3 范围
-✅ P0 包含：知识库总览页、块编辑器文档页、md 导入/导出、AI 对话侧知识库选择抽屉、RAG 召回溯源、权限隔离、向量化开关、文档-向量级联删除、数据模型、接口、关键词检索。
+✅ P0 包含：知识库总览页、块编辑器文档页、md 导入/导出、AI 对话侧知识库选择抽屉、RAG 召回与引用溯源（后端统一）、登录鉴权、向量化开关、文档-向量级联删除、数据模型、接口、关键词检索。
 
 ⏳ P2 预留（只定义扩展位点，不实现）：批量操作、块级元数据/块级向量化、RAG 参数可视化面板、文档版本快照。
 
@@ -48,36 +49,36 @@ VeythCog（渡思）定位为个人一站式工作台，包含 AI 对话、知�
 2. 向量策略：**保存文档 ≠ 自动向量化**，由用户手动触发；文档变更后需重新向量化
 3. 资源约束：轻量 PG；列表页只做 PG 文本关键词检索，向量检索仅在对话 RAG 场景触发
 4. 格式约束：块结构与 Markdown 双向同步，导出为标准 md
-5. 权限约束：访客仅可访问演示库、只读；演示库文档锁定编辑
+5. 权限约束：全部知识库接口要求登录（`anyRequest().authenticated()`），本阶段文档为全账号共享、不做按用户隔离；用户级赋权由统一中间件承担，多账号对外开放前必须先就位
 
 ## 2. 角色与权限
 
-| 角色 | 私有库 | 演示库 | 说明 |
-| ---- | ---- | ---- | ---- |
-| 访客（未登录） | 不可见 | 只读（浏览、RAG 问答） | 无编辑/上传/向量化 |
-| 登录用户（本人） | 读写全权限 | 只读锁定 | 演示库文档禁止编辑，仅浏览与 RAG 测试 |
+| 角色 | 权限 | 说明 |
+| ---- | ---- | ---- |
+| 未登录 | 无 | 全部 `/knowledge/**` 返回 401（`NOT_LOGIN_ERROR`） |
+| 登录用户 | 读写全权限 | 本阶段不分用户：文档为账号间共享数据，赋权由统一中间件后续承担 |
 
-> ⚠️ **访客机制澄清（v0.2 新增）**：当前后端 `SecurityConfig` 是 `anyRequest().authenticated()`，角色只有 `admin/user`，**没有匿名/guest 会话**。落地采用：`SecurityConfig` 放行 `GET /api/knowledge/demo/**`（演示库只读），其余 `/api/knowledge/**` 需登录；写接口内再校验 `libType=demo` 一律 `FORBIDDEN_ERROR`。权限统一在后端校验，前端仅做 UI 隐藏，不可信任前端判断。
+> **权限决策（v0.4，2026-11-09）**：不再有访客 / 演示库分支，`SecurityConfig` 保持 `anyRequest().authenticated()`；`lib_type` 列已物理删除（`011`）。单账号自用时该模型足够；多账号开放前必须由统一中间件补齐用户级授权，否则文档互相可见。
 
 ## 3. 页面 & 路由设计
 
 | 路由 | 页面 | 说明 |
 | ---- | ---- | ---- |
-| `/knowledge` | 知识库总览页 | 库切换、搜索筛选、文档列表、新建/上传入口 |
+| `/knowledge` | 知识库总览页 | 搜索筛选、文档列表、新建/上传入口 |
 | `/knowledge/doc/new` | 新建文档编辑器页 | 新建空白文档 |
 | `/knowledge/doc/:docId` | 文档编辑/预览页 | 块编辑器、元信息面板 |
 | 弹窗（非独立路由） | md 导入弹窗 | 拖拽上传 md，解析为块结构 |
 | AI 对话内抽屉 | 知识库选择器 | 选择文档集合，绑定本次对话 RAG 上下文 |
 
 ### 3.1 知识库总览页
-1. 顶部：面包屑、库切换下拉（`私有库/演示库`，数据与向量隔离）、【新建文档】【上传MD】
+1. 顶部：面包屑、【新建文档】【上传MD】
 2. 筛选&搜索：关键词搜索（PG `simple` 文本检索匹配 `markdown_text`）、标签筛选、排序下拉、状态筛选（全部/已向量化/未向量化）
 3. 视图切换：卡片视图（默认）/ 列表视图
 4. 列表项字段：标题、**摘要（`summary`，v0.2 新增列）**、标签、更新时间、向量化标记 ✅；单条操作：查看/编辑/向量化/取消向量化/导出/删除；复选框占位（P2 批量）
-5. 底部统计：当前库文档总数、已向量化文档数量
+5. 底部统计：文档总数、已向量化文档数量
 
 ### 3.2 文档编辑页（BlockNote 块编辑器）
-- 左侧元信息面板：归属库、标签、向量化开关、创建/更新时间；演示库文档全部编辑控件锁定
+- 左侧元信息面板：标签、向量化开关、创建/更新时间
 - 主画布：块基础单元（段落/H1-H3/无序/有序列表/引用/代码块/分割线/待办/提示块）、拖拽柄、`+` 新增、`/` 斜杠命令、`Shift+Enter` 软换行
 - 双向同步：块变更 → 实时序列化生成 `markdown_text`
 - 数据模型：`block_data jsonb`（权威源）+ `markdown_text text`（派生缓存）
@@ -85,22 +86,21 @@ VeythCog（渡思）定位为个人一站式工作台，包含 AI 对话、知�
 > ⚠️ **双存储权威源（v0.2 澄清）**：`block_data` 为权威源，`markdown_text` 为派生缓存。前端实时序列化生成，后端导入时由后端解析生成；保存时以 `block_data` 为准，避免两套逻辑漂移。
 
 ### 3.3 md 导入弹窗
-- 拖拽/选择 `.md`，选择归属库、自动提取标题、标签输入；单文件 ≤500KB，仅 `.md` 后缀
+- 拖拽/选择 `.md`，自动提取标题、标签输入；单文件 ≤500KB，仅 `.md` 后缀
 - 流程：前端上传 → 后端解析 markdown → 转 block 数组写 `block_data`，回填 `markdown_text`；成功后提示是否立即向量化
 
 ### 3.4 AI 对话 - 知识库选择抽屉（RAG 绑定）
-- 抽屉内库切换、文档复选列表；确认后本次对话临时绑定文档集合；会话隔离（下次默认不继承，记忆上次选中）；访客只能勾选演示库文档
+- 文档复选列表；确认后本次对话临时绑定文档集合；会话隔离（下次默认不继承，记忆上次选中）；选中的 docIds 随 `/chat/stream` 提交给后端，检索与引用由后端完成
 
 ## 4. 数据模型设计（PG，修正后）
 
-> 完整建表脚本见 `openspec/sql/knowledge-init.sql`。此处仅列关键修正点。
+> 完整建表脚本见 `VeythCog-C/docs/sql/009_knowledge.sql`（按 `009 → 010 → 011` 执行）。此处仅列关键修正点。
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;  -- 前置：目标库必须已启用 pgvector
 
 CREATE TABLE knowledge_doc (
     id            BIGSERIAL PRIMARY KEY,
-    lib_type      VARCHAR(20)  NOT NULL,                -- private / demo
     title         VARCHAR(255) NOT NULL,
     summary       VARCHAR(500) NOT NULL DEFAULT '',     -- 🆕 v0.2 列表页摘要
     tags          TEXT[]       NOT NULL DEFAULT '{}',
@@ -125,7 +125,7 @@ CREATE TABLE knowledge_embedding (
 );
 
 -- 索引
-CREATE INDEX idx_knowledge_doc_lib_deleted ON knowledge_doc(lib_type, deleted);
+CREATE INDEX idx_knowledge_doc_deleted ON knowledge_doc(deleted);  -- 🔥 v0.4 移除 (lib_type, deleted) 组合索引
 CREATE INDEX idx_knowledge_doc_text_gin ON knowledge_doc USING gin(
     to_tsvector('simple', title || ' ' || coalesce(summary,'') || ' ' || coalesce(markdown_text,''))
 );  -- ✏️ v0.2 'english'→'simple'（中文分词）
@@ -146,9 +146,9 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 ## 5. 向量化与检索方案（选型说明）
 
 ### 5.1 选型：自定义 `knowledge_embedding` 表（方案A）
-**理由**：PRD 需要 `is_vectorized` 手动开关、doc 级软删除、`lib_type` 物理隔离、文档级生命周期，这些语义用 Spring AI `PgVectorStore` 的 metadata 过滤也能做但更绕；自定义表对面试更好讲「pgvector 原生用法」。
+**理由**：PRD 需要 `is_vectorized` 手动开关、doc 级软删除、`embedding_model` 标识与文档级生命周期，这些语义用 Spring AI `PgVectorStore` 的 metadata 过滤也能做但更绕；自定义表对面试更好讲「pgvector 原生用法」。
 
-**备选方案B**：Spring AI `PgVectorStore` + `QuestionAnswerAdvisor`（复用现成检索，代码少，与 `vc-learn/examples/rag` 同构）。代价：表结构由 Spring AI 托管，与 `knowledge_doc` 解耦，需用 metadata（`docId`/`libType`）模拟隔离与删除。
+**备选方案B**：Spring AI `PgVectorStore` + `QuestionAnswerAdvisor`（复用现成检索，代码少，与 `vc-learn/examples/rag` 同构）。代价：表结构由 Spring AI 托管，与 `knowledge_doc` 解耦，需用 metadata（`docId`）模拟删除与过滤。
 
 > 决策：P0 走方案A；若后续想快速验证，可先按 `vc-learn` 示例用 `PgVectorStore` 做原型，再迁移到自定义表。
 
@@ -158,7 +158,8 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 | 切片大小 | 512（字符，`knowledge.chunk.size`） |
 | 切片重叠 | 64（字符，`knowledge.chunk.overlap`） |
 | 默认召回条数 | 5（`knowledge.retrieve.top-n`） |
-| L2 距离阈值 | 0.8（`knowledge.retrieve.distance-threshold`，需按实际向量分布核查） |
+| L2 距离阈值 | 1.2（`knowledge.retrieve.distance-threshold`，v0.4 实测校准：1024 维已归一化向量，不同分片间 0.5~1.3；原值 0.8 会把全部候选过滤掉。阈值无命中时自动回退 topN，不做硬失败） |
+| rerank | 开启（`knowledge.retrieve.rerank.enabled`），候选 10 条（`candidates`），喂给模型的单片段上限 400 字（`max-chunk-chars`） |
 
 切片用自定义 `RecursiveCharacterTextSplitter`：分隔符优先级 `\n\n > \n > 句号 > 逗号 > 空格`，优先保留 fenced code block 不被切碎；输入源为 `markdown_text`（P0 不基于 Block 块结构切片）。
 
@@ -166,9 +167,18 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 ```
 查询文本 → EmbeddingProvider(query) → 限定本次勾选 docIds 集合
         → ORDER BY embedding <-> $query（L2 距离）+ distance 阈值过滤
-        → embedding_model 标识校验 + 关联文档软删除过滤（禁止全库向量搜索）
-        → 强制同库（不跨库混合召回）→ 返回 chunkText/docId/title/chunkIndex/score
+        → embedding_model 标识校验 + 文档软删除 / 未向量化过滤（禁止全库向量搜索）
+        → 返回 chunkText/docId/title/chunkIndex/score
 ```
+
+> **v0.4 归属调整**：以上检索由**后端**在 `/chat/stream` 请求内执行（`RagChatOrchestrator`），召回结果即喂给模型的上下文，同一份数据再作为 `event: references` 下发前端。前端不再自行调用 `/knowledge/rag/retrieve`，避免出现「展示的引用」与「模型实际读到的资料」两套结果。
+
+### 5.4 元数据自动填充与 rerank（v0.5）
+- 摘要（`summary`）与标签（`tags`）是**文档元数据**，职责从「靠手填 / 导入截正文」改为「向量化时由辅助模型补齐」。
+- 填充策略：**仅空值填充**——`summary` 为空或 `tags` 为空时生成，已有内容不覆盖；两者都完整时跳过模型调用。用户可在知识库页工具栏点「AI 重新生成」（`POST /knowledge/doc/{docId}/metadata/regenerate`）显式覆盖，前端二次确认。
+- 模型：新增**辅助小模型**（`llm.aux-model`：`vendor` / `model-code` / `temperature` / `max-input-chars`），与用户对话模型解耦，不进对话记忆、不做用户绑定校验。
+- rerank：同一辅助模型对召回候选按相关度重排后截 `top-n`；模型异常或返回编号缺失时回退向量顺序，不阻断回答。
+- 降级：元数据生成失败只记 `WARN`，向量化照常成功（返回 `summary=null, tags=[]`）；「AI 重新生成」失败则直接报错，不静默。
 
 ## 6. 接口清单（RESTful）
 
@@ -179,7 +189,7 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 | 1 | `GET /api/knowledge/list` | 分页列表，关键词走 `simple` 文本检索 |
 | 2 | `GET /api/knowledge/doc/{docId}` | 详情（元信息 + block_data + markdown_text） |
 | 3 | `POST /api/knowledge/doc` | 新建 |
-| 4 | `PUT /api/knowledge/doc/{docId}` | 更新；演示库 403 |
+| 4 | `PUT /api/knowledge/doc/{docId}` | 更新（内容变更后置 `is_vectorized=false`，旧向量不再参与召回） |
 | 5 | `DELETE /api/knowledge/doc/{docId}` | 软删除 + 显式清理 embedding |
 | 6 | `POST /api/knowledge/import/md` | 导入 md（≤500KB，仅 .md） |
 | 7 | `GET /api/knowledge/doc/{docId}/export/md` | 导出 md 下载流 |
@@ -204,7 +214,7 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 
 ## 8. 交互规则
 1. 向量化：手动触发；文档修改后前端提示「内容已变更，向量索引非最新」
-2. 库隔离：私有库、演示库数据与向量完全分开；RAG 检索不跨库混合召回
+2. RAG 归属：检索、上下文拼装、引用产出全部在后端完成（`RagChatOrchestrator`）；前端只传 `docIds` 并消费 `references`
 3. 保存：编辑器点击保存才落库，自动保存 P0 不做（P2 可选）
 4. 斜杠菜单：输入 `/` 弹出，输入字符过滤；光标不在块内不触发
 5. 拖拽：仅同文档内块上下排序，不支持跨文档拖拽（P2 扩展）
@@ -219,9 +229,9 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 ## 10. 测试用例要点（P0 验收）
 1. 新建文档、拖拽块、斜杠插入组件，保存后正常回显
 2. 导入 md → 解析为块；导出 md，内容一致（含 callout/待办/代码块的有损边界用例）
-3. 私有库文档：登录用户可编辑；访客看不到（401）
-4. 演示库文档：访客只读，编辑控件锁定；写接口后端 403
-5. 文档向量化、取消向量化；RAG 召回片段携带来源引用
+3. 未登录访问知识库：全部接口 401
+4. 登录后可读写全部文档（本阶段不做按用户隔离，不验 `owner_id`）
+5. 文档向量化、取消向量化；RAG 召回片段携带来源引用（后端 `references` 事件）
 6. 修改文档后提示向量过期；删除文档，embedding 显式级联清除（软删除路径）
 7. 超大小文件、非法后缀 md 上传拦截（40000）
 8. 向量维度校验：写入 `vector(1024)` 不报维度错误
@@ -235,7 +245,7 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 
 ## 12. 面试亮点说明（可直接放进 README）
 > 知识库采用块级编辑器，对标语雀交互，支持块拖拽重排、`/` 斜杠快捷插入组件；双存储设计：JSON 块结构支撑富交互，同步生成标准 Markdown，兼顾编辑体验、格式兼容与 RAG 检索。
-> 架构上区分私有库与演示库，物理隔离数据与向量；向量存储用 pgvector 原生 `vector(1024)` + IVFFlat L2 索引，手动管控向量化；预留批量操作、块级向量、飞书索引层扩展位点；定位轻量化 RAG 实验库，主力文档归档飞书，减轻自建存储/备份压力，适配轻量服务器资源约束。
+> 架构上不做库类型隔离：文档为账号共享数据，用户级赋权由统一中间件承担；向量存储用 pgvector 原生 `vector(1024)` + IVFFlat L2 索引，手动管控向量化；RAG 检索与引用产出统一在后端编排层完成，前端只负责展示引用卡片；预留批量操作、块级向量、飞书索引层扩展位点；定位轻量化 RAG 实验库，主力文档归档飞书，减轻自建存储/备份压力，适配轻量服务器资源约束。
 
 ## 13. 动态配置/环境点（3 项已确认，1 项待落地）
 
@@ -244,9 +254,9 @@ CREATE INDEX idx_knowledge_embedding_vec ON knowledge_embedding USING ivfflat(em
 1. ✅ **Embedding 模型与维度**：保持 `qwen3.7-text-embedding-flash` + `1024`（用户 2026-11-06 确认），与 `vector(1024)` 一致。
 2. ✅ **pgvector 扩展**：目标库已迁到个人服务器 docker 容器，已启用 `CREATE EXTENSION IF NOT EXISTS vector;`（用户 2026-11-06 确认）。
 3. ✅ **数据库连接串**：实际 datasource 为个人服务器 docker 容器（非 Supabase 云端）；备份/迁移方案按该容器库编写。
-4. **访客只读路径**：需在 `SecurityConfig` 放行 `GET /api/knowledge/demo/**`，并确认 JWT 过滤器对未登录请求不拦截（当前 `anyRequest().authenticated()` 需改）。
+4. ✅ **权限模型**：知识库接口仅要求登录，本阶段不做按用户隔离；用户级赋权由统一中间件承担（2026-11-09 确认）。
 
 ## 14. 附录：落地依赖缺口（编码前必须补）
-- 后端 `vc-knowledge/pom.xml`：补 `spring-ai-alibaba-starter-dashscope`（拿 `EmbeddingModel`）、`mybatis-plus-spring-boot3-starter`、`postgresql`；实体/Mapper/XML 用 MyBatis-Plus 对齐 `openspec/sql/knowledge-init.sql` 表结构（`KnowledgeDoc`/`KnowledgeEmbedding`）。
-- 前端 `package.json`：补 `@blocknote/*` 依赖。
-- SQL：执行 `openspec/sql/knowledge-init.sql`（`ddl-auto=none`，表靠脚本管理）。
+- 后端 `vc-knowledge/pom.xml`：补 `spring-ai-alibaba-starter-dashscope`（拿 `EmbeddingModel`）、`mybatis-plus-spring-boot3-starter`、`postgresql`；实体/Mapper/XML 用 MyBatis-Plus 对齐 `VeythCog-C/docs/sql/009_knowledge.sql` 表结构（`KnowledgeDoc`/`KnowledgeEmbedding`）。
+- 前端 `package.json`：补 `@blocknote/*` 依赖（已落地）。
+- SQL：执行 `VeythCog-C/docs/sql/009~011`（`ddl-auto=none`，表靠脚本管理）；`openspec/sql/knowledge-init.sql` 已废弃，勿再使用。

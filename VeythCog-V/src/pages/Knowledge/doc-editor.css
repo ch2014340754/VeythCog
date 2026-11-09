@@ -1,0 +1,99 @@
+.doc-editor-root {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.doc-outline {
+  width: 220px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 12px 8px;
+  box-sizing: border-box;
+}
+
+.doc-outline-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 10px 8px;
+}
+
+.doc-outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doc-outline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-right: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.doc-outline-item:hover {
+  background: var(--color-primary-10, rgba(0, 0, 0, 0.05));
+}
+
+.doc-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+}
+
+.doc-editor-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.doc-editor-toolbar-btn:hover {
+  background: var(--color-primary-10, rgba(0, 0, 0, 0.05));
+}
+
+.doc-editor-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.doc-editor-scroll .bn-container {
+  min-height: 100%;
+}
+
+.doc-editor-scroll .bn-editor {
+  padding: 20px 48px 120px;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* 编辑器滚动容器内的悬浮菜单层级 */
+.doc-editor-scroll .bn-side-menu,
+.doc-editor-scroll .bn-suggestion-menu,
+.doc-editor-scroll .bn-formatting-toolbar {
+  z-index: 30;
+}

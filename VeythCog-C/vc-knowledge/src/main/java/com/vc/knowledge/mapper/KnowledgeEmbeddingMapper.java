@@ -14,11 +14,12 @@ public interface KnowledgeEmbeddingMapper extends BaseMapper<KnowledgeEmbedding>
 
     /**
      * 限定 docIds 的 L2 距离近邻检索（禁止全库向量搜索）。
-     * 返回片段 + 文档 ID + 标题 + chunk 索引 + 距离，供引用溯源。
+     * <p>{@code distanceThreshold} 传 null 表示不做距离过滤，仅按距离取 topN——
+     * 用于阈值无命中时的兜底，避免"选了文档却一条都召不回"。</p>
      */
     List<RetrieveChunk> retrieveByDocIds(@Param("docIds") List<Long> docIds,
                                          @Param("queryVector") float[] queryVector,
                                          @Param("embeddingModel") String embeddingModel,
-                                         @Param("distanceThreshold") double distanceThreshold,
+                                         @Param("distanceThreshold") Double distanceThreshold,
                                          @Param("limit") int limit);
 }

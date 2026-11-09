@@ -1,5 +1,8 @@
 package com.vc.app.web;
 
+import com.vc.app.orchestration.DocMetadata;
+import com.vc.app.orchestration.KnowledgeMetadataOrchestrator;
+import com.vc.app.orchestration.VectorizeResult;
 import com.vc.common.BaseResponse;
 import com.vc.common.ResultUtils;
 import com.vc.common.exception.BusinessException;
@@ -32,11 +35,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 知识库接口（P0）。
- * <p>权限：GET 只读接口与 RAG 召回由 Security 放行，Service 层校验 private 需登录；
- * 写接口需登录，演示库写操作由 Service 层拒绝（403）。</p>
+ * <p>权限：知识库为登录用户私有数据，所有接口均需登录（Security 统一鉴权）。</p>
  */
 @RestController
 @RequestMapping("/knowledge")
@@ -46,16 +49,19 @@ public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
     private final VectorizeService vectorizeService;
+    private final KnowledgeMetadataOrchestrator metadataOrchestrator;
 
-    public KnowledgeController(KnowledgeService knowledgeService, VectorizeService vectorizeService) {
+    public KnowledgeController(KnowledgeService knowledgeService,
+                               VectorizeService vectorizeService,
+                               KnowledgeMetadataOrchestrator metadataOrchestrator) {
         this.knowledgeService = knowledgeService;
         this.vectorizeService = vectorizeService;
+        this.metadataOrchestrator = metadataOrchestrator;
     }
 
     /** 1. 文档列表（关键词走 PG simple 文本检索） */
     @GetMapping("/list")
     public BaseResponse<PageResult<DocListItem>> list(
-            @RequestParam String libType,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String sortField,
@@ -64,7 +70,7 @@ public class KnowledgeController {
             @RequestParam(defaultValue = "10") int pageSize) {
         List<String> tags = tag == null || tag.isBlank() ? List.of() : List.of(tag.trim());
         return ResultUtils.success(knowledgeService.list(
-                currentUserIdOrNull(), libType, keyword, tags, sortField, sortOrder, current, pageSize));
+                currentUserIdOrNull(), keyword, tags, sortField, sortOrder, current, pageSize));
     }
 
     /** 2. 文档详情 */
@@ -97,7 +103,6 @@ public class KnowledgeController {
     @PostMapping("/import/md")
     public BaseResponse<Long> importMd(
             @RequestParam("file") MultipartFile file,
-            @RequestParam String libType,
             @RequestParam(required = false) String title,
             @RequestParam(required = false) String tags) {
         if (file.isEmpty() || file.getSize() > MAX_MD_SIZE) {
@@ -113,7 +118,7 @@ public class KnowledgeController {
                     ? List.of()
                     : Arrays.stream(tags.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
             return ResultUtils.success(knowledgeService.importMd(
-                    currentUserIdOrNull(), libType, title, tagList, md));
+                    currentUserIdOrNull(), title, tagList, md));
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -132,10 +137,22 @@ public class KnowledgeController {
                 .body(bytes);
     }
 
-    /** 8. 向量化 */
+    /** 8. 向量化：embedding 与元数据生成并行，只补齐空值，失败不阻断 */
     @PostMapping("/doc/{docId}/vectorize")
-    public BaseResponse<Integer> vectorize(@PathVariable Long docId) {
-        return ResultUtils.success(vectorizeService.vectorize(currentUserIdOrNull(), docId));
+    public BaseResponse<VectorizeResult> vectorize(@PathVariable Long docId) {
+        Long userId = currentUserIdOrNull();
+        // 摘要/标签生成与 embedding 并行，减少用户等待；落库放在向量化完成之后，避免并发覆盖
+        CompletableFuture<DocMetadata> metaFuture = metadataOrchestrator.generateAsync(userId, docId);
+        int count = vectorizeService.vectorize(userId, docId);
+        DocMetadata generated = metadataOrchestrator.awaitSafely(metaFuture);
+        DocMetadata effective = metadataOrchestrator.fillIfBlank(userId, docId, generated);
+        return ResultUtils.success(new VectorizeResult(count, effective.getSummary(), effective.getTags()));
+    }
+
+    /** 8.1 显式重新生成元数据（覆盖手写内容，需前端二次确认） */
+    @PostMapping("/doc/{docId}/metadata/regenerate")
+    public BaseResponse<DocMetadata> regenerateMetadata(@PathVariable Long docId) {
+        return ResultUtils.success(metadataOrchestrator.regenerate(currentUserIdOrNull(), docId));
     }
 
     /** 9. 取消向量化 */

@@ -7,7 +7,6 @@ import type {
   DocDetail,
   DocListItem,
   DocSavePayload,
-  LibType,
   PageResult,
   RetrieveChunk,
 } from '@/types';
@@ -22,7 +21,6 @@ function apiBase(): string {
 }
 
 export interface ListDocsParams {
-  libType: LibType;
   keyword?: string;
   tag?: string;
   sortField?: 'createdAt' | 'title' | 'updatedAt';
@@ -34,7 +32,6 @@ export interface ListDocsParams {
 /** 1. 文档列表 */
 export function listDocs(params: ListDocsParams): Promise<PageResult<DocListItem>> {
   const query: Record<string, string | number | undefined> = {
-    libType: params.libType,
     keyword: params.keyword,
     tag: params.tag,
     sortField: params.sortField,
@@ -68,13 +65,11 @@ export function deleteDoc(docId: number): Promise<void> {
 /** 6. 导入 Markdown（multipart/form-data，仅 .md，≤500KB） */
 export async function importMd(
   file: File,
-  libType: LibType,
   title?: string,
   tags?: string[]
 ): Promise<number> {
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('libType', libType);
   if (title) fd.append('title', title);
   if (tags && tags.length > 0) fd.append('tags', tags.join(','));
 
@@ -118,9 +113,21 @@ export async function exportMd(docId: number): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-/** 8. 向量化（返回分片数） */
-export function vectorize(docId: number): Promise<number> {
-  return http.post<number>(`/knowledge/doc/${docId}/vectorize`);
+/** 向量化结果：分片数 + 本次自动补齐的元数据（仅填空值，可能为 null） */
+export interface VectorizeResult {
+  chunkCount: number;
+  summary: string | null;
+  tags: string[] | null;
+}
+
+/** 8. 向量化（后端同时按需自动生成摘要/标签） */
+export function vectorize(docId: number): Promise<VectorizeResult> {
+  return http.post<VectorizeResult>(`/knowledge/doc/${docId}/vectorize`);
+}
+
+/** 8.1 显式重新生成摘要 / 标签（覆盖已有内容） */
+export function regenerateMetadata(docId: number): Promise<{ summary: string; tags: string[] }> {
+  return http.post<{ summary: string; tags: string[] }>(`/knowledge/doc/${docId}/metadata/regenerate`);
 }
 
 /** 9. 取消向量化 */

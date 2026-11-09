@@ -1,55 +1,80 @@
-import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Input,
-  Button,
-  Empty,
-  Spin,
-  Tag,
-  Popconfirm,
-  Modal,
-  message,
-  Segmented,
-  Tooltip,
-  Upload,
-  Divider,
-  Space,
-} from 'antd';
-import { Icon } from '@iconify/react';
-import searchIcon from '@iconify-icons/lucide/search';
-import plusIcon from '@iconify-icons/lucide/plus';
-import trashIcon from '@iconify-icons/lucide/trash-2';
+    createDoc,
+    deleteDoc,
+    exportMd,
+    getDoc,
+    importMd,
+    listDocs,
+    regenerateMetadata,
+    unvectorize,
+    updateDoc,
+    vectorize,
+} from '@/api/knowledge';
+import CollapsibleSidebar from '@/components/CollapsibleSidebar';
+import { useTheme } from '@/contexts/ThemeContext';
+import type { DocDetail, DocListItem } from '@/types';
+import { formatRelativeTime } from '@/utils/formatTime';
+import alignLeftIcon from '@iconify-icons/lucide/align-left';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
-import fileTextIcon from '@iconify-icons/lucide/file-text';
-import uploadIcon from '@iconify-icons/lucide/upload';
 import downloadIcon from '@iconify-icons/lucide/download';
+import fileTextIcon from '@iconify-icons/lucide/file-text';
+import plusIcon from '@iconify-icons/lucide/plus';
 import saveIcon from '@iconify-icons/lucide/save';
+import searchIcon from '@iconify-icons/lucide/search';
+import sparklesIcon from '@iconify-icons/lucide/sparkles';
+import trashIcon from '@iconify-icons/lucide/trash-2';
+import uploadIcon from '@iconify-icons/lucide/upload';
 import zapIcon from '@iconify-icons/lucide/zap';
 import zapOffIcon from '@iconify-icons/lucide/zap-off';
-import tagIcon from '@iconify-icons/lucide/tag';
-import eyeIcon from '@iconify-icons/lucide/eye';
-import eyeOffIcon from '@iconify-icons/lucide/eye-off';
-import ReactMarkdown from 'react-markdown';
-import CollapsibleSidebar from '@/components/CollapsibleSidebar';
+import { Icon } from '@iconify/react';
 import {
-  listDocs,
-  getDoc,
-  createDoc,
-  updateDoc,
-  deleteDoc,
-  importMd,
-  exportMd,
-  vectorize,
-  unvectorize,
-} from '@/api/knowledge';
-import type { DocListItem, DocDetail, LibType } from '@/types';
-import { formatRelativeTime } from '@/utils/formatTime';
-import { useTheme } from '@/contexts/ThemeContext';
+    Button,
+    Empty,
+    Input,
+    message,
+    Modal,
+    Popconfirm,
+    Space,
+    Spin,
+    Tag,
+    Tooltip,
+    Upload,
+} from 'antd';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import DocEditor, { type DocEditorHandle } from './DocEditor';
 
 const SIDEBAR_WIDTH = 280;
 
+/** 切换文档时的顶部细进度条：不遮挡内容，仅在右上角提示加载中 */
+const SlimProgress: React.FC = () => (
+  <div
+    aria-hidden
+    style={{
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 120,
+      height: 3,
+      overflow: 'hidden',
+      pointerEvents: 'none',
+      zIndex: 10,
+      borderBottomLeftRadius: 3,
+    }}
+  >
+    <div
+      style={{
+        width: '45%',
+        height: '100%',
+        borderRadius: 3,
+        background: 'var(--color-primary, #7C3AED)',
+        animation: 'vc-slim-progress 1.1s ease-in-out infinite',
+      }}
+    />
+  </div>
+);
+
 const KnowledgePage: React.FC = () => {
   const { colors } = useTheme();
-  const [libType, setLibType] = useState<LibType>('private');
   const [docs, setDocs] = useState<DocListItem[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [keyword, setKeyword] = useState('');
@@ -61,89 +86,116 @@ const KnowledgePage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [tagsText, setTagsText] = useState('');
-  const [markdownText, setMarkdownText] = useState('');
-  const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [vectorizing, setVectorizing] = useState(false);
+  const [metaGenerating, setMetaGenerating] = useState(false);
+  /** 元数据弹窗：摘要 + 标签统一编辑 */
+  const [metaOpen, setMetaOpen] = useState(false);
+  const [metaSummary, setMetaSummary] = useState('');
+  const [metaTags, setMetaTags] = useState('');
+  const editorRef = useRef<DocEditorHandle>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
-  const isDemo = libType === 'demo';
-
-  const loadDocs = useCallback(async () => {
-    setLoading(true);
+  /**
+   * 拉取文档列表。
+   * @param opts.silent 静默刷新：不切换 loading（侧栏不闪 Spin），仅在原列表上原地更新，
+   *                    用于保存 / 向量化 / 删除后的数据同步
+   */
+  const loadDocs = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoading(true);
     try {
-      const page = await listDocs({ libType, keyword: keyword.trim() || undefined, current: 1, pageSize: 100 });
+      const page = await listDocs({ keyword: keyword.trim() || undefined, current: 1, pageSize: 100 });
       setDocs(page.records ?? []);
       setTotal(page.total ?? 0);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载文档失败');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [libType, keyword]);
+  }, [keyword]);
+
+  /** 静默同步列表（不闪加载态） */
+  const refreshDocsSilently = useCallback(() => loadDocs({ silent: true }), [loadDocs]);
 
   useEffect(() => {
     loadDocs();
   }, [loadDocs]);
 
-  useEffect(() => {
-    setActiveDocId(null);
-    setDetail(null);
-  }, [libType]);
-
-  const selectDoc = async (id: number) => {
-    setActiveDocId(id);
-    setDetailLoading(true);
+  /**
+   * 打开文档。
+   * @param opts.silent 静默加载：不切换 detailLoading（编辑区不闪 Spin），
+   *                    用于保存 / 向量化后需要刷新详情但不想打断编辑器的场景
+   */
+  const selectDoc = async (id: number, opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    // 重复点击当前已打开的文档时直接返回，避免无意义的重新拉取与 loading 闪烁
+    if (!silent && id === activeDocId && detail?.id === id) return;
+    if (!silent) {
+      setActiveDocId(id);
+      setDetailLoading(true);
+    }
     try {
       const d = await getDoc(id);
       setDetail(d);
       setTitle(d.title ?? '');
       setSummary(d.summary ?? '');
       setTagsText((d.tags ?? []).join(', '));
-      setMarkdownText(d.markdownText ?? '');
-      setPreview(false);
+      if (silent) setActiveDocId(id);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载文档详情失败');
     } finally {
-      setDetailLoading(false);
+      if (!silent) setDetailLoading(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!title.trim()) {
-      message.warning('标题不能为空');
-      return;
-    }
-    const tags = tagsText
+  /**
+   * 保存文档（标题 / 摘要 / 标签 / 正文）。
+   * @param override 元数据弹窗提交时的草稿值，避免 setState 异步导致取到旧值
+   * @returns 是否保存成功（供元数据弹窗决定是否关闭）
+   */
+  const handleSave = async (override?: { summary?: string; tagsText?: string }): Promise<boolean> => {
+    if (!detail) return false;
+    const summaryValue = (override?.summary ?? summary).trim();
+    const rawTags = override?.tagsText ?? tagsText;
+    const tags = rawTags
       .split(/[,，]/)
       .map((t) => t.trim())
       .filter(Boolean);
+    // 编辑态从块编辑器拉取最新内容（blockData 权威源 + markdown 派生缓存）
+    const snap = await editorRef.current?.snapshot();
     const payload = {
-      libType,
-      title: title.trim(),
-      summary: summary.trim(),
+      title: title.trim() || '未命名文档',
+      summary: summaryValue,
       tags,
-      blockData: '[]',
-      markdownText,
+      blockData: snap?.blockData ?? '[]',
+      markdownText: snap?.markdownText ?? '',
     };
     setSaving(true);
     try {
-      if (detail) {
-        await updateDoc(detail.id, payload);
-        message.success('已保存（内容变更后需重新向量化）');
-        await selectDoc(detail.id);
-      } else {
-        const id = await createDoc(payload);
-        message.success('已创建');
-        setCreateOpen(false);
-        setNewTitle('');
-        await loadDocs();
-        await selectDoc(id);
-      }
+      await updateDoc(detail.id, payload);
+      // 本地乐观更新：只改元信息，不重新拉详情（重拉会让 DocEditor 重解析 blockData 造成闪动）
+      setDetail((prev) =>
+        prev ? { ...prev, title: payload.title, summary: payload.summary, tags, isVectorized: false } : prev
+      );
+      setDocs((prev) =>
+        prev.map((d) =>
+          d.id === detail.id
+            ? { ...d, title: payload.title, summary: payload.summary, tags, isVectorized: false }
+            : d
+        )
+      );
+      setTitle(payload.title);
+      setSummary(summaryValue);
+      setTagsText(tags.join(', '));
+      message.success('已保存（内容变更后需重新向量化）');
+      void refreshDocsSilently();
+      return true;
     } catch (e) {
       message.error(e instanceof Error ? e.message : '保存失败');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -151,13 +203,28 @@ const KnowledgePage: React.FC = () => {
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
-    setTitle(newTitle.trim());
-    setSummary('');
-    setTagsText('');
-    setMarkdownText('');
-    setDetail(null);
-    setActiveDocId(null);
-    await handleSave();
+    const docTitle = newTitle.trim();
+    const payload = {
+      title: docTitle,
+      summary: '',
+      tags: [] as string[],
+      blockData: '[]',
+      // 种子：首个 H1 即文档标题，顶部标题与正文同步
+      markdownText: `# ${docTitle}\n`,
+    };
+    setSaving(true);
+    try {
+      const id = await createDoc(payload);
+      message.success('已创建');
+      setCreateOpen(false);
+      setNewTitle('');
+      await loadDocs({ silent: true });
+      await selectDoc(id);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '创建失败');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -168,9 +235,60 @@ const KnowledgePage: React.FC = () => {
         setActiveDocId(null);
         setDetail(null);
       }
-      await loadDocs();
+      await loadDocs({ silent: true });
     } catch (e) {
       message.error(e instanceof Error ? e.message : '删除失败');
+    }
+  };
+
+  /** 应用后端生成的元数据：只改摘要/标签等元信息，不碰 blockData，避免编辑器重解析 */
+  const applyGeneratedMetadata = (
+    docId: number,
+    nextSummary?: string | null,
+    nextTags?: string[] | null
+  ) => {
+    const hasSummary = !!nextSummary;
+    const hasTags = !!nextTags && nextTags.length > 0;
+    if (!hasSummary && !hasTags) return;
+    if (hasSummary) {
+      setSummary(nextSummary as string);
+    }
+    if (hasTags) {
+      setTagsText((nextTags as string[]).join(', '));
+    }
+    setDetail((prev) =>
+      prev
+        ? {
+            ...prev,
+            summary: hasSummary ? (nextSummary as string) : prev.summary,
+            tags: hasTags ? (nextTags as string[]) : prev.tags,
+          }
+        : prev
+    );
+    setDocs((prev) =>
+      prev.map((d) =>
+        d.id === docId
+          ? {
+              ...d,
+              summary: hasSummary ? (nextSummary as string) : d.summary,
+              tags: hasTags ? (nextTags as string[]) : d.tags,
+            }
+          : d
+      )
+    );
+  };
+
+  const handleRegenerateMetadata = async () => {
+    if (!detail) return;
+    setMetaGenerating(true);
+    try {
+      const meta = await regenerateMetadata(detail.id);
+      applyGeneratedMetadata(detail.id, meta.summary, meta.tags);
+      message.success('已重新生成摘要与标签');
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '生成失败');
+    } finally {
+      setMetaGenerating(false);
     }
   };
 
@@ -178,10 +296,14 @@ const KnowledgePage: React.FC = () => {
     if (!detail) return;
     setVectorizing(true);
     try {
-      const count = await vectorize(detail.id);
-      message.success(`已向量化，共 ${count} 个分片`);
-      await selectDoc(detail.id);
-      await loadDocs();
+      const result = await vectorize(detail.id);
+      message.success(`已向量化，共 ${result.chunkCount} 个分片`);
+      // 原地更新标记，不重拉详情（重拉会重解析编辑器内容造成闪动）
+      setDetail((prev) => (prev ? { ...prev, isVectorized: true } : prev));
+      setDocs((prev) => prev.map((d) => (d.id === detail.id ? { ...d, isVectorized: true } : d)));
+      // 后端已按"仅填空值"补齐摘要/标签，这里直接应用，避免额外拉详情
+      applyGeneratedMetadata(detail.id, result.summary, result.tags);
+      void refreshDocsSilently();
     } catch (e) {
       message.error(e instanceof Error ? e.message : '向量化失败');
     } finally {
@@ -195,8 +317,9 @@ const KnowledgePage: React.FC = () => {
     try {
       await unvectorize(detail.id);
       message.success('已取消向量化');
-      await selectDoc(detail.id);
-      await loadDocs();
+      setDetail((prev) => (prev ? { ...prev, isVectorized: false } : prev));
+      setDocs((prev) => prev.map((d) => (d.id === detail.id ? { ...d, isVectorized: false } : d)));
+      void refreshDocsSilently();
     } catch (e) {
       message.error(e instanceof Error ? e.message : '取消向量化失败');
     } finally {
@@ -223,9 +346,9 @@ const KnowledgePage: React.FC = () => {
       return;
     }
     try {
-      const id = await importMd(file, libType, file.name.replace(/\.md$/i, ''));
+      const id = await importMd(file, file.name.replace(/\.md$/i, ''));
       message.success('已导入');
-      await loadDocs();
+      await loadDocs({ silent: true });
       await selectDoc(id);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '导入失败');
@@ -235,19 +358,7 @@ const KnowledgePage: React.FC = () => {
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <CollapsibleSidebar width={SIDEBAR_WIDTH}>
-        <div style={{ padding: '16px 12px 8px' }}>
-          <Segmented
-            block
-            value={libType}
-            onChange={(v) => setLibType(v as LibType)}
-            options={[
-              { label: '私有库', value: 'private' },
-              { label: '演示库', value: 'demo' },
-            ]}
-          />
-        </div>
-
-        <div style={{ padding: '0 12px 8px' }}>
+        <div style={{ padding: '15px 12px 8px' }}>
           <Input
             prefix={<Icon icon={searchIcon} width={14} style={{ color: colors.textTertiary }} />}
             placeholder="搜索文档..."
@@ -258,34 +369,32 @@ const KnowledgePage: React.FC = () => {
           />
         </div>
 
-        {!isDemo && (
-          <div style={{ padding: '0 12px 8px', display: 'flex', gap: 8 }}>
-            <Button
-              icon={<Icon icon={plusIcon} width={14} />}
-              onClick={() => setCreateOpen(true)}
-              block
-              type="primary"
-              style={{ borderRadius: 'var(--radius-md)' }}
-            >
-              新建
+        <div style={{ padding: '0 12px 8px', display: 'flex', gap: 8 }}>
+          <Button
+            icon={<Icon icon={plusIcon} width={14} />}
+            onClick={() => setCreateOpen(true)}
+            block
+            type="primary"
+            style={{ borderRadius: 'var(--radius-md)' }}
+          >
+            新建
+          </Button>
+          <Upload
+            showUploadList={false}
+            accept=".md"
+            beforeUpload={(file) => {
+              void handleImport(file as File);
+              return false;
+            }}
+          >
+            <Button icon={<Icon icon={uploadIcon} width={14} />} style={{ borderRadius: 'var(--radius-md)' }}>
+              导入
             </Button>
-            <Upload
-              showUploadList={false}
-              accept=".md"
-              beforeUpload={(file) => {
-                void handleImport(file as File);
-                return false;
-              }}
-            >
-              <Button icon={<Icon icon={uploadIcon} width={14} />} style={{ borderRadius: 'var(--radius-md)' }}>
-                导入
-              </Button>
-            </Upload>
-          </div>
-        )}
+          </Upload>
+        </div>
 
         <div style={{ padding: '0 12px 6px', fontSize: 11, color: colors.textTertiary }}>
-          {isDemo ? '演示库只读' : `共 ${total} 篇文档`}
+          共 {total} 篇文档
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
@@ -362,30 +471,26 @@ const KnowledgePage: React.FC = () => {
           >
             <Icon icon={bookOpenIcon} width={64} style={{ color: colors.textTertiary, opacity: 0.3 }} />
             <span style={{ color: colors.textTertiary, fontSize: 16 }}>选择或新建一个文档</span>
-            {!isDemo && (
-              <Space>
-                <Button type="primary" icon={<Icon icon={plusIcon} width={14} />} onClick={() => setCreateOpen(true)}>
-                  新建文档
-                </Button>
-                <Upload
-                  showUploadList={false}
-                  accept=".md"
-                  beforeUpload={(file) => {
-                    void handleImport(file as File);
-                    return false;
-                  }}
-                >
-                  <Button icon={<Icon icon={uploadIcon} width={14} />}>导入 Markdown</Button>
-                </Upload>
-              </Space>
-            )}
-          </div>
-        ) : detailLoading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-            <Spin />
+            <Space>
+              <Button type="primary" icon={<Icon icon={plusIcon} width={14} />} onClick={() => setCreateOpen(true)}>
+                新建文档
+              </Button>
+              <Upload
+                showUploadList={false}
+                accept=".md"
+                beforeUpload={(file) => {
+                  void handleImport(file as File);
+                  return false;
+                }}
+              >
+                <Button icon={<Icon icon={uploadIcon} width={14} />}>导入 Markdown</Button>
+              </Upload>
+            </Space>
           </div>
         ) : (
-          <>
+          <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+            {/* 切换文档时保留上一篇内容，只在右上角显示细进度条 */}
+            {detailLoading && <SlimProgress />}
             <div
               style={{
                 padding: '12px 24px',
@@ -396,16 +501,29 @@ const KnowledgePage: React.FC = () => {
                 flexWrap: 'wrap',
               }}
             >
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                disabled={isDemo}
-                placeholder="文档标题"
-                style={{ flex: 1, minWidth: 200, fontWeight: 600, borderRadius: 'var(--radius-md)' }}
-              />
-              <Tag color={isDemo ? 'orange' : 'blue'} style={{ margin: 0 }}>
-                {isDemo ? '演示库' : '私有库'}
-              </Tag>
+              <button
+                type="button"
+                onClick={() => editorRef.current?.focusTitle()}
+                title="文档标题（与正文首个 # 标题同步，点击定位）"
+                style={{
+                  flex: 1,
+                  minWidth: 200,
+                  textAlign: 'left',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  fontSize: 18,
+                  fontWeight: 600,
+                  lineHeight: 1.4,
+                  color: colors.text,
+                  cursor: 'text',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {title || '未命名文档'}
+              </button>
               {detail.isVectorized ? (
                 <Tag color="success" icon={<Icon icon={zapIcon} width={12} />} style={{ margin: 0 }}>
                   已向量化
@@ -414,14 +532,46 @@ const KnowledgePage: React.FC = () => {
                 <Tag color="default" style={{ margin: 0 }}>未向量化</Tag>
               )}
               <Space size={4}>
-                {!isDemo && (
-                  <>
-                    <Tooltip title="保存">
-                      <Button icon={<Icon icon={saveIcon} width={14} />} onClick={handleSave} loading={saving} />
+                <>
+                    <Popconfirm
+                      title={
+                        summary || tagsText.trim()
+                          ? 'AI 将覆盖现有摘要与标签，确定重新生成？'
+                          : '用 AI 生成摘要与标签？'
+                      }
+                      onConfirm={handleRegenerateMetadata}
+                      okText="生成"
+                      cancelText="取消"
+                    >
+                      <Tooltip title="AI 重新生成摘要与标签">
+                        <Button
+                          type="text"
+                          icon={<Icon icon={sparklesIcon} width={14} />}
+                          loading={metaGenerating}
+                          disabled={detailLoading}
+                        />
+                      </Tooltip>
+                    </Popconfirm>
+                    <Tooltip title="编辑元数据（摘要 / 标签）">
+                      <Button
+                        icon={<Icon icon={alignLeftIcon} width={14} />}
+                        onClick={() => {
+                          setMetaSummary(summary);
+                          setMetaTags(tagsText);
+                          setMetaOpen(true);
+                        }}
+                        type={summary || tagsText ? 'default' : 'text'}
+                        disabled={detailLoading}
+                      />
+                    </Tooltip>
+                    <Tooltip  title="保存">
+                      <Button type="primary" icon={<Icon icon={saveIcon} width={14} />} onClick={() => { void handleSave(); }} loading={saving} disabled={detailLoading} >
+                      保存
+                      </Button>
                     </Tooltip>
                     {detail.isVectorized ? (
                       <Tooltip title="取消向量化">
-                        <Button icon={<Icon icon={zapOffIcon} width={14} />} onClick={handleUnvectorize} loading={vectorizing} />
+                        <Button icon={<Icon icon={zapOffIcon} width={14} />} onClick={handleUnvectorize} loading={vectorizing} disabled={detailLoading} />
                       </Tooltip>
                     ) : (
                       <Tooltip title="向量化">
@@ -430,81 +580,81 @@ const KnowledgePage: React.FC = () => {
                           icon={<Icon icon={zapIcon} width={14} />}
                           onClick={handleVectorize}
                           loading={vectorizing}
+                          disabled={detailLoading}
                         >
                           向量化
                         </Button>
                       </Tooltip>
                     )}
                     <Tooltip title="导出 Markdown">
-                      <Button icon={<Icon icon={downloadIcon} width={14} />} onClick={handleExport} />
+                      <Button icon={<Icon icon={downloadIcon} width={14} />} onClick={handleExport} disabled={detailLoading} />
                     </Tooltip>
                     <Popconfirm title="确定删除该文档？" onConfirm={() => handleDelete(detail.id)} okText="删除" cancelText="取消">
                       <Tooltip title="删除">
-                        <Button danger icon={<Icon icon={trashIcon} width={14} />} />
+                        <Button danger icon={<Icon icon={trashIcon} width={14} />} disabled={detailLoading} />
                       </Tooltip>
                     </Popconfirm>
-                  </>
-                )}
+                </>
               </Space>
             </div>
 
-            <div style={{ padding: '12px 24px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Input
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                disabled={isDemo}
-                placeholder="摘要（可选）"
-                style={{ borderRadius: 'var(--radius-md)' }}
-              />
-              <Input
-                value={tagsText}
-                onChange={(e) => setTagsText(e.target.value)}
-                disabled={isDemo}
-                prefix={<Icon icon={tagIcon} width={14} style={{ color: colors.textTertiary }} />}
-                placeholder="标签（逗号分隔）"
-                style={{ borderRadius: 'var(--radius-md)' }}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+              <DocEditor
+                key={detail.id}
+                ref={editorRef}
+                docId={detail.id}
+                blockData={detail.blockData ?? '[]'}
+                markdownText={detail.markdownText ?? ''}
+                onTitleChange={setTitle}
               />
             </div>
-
-            <Divider style={{ margin: '12px 0 0' }} />
-
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <div style={{ padding: '0 24px 8px', display: 'flex', justifyContent: 'flex-end' }}>
-                <Segmented
-                  size="small"
-                  value={preview ? 'preview' : 'edit'}
-                  onChange={(v) => setPreview(v === 'preview')}
-                  options={[
-                    { label: '编辑', value: 'edit', icon: <Icon icon={eyeOffIcon} width={12} /> },
-                    { label: '预览', value: 'preview', icon: <Icon icon={eyeIcon} width={12} /> },
-                  ]}
-                />
-              </div>
-              <div style={{ flex: 1, overflow: 'auto', padding: '0 24px 24px' }}>
-                {preview ? (
-                  <div className="md-body" style={{ minHeight: 200 }}>
-                    <ReactMarkdown>{markdownText || '*暂无内容*'}</ReactMarkdown>
-                  </div>
-                ) : (
-                  <Input.TextArea
-                    value={markdownText}
-                    onChange={(e) => setMarkdownText(e.target.value)}
-                    disabled={isDemo}
-                    placeholder="在此输入 Markdown 内容..."
-                    autoSize={{ minRows: 12 }}
-                    style={{
-                      borderRadius: 'var(--radius-md)',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                      fontSize: 13,
-                      lineHeight: 1.7,
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          </>
+          </div>
         )}
       </div>
+
+      <Modal
+        title="编辑元数据"
+        open={metaOpen}
+        onOk={async () => {
+          const ok = await handleSave({ summary: metaSummary, tagsText: metaTags });
+          if (ok) setMetaOpen(false);
+        }}
+        onCancel={() => setMetaOpen(false)}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={saving}
+        width={520}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>摘要</div>
+            <Input.TextArea
+              value={metaSummary}
+              onChange={(e) => setMetaSummary(e.target.value)}
+              placeholder="一句话概括文档内容（用于列表页展示）"
+              autoSize={{ minRows: 3, maxRows: 8 }}
+              maxLength={500}
+              showCount
+              style={{ borderRadius: 'var(--radius-md)' }}
+            />
+            <div style={{ marginTop: 4, fontSize: 12, color: colors.textTertiary }}>
+              向量化时会按「仅填空值」自动补齐；也可点工具栏的 AI 按钮重新生成。
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>标签</div>
+            <Input
+              value={metaTags}
+              onChange={(e) => setMetaTags(e.target.value)}
+              placeholder="逗号分隔，如：后端, 向量检索"
+              style={{ borderRadius: 'var(--radius-md)' }}
+            />
+            <div style={{ marginTop: 4, fontSize: 12, color: colors.textTertiary }}>
+              多个标签用中英文逗号分隔，保存后立即生效。
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         title="新建文档"

@@ -1,42 +1,74 @@
 /**
  * 对话 API
- * - 会话管理（本地 mock，P0 不做持久化）
+ * - 会话列表 / 历史消息 / 删除：走后端（数据源为 chat_message 记忆表，无本地 mock）
  * - 发消息调后端真实模型接口 POST /chat/message（同步）
  * - 流式对话走 POST /chat/stream（SSE，逐 token 下发）
  */
-import type { Conversation } from '@/types';
+import type { Conversation, Message, RetrieveChunk } from '@/types';
 import { http } from '@/api/client';
 import { config } from '@/config';
 import { useAuthStore } from '@/stores/authStore';
-import { mockConversations } from '@/mock/chat';
 
-// 内存中的会话数据副本（模拟数据库，P0 本地）
-let conversations: Conversation[] = JSON.parse(JSON.stringify(mockConversations));
-
-/** 模拟异步延迟 */
-function delay(ms: number = 200): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** 后端会话列表项（对话记忆聚合） */
+interface RemoteConversation {
+  id: string;
+  title: string;
+  lastMessage: string;
+  messageCount: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
-/** 生成唯一ID */
+/** 后端会话消息项 */
+interface RemoteMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: number;
+}
+
+/** 生成唯一ID（新会话先在前端之前创建，首次发消息后才会落库） */
 function generateId(): string {
   return `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** 获取会话列表 */
+/** 获取会话列表（后端真实数据，按最近活动倒序） */
 export async function getConversations(): Promise<Conversation[]> {
-  await delay();
-  return [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
+  const list = await http.get<RemoteConversation[]>('/chat/conversations');
+  if (!Array.isArray(list)) return [];
+  return list.map((item) => ({
+    id: item.id,
+    title: item.title || '新对话',
+    lastMessage: item.lastMessage ?? '',
+    // 消息按需加载，避免列表页一次性拉全量
+    messages: [],
+    knowledgeBaseId: null,
+    createdAt: item.createdAt ?? Date.now(),
+    updatedAt: item.updatedAt ?? Date.now(),
+  }));
 }
 
-/** 创建新会话（可绑定模型） */
+/** 获取某会话的历史消息（刷新页面 / 切换会话时回显） */
+export async function getConversationMessages(conversationId: string): Promise<Message[]> {
+  const list = await http.get<RemoteMessage[]>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages`
+  );
+  if (!Array.isArray(list)) return [];
+  return list.map((m) => ({
+    id: `msg-${m.id}`,
+    role: m.role,
+    content: m.content,
+    timestamp: m.createdAt ?? Date.now(),
+  }));
+}
+
+/** 创建新会话（仅存在于前端；首次发消息后由后端记忆表落库） */
 export async function createConversation(
   title: string,
   model?: { vendor?: string; modelCode?: string; modelName?: string }
 ): Promise<Conversation> {
-  await delay();
   const now = Date.now();
-  const newConversation: Conversation = {
+  return {
     id: generateId(),
     title,
     lastMessage: '',
@@ -46,14 +78,11 @@ export async function createConversation(
     createdAt: now,
     updatedAt: now,
   };
-  conversations = [newConversation, ...conversations];
-  return newConversation;
 }
 
-/** 删除会话 */
+/** 删除会话（清空后端该会话记忆行） */
 export async function deleteConversation(id: string): Promise<void> {
-  await delay();
-  conversations = conversations.filter((c) => c.id !== id);
+  await http.del<boolean>(`/chat/conversations/${encodeURIComponent(id)}`);
 }
 
 /** 发送消息到指定模型，返回 AI 回复文本（真实后端同步调用）。
@@ -78,6 +107,10 @@ export interface StreamChatMessageOptions {
   vendor: string;
   modelCode: string;
   conversationId?: string | null;
+  /** 本次对话绑定的知识库文档 id；非空时由后端检索并注入上下文，引用随 SSE 下发 */
+  docIds?: number[];
+  /** 后端产出的引用片段（event: references 到达时触发一次） */
+  onReferences?: (references: RetrieveChunk[]) => void;
   /** 增量文本回调（每到达一个 token 触发一次） */
   onDelta: (text: string) => void;
   /** 完成回调（收到 [DONE] 或流自然结束） */
@@ -88,7 +121,7 @@ export interface StreamChatMessageOptions {
 
 /**
  * 流式对话（SSE）：POST /chat/stream，fetch + ReadableStream 解析。
- * 后端事件格式：data: <token>\n\n，末尾 data: [DONE]\n\n。
+ * 后端事件：先 event: references（引用数组 JSON），后 data: <token>，末尾 data: [DONE]。
  * 返回 AbortController，可中断（中断会传导到后端取消上游生成）。
  */
 export function streamChatMessage(o: StreamChatMessageOptions): AbortController {
@@ -108,6 +141,7 @@ export function streamChatMessage(o: StreamChatMessageOptions): AbortController 
           vendor: o.vendor,
           modelCode: o.modelCode,
           conversationId: o.conversationId ?? undefined,
+          docIds: o.docIds && o.docIds.length > 0 ? o.docIds : undefined,
         }),
         signal: controller.signal,
       });
@@ -142,6 +176,15 @@ export function streamChatMessage(o: StreamChatMessageOptions): AbortController 
           if (eventName === 'error') {
             o.onError?.(new Error(text || '模型调用失败'));
             return;
+          }
+          if (eventName === 'references') {
+            try {
+              const refs = JSON.parse(text) as RetrieveChunk[];
+              if (Array.isArray(refs)) o.onReferences?.(refs);
+            } catch {
+              // 引用解析失败不影响正文流
+            }
+            continue;
           }
           if (text === '[DONE]') {
             o.onDone?.();

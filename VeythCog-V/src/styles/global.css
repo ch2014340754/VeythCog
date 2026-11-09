@@ -572,6 +572,16 @@ body.dark .ant-select-focused .ant-select-selector {
     transform: translateY(0);
   }
 }
+
+/* 知识库切换文档时的右上角细进度条：不确定进度，循环滑动 */
+@keyframes vc-slim-progress {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
 .vc-tab-pane {
   animation: vc-fade-up 0.28s ease-out;
 }

@@ -2,7 +2,7 @@
 
 > **本文件用途**：给未来的 AI Agent（以及协作者）快速恢复项目心智模型，减少每次迭代重新摸底的成本。
 > **维护规则**：每次项目迭代（改架构、加接口、换库、迁移模块）后，由 Agent 在本文件同步更新，并保持与真实代码一致。
-> **信息基准**：2026-10-15，依据对仓库源码与配置的实际遍历（非仅凭 README）。
+> **信息基准**：2026-11-09，依据对仓库源码与配置的实际遍历（非仅凭 README）。
 
 ---
 
@@ -48,7 +48,7 @@ VeythCog/                      # 仓库根（本项目记忆文档所在）
 | 后端 | Spring AI（ChatClient / ChatMemory / Advisor） | LLM 统一抽象，流式走 `reactor` Flux |
 | 后端 | Spring Security + JWT（jjwt 0.12.6）+ BCrypt | 无状态鉴权 |
 | 后端 | Spring Data JPA / JDBC / MyBatis-Plus | 业务实体 + 记忆仓库；知识库域走 MP + pgvector |
-| 数据库 | **PostgreSQL（当前 active，个人服务器 docker 容器）** | `ddl-auto=none`，表由 `docs/sql/*.sql` 管理；vc-app 仍残留 MySQL 驱动未清理 |
+| 数据库 | **PostgreSQL（当前 active，个人服务器 docker 容器）** | `ddl-auto=none`，表由 `docs/sql/*.sql` 管理；全模块已清除 MySQL 依赖（pom 无 mysql 驱动） |
 | 接口文档 | springdoc + knife4j（springdoc 2.8.9 显式锁定） | `/api/doc.html`、`/api/v3/api-docs` |
 | 前端 | React 18 / TS / Vite 5 / AntD 5 / Zustand(persist) / React Router 6 | fetch+ReadableStream 封装 SSE |
 
@@ -82,19 +82,23 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 **vc-chat**（`com.vc.chat`）—— 对话域（无 Controller）：
 - `ChatService`：领域入口，委托 `LlmChatService`，提供同步 `chat()` 与流式 `streamChat()`。
-- `memory/ChatMemoryConfig`：把 JDBC 记忆仓库包装成 Spring AI `ChatMemory`，`MessageWindowChatMemory` **窗口 20 条**截断。
-- `memory/JdbcChatMessageRepository`：实现 `ChatMemoryRepository`，落 `chat_message` 表（`(conversation_id, seq)` 排序，记忆主键=`userId:conversationId`）。
+- `memory/ChatMemoryConfig`：把 MyBatis 记忆仓库包装成 Spring AI `ChatMemory`，`MessageWindowChatMemory` **窗口 20 条**截断。
+- `memory/MyBatisChatMessageRepository`：实现 `ChatMemoryRepository`，落 `chat_message` 表（`(conversation_id, seq)` 排序，记忆主键=`userId:conversationId`）。
+- `mapper/ChatMessageMapper` + `resources/mapper/ChatMessageMapper.xml`：`chat_message` 的全部 SQL（会话聚合、消息列表、批量写入、删除），供记忆仓库与 `ChatHistoryService` 共用；**本模块不含 Java 内联 SQL**。
+- `ChatHistoryService`：对外会话列表 / 历史回显（剥离 `userId:` 前缀、还原被 RAG prompt 包裹的用户问题），SQL 走上面的 mapper。
 
 **vc-app**（`com.vc.app`）—— 唯一可运行，装配全部：
 - `auth/*`：JWT 鉴权（`JwtUtil` / `JwtAuthFilter` / `AuthServiceImpl` / `PasswordUtil` / `User`）。
-- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE）、`LlmModelController`、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`GlobalExceptionHandler`。
+- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE + `/chat/conversations` 三件套）、`LlmModelController`、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`GlobalExceptionHandler`、`ApiAccessLogFilter`（全接口访问日志：rid/user/ip/方法/URI/Controller#方法/状态/耗时/query/body，敏感字段脱敏）。
 - `config/*`：`SecurityConfig`（无状态，放行 `/auth/**`、`/health/**`、接口文档、ASYNC 分发）、`CorsConfig`、`DataInitializer`（幂等种子：模型目录 + admin 用户 + 默认绑定 qwen-plus）。
-- `admin` / `orchestration`：占位（系统管理后端未实现）。
+- `admin/*`：系统管理后端**已实现**（`AdminController` / `RoleController` / `AdminUserServiceImpl`，用户-角色多对多，`/admin/**` 需 `ADMIN` 角色）。
+- `orchestration/*`：`RagChatOrchestrator`（检索 → 拼带编号引用的上下文 → 交 vc-chat 作答；同步/流式共用，召回落空或失败降级为普通对话）。
 
 **vc-knowledge**（`com.vc.knowledge`）—— 知识库域（无 Controller）：
-- `entity/KnowledgeDoc` + `entity/KnowledgeEmbedding`（MyBatis-Plus 注解实体，含 `tags text[]`/`embedding vector(1024)` 的 TypeHandler 映射）、`mapper/KnowledgeDocMapper` + `mapper/KnowledgeEmbeddingMapper`（XML 承载 PG 特有语法）。
+- `entity/KnowledgeDoc` + `entity/KnowledgeEmbedding`（MyBatis-Plus 注解实体，TypeHandler：`JsonbTypeHandler`(block_data jsonb) / `StringArrayTypeHandler`(tags text[]) / `VectorTypeHandler`(embedding vector(1024))）、`mapper/KnowledgeDocMapper` + `mapper/KnowledgeEmbeddingMapper`（XML 承载 PG 特有语法）。
 - `service/KnowledgeService` + `impl/KnowledgeServiceImpl`：文档 CRUD / 导入导出（普通 CRUD 用 MP BaseMapper + LambdaWrapper）；关键词列表检索（`to_tsvector('simple', ...)` + `plainto_tsquery`）与 tags 数组过滤收拢到 XML。
-- `service/VectorizeService` + `impl/VectorizeServiceImpl`：自定义 `RecursiveCharacterTextSplitter`（512/64，优先保留代码块）→ `EmbeddingProvider` 批量编码（qwen3.7-text-embedding-flash，维度 1024）→ pgvector `<->` L2 检索（IVFFlat）；先删后插幂等（`doc_id` 为幂等键）+ `embedding_model` 标识校验。
+- `service/VectorizeService` + `impl/VectorizeServiceImpl`：自定义 `RecursiveCharacterTextSplitter`（512/64，优先保留代码块）→ `EmbeddingProvider` 批量编码（qwen3.7-text-embedding-flash，维度 1024）→ pgvector `<->` L2 检索（IVFFlat）；先删后插幂等（`doc_id` 为幂等键）+ `embedding_model` 标识校验。⚠️ L2 阈值配置 1.2（原 0.8 会过滤掉全部候选）；阈值无命中时回退 topN 并打 WARN。
+- `knowledge_doc.lib_type` 列已**物理删除**（`011` 新版 `DROP COLUMN`，需在库上重跑一次）；「私有库/演示库」概念彻底废弃。本模块**先不做按用户隔离**（见 §10.1）。
 
 **vc-learn**（`com.vc.learn`）—— **Spring AI 学习沙箱**：独立可运行、只连 DashScope、与业务模块零依赖。含 `examples/chat`（`ChatDemo` / `ChatController` / Advisor：`RereadingAdvisor` / `SimpleLoggerAdvisor`）、结构化输出测试（`StructuredOutTest`）等。**git status 有未提交改动**（ChatController 修改 + 新增 service/ 与测试）。
 
@@ -106,8 +110,16 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 |---|---|---|
 | ① llm-gateway 多模型调度 | Phase 1 | ✅ 已落地：供应商抽象+工厂+路由+实例缓存；DashScope 与 OpenAI 兼容双工厂 |
 | ② SSE 流式全链路 | Phase 1 待办 | ✅ **已落地**：`POST /chat/stream`（SseEmitter + Flux 逐 token，`[DONE]` 结尾，客户端断开取消上游）；前端 `api/chat.ts` `streamChatMessage()` |
-| ③ 会话/消息持久化 | Phase 1 待办 | ✅ **已落地（记忆层）**：Spring AI `ChatMemory` + `JdbcChatMessageRepository`（`chat_message` 表）；⚠️ 无独立会话表，会话元数据仍在前端本地（Zustand persist） |
-| RAG 知识库 | Phase 2 | ✅ **已落地（P0）**：文档 CRUD + 导入导出 + 向量化（pgvector `<->` L2）+ RAG 召回 + 访客只读演示库；前端知识库页 + 对话侧 RAG 引用卡片 |
+| ③ 会话/消息持久化 | Phase 1 待办 | ✅ **已落地（记忆层 + 历史回显）**：Spring AI `ChatMemory` + `MyBatisChatMessageRepository`（SQL 在 `ChatMessageMapper.xml`）；`GET /chat/conversations`、`GET /chat/conversations/{id}/messages`、`DELETE` 已对外；⚠️ 无独立会话表：`knowledgeDocIds` / 会话模型绑定仍只在前端内存，刷新即丢 |
+| RAG 知识库 | Phase 2 | ✅ **已落地（P0）**：文档 CRUD + 导入导出 + 向量化（pgvector `<->` L2）+ RAG 召回；前端知识库页（`DocEditor` 基于 BlockNote）+ 对话侧引用卡片。✅ 召回已**注入 prompt**并由后端统一下发引用（`RagChatOrchestrator` + SSE `event: references`，`ChatRequest.docIds`）；已去除「私有库/演示库」概念（`lib_type` 列已删）；⚠️ 文档更新仅置 `is_vectorized=false`、不删旧向量（检索端已过滤，旧向量仅占空间） |
+
+**RAG 元数据自动填充 + 检索 rerank（2026-11-09 落地）**
+- 摘要 / 标签属于文档元数据，向量化时由**辅助小模型**自动补齐；策略**仅填空值**（手写内容不被覆盖），摘要与标签都完整时直接跳过模型调用。
+- 手动「AI 重新生成」：`POST /knowledge/doc/{docId}/metadata/regenerate` 显式覆盖，前端工具栏 sparkles 图标 + Popconfirm 二次确认；只改元数据，不动正文与向量化状态。
+- 前端元数据编辑：摘要与标签**统一在一个「编辑元数据」弹窗**内编辑（工具栏单入口），点弹窗「保存」直接落库；`handleSave` 支持传入草稿值覆盖，避免 `setState` 异步导致读到旧值。取消则丢弃草稿，不再有独立的摘要弹窗 / 标签 Popover。
+- 辅助模型与用户对话模型**解耦**：`llm.aux-model.*` → `AuxModelProps` + `AuxChatService`（无记忆、一次性 `complete(system,user)`；DashScope 必须按请求传 `DashScopeChatOptions.model(...)`）。当前 `model-code: deepseek-v4-pro-0813`——该账号 `qwen-turbo` 返回 429、`qwen-plus` 返回 403，仅此模型可用，开通 qwen 后改回。
+- 检索 rerank：`RagReranker` 用同一辅助模型对候选片段重排后截 `topN`；配置 `knowledge.retrieve.rerank`（`enabled` / `candidates=10` / `max-chunk-chars=400`）；模型异常或编号缺失自动回退向量顺序，不阻断回答。
+- 实现位置：`vc-app/orchestration/{KnowledgeMetadataOrchestrator,RagReranker,DocMetadata,VectorizeResult}.java`、`vc-llm/{AuxChatService,AuxModelProps}.java`。
 
 > **重要**：`docs/architecture.md` 与 `agent.md` 仍把 SSE 流式/会话持久化列为待办——**文档滞后于代码**。新增迭代前先读代码，别信旧文档。
 
@@ -121,8 +133,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | `llm_model` | 模型目录（vendor_code 仅存字符串，供应商为枚举不建表） | unique(vendor_code, model_code) |
 | `user_llm_binding` | 用户-模型绑定中间表 | unique(user_id, vendor_code, model_code)；is_default 应用层保证每用户至多 1 个 |
 | `chat_message` | 对话记忆（Spring AI JDBC 落库） | unique(conversation_id, seq)；conversation_id=`userId:conversationId` |
-| `knowledge_doc` | 知识库文档 | lib_type ∈ {private, demo}；block_data JSONB 权威源；markdown_text 派生缓存；tags text[]；deleted 软删除；summary ≤500 |
-| `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ embedding_model 标识；doc_id 外键（软删除时显式清理，不依赖级联） |
+| `knowledge_doc` | 知识库文档 | 无 `lib_type`（历史列已由 `011` 删除）；block_data JSONB 权威源；markdown_text 派生缓存；tags text[]；deleted 软删除；summary ≤500。新库按 `009→010→011` 执行 |
+| `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ `embedding_model` 标识（禁止不同模型向量混查）；doc_id 外键（软删除时显式清理，不依赖级联）。⚠️ `embedding_model` 由 `010` 补充，服务器库已执行 |
 
 > `llm_vendor` 表已**下线**（`005_drop_llm_vendor.sql`），改后端枚举。脚本含 MySQL/PG 双语差异注释。
 
@@ -138,21 +150,27 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | POST | `/llm/bindings` | {vendor, modelCode, isDefault?} | 是 |
 | DELETE | `/llm/bindings/{vendor}/{modelCode}` | - | 是 |
 | PUT | `/llm/bindings/{vendor}/{modelCode}/default` | - | 是 |
-| POST | `/chat/message` | {message, vendor, modelCode, conversationId?} | 是（同步返回 string） |
-| POST | `/chat/stream` | {message, vendor, modelCode, conversationId?} | 是（SSE：`data: <token>`，末尾 `data: [DONE]`，错误 `event:error`） |
-| GET | `/knowledge/list` | query: libType, keyword?, tag?, sortField?, sortOrder?, current?, pageSize? | 否（private 需登录，Service 层校验） |
-| GET | `/knowledge/doc/{docId}` | - | 否（private 需登录） |
-| POST | `/knowledge/doc` | {libType, title, summary?, tags?, blockData?, markdownText?} | 是（demo 写 403） |
-| PUT | `/knowledge/doc/{docId}` | 同新建 | 是（demo 写 403） |
-| DELETE | `/knowledge/doc/{docId}` | - | 是（demo 写 403） |
-| POST | `/knowledge/import/md` | multipart: file(.md≤500KB), libType, title?, tags? | 是（demo 写 403） |
-| GET | `/knowledge/doc/{docId}/export/md` | - | 否（下载流） |
-| POST | `/knowledge/doc/{docId}/vectorize` | - | 是（返回分片数） |
+| POST | `/chat/message` | {message, vendor, modelCode, conversationId?, docIds?} | 是（同步返回 string；docIds 非空时后端先召回再拼上下文） |
+| POST | `/chat/stream` | {message, vendor, modelCode, conversationId?, docIds?} | 是（SSE：先 `event: references`（JSON 数组），后 `data: <token>`，末尾 `data: [DONE]`，错误 `event:error`） |
+| GET | `/chat/conversations` | - | 是（会话列表来自 `chat_message` 记忆表，剥离 `userId:` 前缀，按最近活动倒序） |
+| GET | `/chat/conversations/{id}/messages` | - | 是（按 `seq` 升序回显；RAG 落库的「上下文+问题」在返回时剥离为原始问题） |
+| DELETE | `/chat/conversations/{id}` | - | 是（物理删除该会话记忆行） |
+| GET | `/knowledge/list` | query: keyword?, tag?, sortField?, sortOrder?, current?, pageSize? | 是（登录即可访问，暂不做用户隔离） |
+| GET | `/knowledge/doc/{docId}` | - | 是 |
+| POST | `/knowledge/doc` | {title, summary?, tags?, blockData?, markdownText?} | 是 |
+| PUT | `/knowledge/doc/{docId}` | 同新建 | 是 |
+| DELETE | `/knowledge/doc/{docId}` | - | 是（软删除 + 显式清理 embedding） |
+| POST | `/knowledge/import/md` | multipart: file(.md≤500KB), title?, tags? | 是 |
+| GET | `/knowledge/doc/{docId}/export/md` | - | 是（下载流） |
+| POST | `/knowledge/doc/{docId}/vectorize` | - | 是（返回 `{chunkCount, summary, tags}`，同时按「仅填空值」补齐摘要/标签） |
+| POST | `/knowledge/doc/{docId}/metadata/regenerate` | - | 是（辅助模型显式覆盖摘要/标签，只改元数据不动正文） |
 | POST | `/knowledge/doc/{docId}/unvectorize` | - | 是 |
-| POST | `/knowledge/rag/retrieve` | {docIds, query, topN?} | 否（private 需登录；限定 docIds + embedding_model + L2 距离阈值，强制同库召回） |
+| POST | `/knowledge/rag/retrieve` | {docIds, query, topN?} | 是（限定 docIds + embedding_model + L2 阈值 1.2；阈值无命中自动回退 topN；禁止全库向量搜索） |
 | GET | `/health` | - | 否 |
 
 统一返回 `BaseResponse<T>`：`{ code, data, message }`，`code===0` 成功；未登录 401（`ErrorCode.NOT_LOGIN_ERROR`）。
+
+> **知识库权限现状（2026-11-09 决策）**：接口只校验"已登录"，**暂不按用户隔离**，知识库为全账号共享数据（单账号自用可接受）。用户级赋权计划由统一中间件承担，落地后本模块只消费中间件给出的授权结果，不自行维护 owner 校验。
 
 ---
 
@@ -168,13 +186,22 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 ### 7.2 核心封装
 - `api/client.ts`：`http`（fetch 封装：baseURL / 自动带 token / 401 跳登录 / 超时 / 统一错误）。
 - `api/sse.ts`：通用 `streamChat()`（OpenAI 兼容 /chat/completions，原生 EventSource 不能带 header 故用 fetch 手动解析）。
-- `api/chat.ts`：`sendMessage()` 同步 + `streamChatMessage()` 流式（`/chat/stream`，支持 AbortController 中断）。
-- `api/auth.ts` / `llm.ts`：已接真后端；`knowledge.ts` / `admin.ts`：仍 mock。
+- `api/chat.ts`：`sendMessage()` 同步 + `streamChatMessage()` 流式（`/chat/stream`，携带 `docIds`、解析 `event: references` → `onReferences`、支持 AbortController 中断）；会话列表 / 历史消息 / 删除均走后端（`getConversations` / `getConversationMessages` / `deleteConversation`），**已无 mock 会话数据**。
+- `api/auth.ts` / `llm.ts` / `knowledge.ts`：已接真后端；`admin.ts`：仍 mock。
 
 ### 7.3 Zustand stores（6+1，全部 persist）
 `authStore`(token/用户/飞书) · `settingsStore`(模型绑定列表+当前模型+流式开关+毛玻璃) · `chatStore`(会话列表/流式增量) · `knowledgeStore` · `dbStore` · `toolTabsStore`。
 
+> ⚠️ `chatStore` 虽为 persist 且实现了 `appendMessage/appendDelta`，但**聊天页未接入**（页面用 `useState`，会话列表与历史消息改由 `GET /chat/conversations` 拉取）；`knowledgeDocIds` 与会话模型绑定仍只在前端内存，刷新即丢。
+
 > 注意：`settingsStore.providers`（本地供应商 CRUD）已演进为**从后端拉取绑定模型**（P0 改造），`doc/README.md` 该节描述偏旧。
+
+### 7.4 交互约定（操作无感）
+- 列表/详情的**变更后同步**一律用「静默刷新」：`loadDocs({ silent: true })` 不切 `loading`，只在原列表上原地更新；禁止保存、向量化、删除后触发整块 `<Spin />` 替换。
+- 保存 / 向量化只做**本地乐观更新**（改 `detail` 元信息与列表项标记），不重拉详情——重拉会让 `DocEditor` 重解析 `blockData`，造成内容闪动与光标丢失。
+- 同一文档重复点击不重新拉取（`selectDoc` 内置去重），避免无意义 loading。
+- **切换明细/详情时不清空当前内容**：保留上一条内容继续显示，只在右上角显示细进度条（`vc-slim-progress`，见 `styles/global.css`）；禁止整块 `<Spin />` 替换。加载期间禁用保存 / 向量化 / 导出 / 删除，避免误操作到上一篇文档。
+- 以上为**全站前端通用规范**，新开发的列表、详情、表单页一律遵循。
 
 ### 7.4 会话模型绑定策略（生产策略，已实现）
 新建会话可选模型并写入 `Conversation.vendor/modelCode/modelName`；进入已有会话后**下拉禁用**（会话内禁切）。无绑定→空态引导去模型配置页。
@@ -199,12 +226,14 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 种子账号：`admin / admin123`，默认绑定 `dashscope/qwen-plus`。
 
 ### 8.2 前端
-- `.env.local`（不提交）：`VITE_API_BASE=http://localhost:8123/api`、`VITE_USE_MOCK=false`；`src/config/index.ts` 兜底默认 8123。
+- `.env.development`（已提交）：`VITE_API_BASE=http://localhost:8123/api`（与后端 8123 对齐，2026-11-09 修正原 8080 错配）；`.env.production` 指向 `https://api.veythcog.top/api`；`src/config/index.ts` 兜底默认 8123。
+- 登录页「运行模式」默认收起并走真实后端（`bypassMode=false`）；展开后单选切换 mock/真实，可临时覆盖 apiBase（persist key `veythcog:mode:v3`）。⚠️ 改 `.env` 后需重启 dev server（Vite 不热更 env）。
 - 启动：`npm install && npm run dev`（:3000）；构建：`npm run build`（tsc + vite）。
 
 ### 8.3 数据库
 - `docker-compose.yml`：`pgvector/pgvector:pg16`（个人服务器 docker 容器，单库两用，已启用 pgvector 扩展）。
 - `ddl-auto=none`：新表需手动执行 `docs/sql/*.sql`（`chat_message` 建表后记忆才生效）。
+- 知识库脚本（唯一权威，按序执行）：`009_knowledge.sql`（建表，已不含 `lib_type`）→ `010_knowledge_v0.3_migration.sql`（旧库补 `embedding_model` 列 + IVFFlat 索引）→ `011_knowledge_remove_libtype.sql`（**物理删除**历史 `lib_type` 列，幂等）。⚠️ 旧库缺 010 则向量化报「`embedding_model` 列不存在」；011 新版需**重跑一次**才会真正删列（个人服务器库已跑过旧版 011，只置了默认值）。`openspec/sql/knowledge-init.sql` 已废弃，勿再使用。
 
 ---
 
@@ -220,19 +249,30 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 ## 10. 当前状态快照与待办
 
-**已打通（可演示）**：真 JWT 登录 → 模型绑定管理 → 同步对话 + **SSE 流式对话**（带 JDBC 会话记忆、可中断）。
+**已打通（可演示）**：真 JWT 登录（账号密码；微信扫码登录已移除）→ 模型绑定管理 → 同步对话 + **SSE 流式对话**（带 JDBC 会话记忆、可中断）；RAG 知识库 P0（文档 CRUD/导入导出/向量化/RAG 召回/**后端注入 prompt + 引用下发** + `DocEditor`（基于 BlockNote）文档编辑器 + 对话侧引用卡片）；已去除「私有库/演示库」概念（`lib_type` 列已删）。
 
 **已知阻塞**：
 - DashScope 免费额度曾耗尽（403 FreeTierOnly），需充值或换有效 AK 才能拿真实回复；DeepSeek AK 待填。
+- ~~旧库需补跑 010/011~~ ✅ 个人服务器库已执行（2026-11-09 确认），写入链路打通。
 
 **待办/演进**（源自架构文档 + 现状）：
-1. 会话元数据持久化（现仅记忆层落库，会话列表在前端本地）。
-2. ~~RAG 知识库实现~~ ✅ 已完成 P0（文档 CRUD/导入导出/向量化/RAG 召回/前端知识库页 + 对话侧引用卡片）；P1 待办：BlockNote 块编辑器、批量向量化/移动/打标。
-3. Admin 后台后端对接（现全 mock，`api/admin.ts`）。
-4. 真实 `role` 字段由后端 `/auth/me` 下发。
-5. vc-app 清理残留 MySQL 驱动与过时注释。
+1. 会话元数据持久化（现仅记忆层落库，会话列表在前端内存，`chatStore` 未接入）。
+2. ~~RAG 知识库实现~~ ✅ 已完成 P0；**RAG 引用已收归后端**（`RagChatOrchestrator` 检索 + 注入 prompt + SSE `event: references`，前端不再自行 retrieve）。P1 待办：① 文档更新时清理旧向量（当前只置 `is_vectorized=false`，检索端已过滤，旧向量仅占空间）；② 批量向量化/移动/打标；③ `importMd` 的 md→block 结构与 BlockNote 块结构对齐（当前靠前端降级解析）；④ `vectorize` 长事务拆分、`dimensions` 校验、IVFFlat/阈值调参、单测；⑤ 辅助模型选型收敛（当前为可用性妥协的 `deepseek-v4-pro-0813`，带 reasoning 成本偏高），rerank 需补端到端回归与失败用例。
+3. Admin 后台：用户/角色管理**已接真后端**（`/admin/users`、`/admin/roles`）；模型目录/监控/审计/系统配置/定时任务仍 mock。
+4. `role` 已随登录响应下发（`LoginResponse.role`，取多角色中的主角色）；暂无 `/auth/me` 接口，需重新拉取用户信息时再补。
+5. ~~清理残留 MySQL 驱动~~ ✅ 已清理（全模块 pom 无 mysql 依赖）。
 6. vc-learn 未提交改动整理（结构化输出实验）。
 7. 同步各文档滞后点（见 §4 / §7.3 / §8.1）。
+
+---
+
+## 10.1 权限决策（2026-11-09）
+
+- **本阶段不做按用户隔离**：知识库接口仅要求登录，文档为全账号共享数据；单账号自用场景可接受。
+- 用户级赋权**计划通过统一中间件**实现（非本模块内建），中间件落地后本模块只消费其授权结果。
+- 因此评审中「`owner_id` 缺失 / 越权读写」**不作为缺陷处理**，也不在 P0/P1 计划内；多账号上线前必须由中间件补齐，否则文档互相可见。
+- **RAG 引用归属（2026-11-09）**：检索、上下文注入、引用产出全部在后端完成；前端只传 `docIds`、只消费 `references`。不同场景复用同一份召回结果，杜绝「展示的引用 ≠ 模型读到的资料」。
+- **`lib_type` 处置（2026-11-09）**：`009` 不再建该列，`011` 改为 `DROP COLUMN IF EXISTS`（旧库重跑即删列）。列内历史取值均为 `private`，无业务语义，删除不可逆但不影响读写。
 
 ---
 

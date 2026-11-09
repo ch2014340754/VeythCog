@@ -142,7 +142,7 @@ CREATE INDEX idx_chat_session_user ON chat_session(user_id, deleted);
 ```
 > 补充规则：
 > - `binding_id` 不设外键（绑定可被软删），但**切换/下一轮对话前必须校验**：绑定存在、属于当前用户、`is_valid=true` 且未删除；否则返回友好错误提示重新绑定；
-> - `rag_doc_ids` 中的每个 docId 必须校验归属：私有库文档属于当前用户，或为演示库文档；越权 docId 直接拒绝/剔除；
+> - `rag_doc_ids` 中的 docId 仅校验存在性与 `deleted=false`（不做"私有库本人 / 演示库"归属判断——该概念已废弃，用户级授权由统一中间件承担）；
 > - 会话删除采用**软删除**（`deleted=true`），消息不靠 `ON DELETE CASCADE` 物理级联（见 2.4 说明）。
 
 ### 2.4 对话消息表 `chat_message`
@@ -188,11 +188,11 @@ CREATE INDEX idx_chat_message_session ON chat_message(session_id, seq);
 - 上下文压缩开关（默认开启，会话独立保存）
 
 知识库抽屉交互：
-- 支持知识库切换、文档复选多选
+- 文档复选多选（无库类型切换）
 - 确认后将选中docId数组写入当前会话 `rag_doc_ids`
 - 打开抽屉自动回显当前会话已勾选文档
 - 新建会话默认 `rag_doc_ids = []`，默认不触发RAG检索
-- 访客仅可选择演示库文档
+- 检索与引用由后端在 `/chat/stream` 内统一完成（前端只传 docIds、只展示 `references`）
 
 消息区：SSE流式输出对话内容；输入框提交用户问题；
 附加提示：
@@ -294,10 +294,11 @@ CREATE INDEX idx_chat_message_session ON chat_message(session_id, seq);
 7. 流式链路异常处理：断开、超时，保证已经返回的内容落库，不丢失消息；
 8. 模块边界严格隔离：
    - 知识库模块：只负责文档、切片、向量入库、向量检索接口，不感知LLM、密钥、会话；
-   - 对话&绑定模块：调用RAG检索接口，不操作pgvector、不处理chunk切片；
+   - 对话&绑定模块：只负责模型调度与会话，不操作pgvector、不处理chunk切片；
+   - RAG 编排（检索 → 拼上下文 → 引用下发）由 app 层 `RagChatOrchestrator` 承担，避免两个域互相依赖；
 9. 日志脱敏：错误日志、异常堆栈禁止打印明文 key 或完整密文，统一用脱敏值占位；
 10. 解密失败处理：环境变量缺失/密文损坏时返回明确错误码（50000），不落库、不调用上游；
-11. 所有接口二次校验资源归属：binding 属于当前用户、session 属于当前用户、ragDocIds 归属合法（私有库本人 / 演示库），不信任前端；
+11. 所有接口二次校验资源归属：binding 属于当前用户、session 属于当前用户、ragDocIds 存在且未软删，不信任前端；
 12. `PUT /api/chat/session/{sessionId}` 切换 `bindingId` 时，必须校验新绑定属于当前用户且 `is_valid=true`、未删除。
 
 ## 7. 风险与兜底

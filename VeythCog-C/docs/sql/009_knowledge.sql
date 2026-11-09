@@ -5,6 +5,12 @@
 -- 前置：目标库已启用 pgvector 扩展（脚本内 CREATE EXTENSION IF NOT EXISTS vector 幂等）。
 -- 表：knowledge_doc（文档主表，块 JSON + Markdown 双存储）+ knowledge_embedding（向量分片）。
 -- 注意：ddl-auto=none，需对目标库执行本脚本后知识库功能才生效。
+-- -----------------------------------------------------------------------------
+-- ⚠️ 执行顺序：009 → 010 → 011。
+--    010 为已有库补 embedding_model 列 + IVFFlat 索引（新库由本脚本直接建出）；
+--    011 清理历史 lib_type 列（新库执行时为空操作）。
+-- ⚠️ 「私有库 / 演示库」概念已废弃（2026-11-09）：本脚本不再建 lib_type 列，
+--    文档按账号共享 + 后续统一中间件赋权，不做库类型隔离。
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -20,7 +26,6 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS knowledge_doc (
     id             BIGSERIAL PRIMARY KEY,
-    lib_type       VARCHAR(20)  NOT NULL,                  -- private / demo（物理隔离）
     title          VARCHAR(255) NOT NULL,
     summary        VARCHAR(500) NOT NULL DEFAULT '',       -- 列表页摘要（v0.2 新增）
     tags           TEXT[]       NOT NULL DEFAULT '{}',     -- 标签数组，预留批量打标签
@@ -34,7 +39,6 @@ CREATE TABLE IF NOT EXISTS knowledge_doc (
 );
 
 COMMENT ON TABLE  knowledge_doc IS '知识库文档主表（块 JSON + Markdown 双存储）';
-COMMENT ON COLUMN knowledge_doc.lib_type      IS '库类型：private=私有库 / demo=演示库（数据与向量物理隔离）';
 COMMENT ON COLUMN knowledge_doc.block_data    IS '块结构数组，权威源；markdown_text 为其派生缓存';
 COMMENT ON COLUMN knowledge_doc.markdown_text IS '标准 Markdown，供关键词检索 / 导出 / RAG 切片';
 COMMENT ON COLUMN knowledge_doc.is_vectorized IS '是否已向量化；保存文档不自动置 true，由用户手动触发';
@@ -64,9 +68,9 @@ COMMENT ON COLUMN knowledge_embedding.chunk_index IS '分片序号；向量化�
 -- -----------------------------------------------------------------------------
 -- 3. 索引
 -- -----------------------------------------------------------------------------
--- 列表页：库类型 + 软删除过滤（最常用组合）
-CREATE INDEX IF NOT EXISTS idx_knowledge_doc_lib_deleted
-    ON knowledge_doc (lib_type, deleted);
+-- 列表页：软删除过滤（最常用条件）
+CREATE INDEX IF NOT EXISTS idx_knowledge_doc_deleted
+    ON knowledge_doc (deleted);
 
 -- 关键词检索：中文内容用 'simple' 配置（v0.2 修正，原 'english' 对中文不切词）。
 -- 若需更强中文分词，可后续引入 zhparser/jieba 扩展，P0 不引入。

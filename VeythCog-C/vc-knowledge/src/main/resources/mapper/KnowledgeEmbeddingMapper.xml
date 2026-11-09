@@ -11,12 +11,15 @@
         FROM knowledge_embedding e
         JOIN knowledge_doc d ON d.id = e.doc_id
         WHERE d.deleted = false
+          AND d.is_vectorized = true
           AND e.doc_id IN
           <foreach collection="docIds" item="id" open="(" separator="," close=")">
               #{id}
           </foreach>
           AND e.embedding_model = #{embeddingModel}
-          AND (e.embedding &lt;-&gt; #{queryVector,typeHandler=com.vc.knowledge.handler.VectorTypeHandler}) &lt;= #{distanceThreshold}
+          <if test="distanceThreshold != null">
+              AND (e.embedding &lt;-&gt; #{queryVector,typeHandler=com.vc.knowledge.handler.VectorTypeHandler}) &lt;= #{distanceThreshold}
+          </if>
         ORDER BY score ASC
         LIMIT #{limit}
     </select>

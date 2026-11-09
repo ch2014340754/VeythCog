@@ -1,43 +1,42 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createConversation, deleteConversation, getConversationMessages, getConversations, streamChatMessage } from '@/api/chat';
+import { listDocs } from '@/api/knowledge';
+import CollapsibleSidebar from '@/components/CollapsibleSidebar';
+import MessageBubble from '@/components/MessageBubble';
+import { useTheme } from '@/contexts/ThemeContext';
+import { modelId, useSettingsStore } from '@/stores/settingsStore';
+import type { Conversation, DocListItem, Message } from '@/types';
+import { formatRelativeTime } from '@/utils/formatTime';
+import bookOpenIcon from '@iconify-icons/lucide/book-open';
+import databaseIcon from '@iconify-icons/lucide/database';
+import globeIcon from '@iconify-icons/lucide/globe';
+import messageSquareIcon from '@iconify-icons/lucide/message-square';
+import micIcon from '@iconify-icons/lucide/mic';
+import moreHorizontalIcon from '@iconify-icons/lucide/more-horizontal';
+import paperclipIcon from '@iconify-icons/lucide/paperclip';
+import pencilIcon from '@iconify-icons/lucide/pencil';
+import plusIcon from '@iconify-icons/lucide/plus';
+import searchIcon from '@iconify-icons/lucide/search';
+import sendIcon from '@iconify-icons/lucide/send';
+import trashIcon from '@iconify-icons/lucide/trash-2';
+import zapIcon from '@iconify-icons/lucide/zap';
+import { Icon } from '@iconify/react';
 import {
-  Input,
-  Button,
-  Empty,
-  Spin,
-  Popconfirm,
-  Dropdown,
-  Modal,
-  message,
-  Tooltip,
-  Select,
-  Drawer,
-  Checkbox,
-  Segmented,
-  Tag,
+    Button,
+    Checkbox,
+    Drawer,
+    Dropdown,
+    Empty,
+    Input,
+    message,
+    Modal,
+    Popconfirm,
+    Select,
+    Spin,
+    Tag,
+    Tooltip,
 } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
-import { Icon } from '@iconify/react';
-import searchIcon from '@iconify-icons/lucide/search';
-import plusIcon from '@iconify-icons/lucide/plus';
-import trashIcon from '@iconify-icons/lucide/trash-2';
-import sendIcon from '@iconify-icons/lucide/send';
-import bookOpenIcon from '@iconify-icons/lucide/book-open';
-import messageSquareIcon from '@iconify-icons/lucide/message-square';
-import moreHorizontalIcon from '@iconify-icons/lucide/more-horizontal';
-import pencilIcon from '@iconify-icons/lucide/pencil';
-import paperclipIcon from '@iconify-icons/lucide/paperclip';
-import globeIcon from '@iconify-icons/lucide/globe';
-import micIcon from '@iconify-icons/lucide/mic';
-import databaseIcon from '@iconify-icons/lucide/database';
-import zapIcon from '@iconify-icons/lucide/zap';
-import MessageBubble from '@/components/MessageBubble';
-import CollapsibleSidebar from '@/components/CollapsibleSidebar';
-import { getConversations, createConversation, deleteConversation, streamChatMessage } from '@/api/chat';
-import { listDocs, retrieve } from '@/api/knowledge';
-import type { Conversation, Message, DocListItem, RetrieveChunk, LibType } from '@/types';
-import { formatRelativeTime } from '@/utils/formatTime';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useSettingsStore, modelId } from '@/stores/settingsStore';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** 侧栏宽度（与 Knowledge 页保持一致） */
 const SIDEBAR_WIDTH = 280;
@@ -69,7 +68,6 @@ const ChatPage: React.FC = () => {
 
   // 知识库抽屉状态
   const [kbDrawerOpen, setKbDrawerOpen] = useState(false);
-  const [kbLibType, setKbLibType] = useState<LibType>('private');
   const [kbDocs, setKbDocs] = useState<DocListItem[]>([]);
   const [kbLoading, setKbLoading] = useState(false);
 
@@ -99,36 +97,59 @@ const ChatPage: React.FC = () => {
 
   const loadConversations = async () => {
     setLoading(true);
-    const data = await getConversations();
-    setConversations(data);
-    if (data.length > 0 && !activeConvId) {
-      setActiveConvId(data[0].id);
+    try {
+      const data = await getConversations();
+      setConversations(data);
+      if (data.length > 0 && !activeConvId) {
+        setActiveConvId(data[0].id);
+      }
+    } catch (e) {
+      // 列表拉取失败不阻塞页面（新会话仍可创建与发送）
+      message.error(e instanceof Error ? e.message : '会话列表加载失败');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  // 切换会话时按需加载真实历史（会话列表只带摘要，消息体单独拉取）
+  useEffect(() => {
+    if (!activeConvId) return;
+    const target = conversations.find((c) => c.id === activeConvId);
+    if (!target || target.messages.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const msgs = await getConversationMessages(activeConvId);
+        if (cancelled || msgs.length === 0) return;
+        setConversations((prev) =>
+          prev.map((c) => (c.id === activeConvId ? { ...c, messages: msgs } : c))
+        );
+      } catch {
+        // 历史加载失败不阻塞对话（新建会话本就没有历史）
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConvId]);
 
   // 打开知识库抽屉并加载文档
   const openKbDrawer = () => {
     setKbDrawerOpen(true);
-    void loadKbDocs(kbLibType);
+    void loadKbDocs();
   };
 
-  const loadKbDocs = async (lib: LibType) => {
+  const loadKbDocs = async () => {
     setKbLoading(true);
     try {
-      const page = await listDocs({ libType: lib, current: 1, pageSize: 100 });
+      const page = await listDocs({ current: 1, pageSize: 100 });
       setKbDocs(page.records ?? []);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载知识库文档失败');
     } finally {
       setKbLoading(false);
     }
-  };
-
-  // 切换抽屉库类型
-  const changeKbLibType = (v: LibType) => {
-    setKbLibType(v);
-    void loadKbDocs(v);
   };
 
   // 更新当前会话选中的知识库文档
@@ -207,15 +228,39 @@ const ChatPage: React.FC = () => {
   // 组件卸载时中断未完成流
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // 流式回复：SSE 逐 token 增量填充到指定 assistant 消息
+  // 流式回复：SSE 逐 token 增量填充到指定 assistant 消息；引用由后端先下发
   const streamReply = useCallback(
-    (content: string, vendor: string, modelCode: string, conversationId: string, assistantId: string) => {
+    (
+      content: string,
+      vendor: string,
+      modelCode: string,
+      conversationId: string,
+      assistantId: string,
+      docIds?: number[]
+    ) => {
       abortRef.current?.abort();
       abortRef.current = streamChatMessage({
         message: content,
         vendor,
         modelCode,
         conversationId,
+        docIds,
+        onReferences: (refs) => {
+          const id = streamingMsgIdRef.current;
+          if (!id || refs.length === 0) return;
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === conversationId
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === id ? { ...m, references: refs } : m
+                    ),
+                  }
+                : c
+            )
+          );
+        },
         onDelta: (t) => {
           const id = streamingMsgIdRef.current;
           if (!id) return;
@@ -260,7 +305,7 @@ const ChatPage: React.FC = () => {
     []
   );
 
-  // 发送消息（若会话绑定了知识库文档，先 RAG 召回并作为引用卡片上屏）
+  // 发送消息（RAG 由后端统一检索并拼上下文，引用随 SSE references 事件下发）
   const handleSend = useCallback(async (text?: string) => {
     const content = (text ?? inputValue).trim();
     if (!content || !activeConvId || sending) return;
@@ -271,16 +316,7 @@ const ChatPage: React.FC = () => {
       return;
     }
 
-    // RAG 召回：会话选中知识库文档时，先取引用片段（失败不阻塞普通对话）
     const docIds = activeConv?.knowledgeDocIds ?? [];
-    let references: RetrieveChunk[] = [];
-    if (docIds.length > 0) {
-      try {
-        references = await retrieve({ docIds, query: content, topN: 5 });
-      } catch (e) {
-        message.warning('知识库召回失败，已按普通对话继续');
-      }
-    }
 
     setInputValue('');
     setSending(true);
@@ -291,7 +327,6 @@ const ChatPage: React.FC = () => {
       role: 'user',
       content,
       timestamp: now,
-      references: references.length > 0 ? references : undefined,
     };
     const aiId = `msg-${Date.now()}-ai`;
     streamingMsgIdRef.current = aiId;
@@ -314,7 +349,7 @@ const ChatPage: React.FC = () => {
       )
     );
 
-    streamReply(content, activeModel.vendor, activeModel.modelCode, activeConvId, aiId);
+    streamReply(content, activeModel.vendor, activeModel.modelCode, activeConvId, aiId, docIds);
   }, [inputValue, activeConvId, sending, activeModel, activeConv]);
 
   // 重新生成：找到该会话最后一条 user 消息内容，再流式重发
@@ -345,7 +380,14 @@ const ChatPage: React.FC = () => {
           : c
       )
     );
-    streamReply(userContent, activeConv.vendor, activeConv.modelCode, activeConv.id, aiId);
+    streamReply(
+      userContent,
+      activeConv.vendor,
+      activeConv.modelCode,
+      activeConv.id,
+      aiId,
+      activeConv.knowledgeDocIds ?? []
+    );
   }, [activeConv, sending]);
 
   // 键盘事件
@@ -830,6 +872,35 @@ const ChatPage: React.FC = () => {
                   WebkitBackdropFilter: glassEnabled ? 'blur(20px) saturate(180%)' : undefined,
                 }}
               >
+                {/* 已选知识库文档标识：回答前就能看到本次会引用哪些文档 */}
+                {activeConv && (activeConv.knowledgeDocIds?.length ?? 0) > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '0 2px 8px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Tag
+                      icon={<Icon icon={databaseIcon} width={13} style={{ paddingTop: 4 }} />}
+                      color="processing"
+                      closable
+                      onClick={openKbDrawer}
+                      onClose={(e) => {
+                        e.preventDefault();
+                        setSelectedDocIds([]);
+                      }}
+                      style={{ margin: 0, cursor: 'pointer' }}
+                    >
+                      已引用 {activeConv.knowledgeDocIds!.length} 篇知识库文档
+                    </Tag>
+                    <span style={{ fontSize: 12, color: colors.textTertiary }}>
+                      本次回答将优先依据这些文档
+                    </span>
+                  </div>
+                )}
                 <Input.TextArea
                   ref={inputRef}
                   value={inputValue}
@@ -966,15 +1037,6 @@ const ChatPage: React.FC = () => {
         open={kbDrawerOpen}
         onClose={() => setKbDrawerOpen(false)}
       >
-        <Segmented
-          block
-          value={kbLibType}
-          onChange={(v) => changeKbLibType(v as LibType)}
-          options={[
-            { label: '私有库', value: 'private' },
-            { label: '演示库', value: 'demo' },
-          ]}
-        />
         <div style={{ margin: '16px 0 8px', fontSize: 12, color: colors.textTertiary }}>
           已选 {activeConv?.knowledgeDocIds?.length ?? 0} 篇（仅已向量化文档可召回）
         </div>

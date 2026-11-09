@@ -12,10 +12,9 @@ import org.apache.ibatis.annotations.Param;
 public interface KnowledgeDocMapper extends BaseMapper<KnowledgeDoc> {
 
     /**
-     * 文档列表分页检索：libType 过滤 + 关键词全文检索 + tags 数组过滤 + 排序 + 分页。
+     * 文档列表分页检索：关键词全文检索 + tags 数组过滤 + 排序 + 分页。
      */
     IPage<KnowledgeDoc> selectDocList(Page<KnowledgeDoc> page,
-                                      @Param("libType") String libType,
                                       @Param("keyword") String keyword,
                                       @Param("tag") String tag,
                                       @Param("sortField") String sortField,

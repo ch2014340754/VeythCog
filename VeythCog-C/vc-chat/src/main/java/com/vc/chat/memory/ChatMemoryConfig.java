@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 对话记忆装配：把 JDBC 记忆仓库包装成 Spring AI 的 {@link ChatMemory}，
+ * 对话记忆装配：把 MyBatis 记忆仓库包装成 Spring AI 的 {@link ChatMemory}，
  * 供 vc-llm 路由层的 {@code MessageChatMemoryAdvisor} 使用。
  * <p>记忆窗口按最近 N 条截断，控制每次上文的 token 成本。</p>
  */
@@ -17,7 +17,7 @@ public class ChatMemoryConfig {
     private static final int MEMORY_WINDOW_SIZE = 20;
 
     @Bean
-    public ChatMemory chatMemory(JdbcChatMessageRepository repository) {
+    public ChatMemory chatMemory(MyBatisChatMessageRepository repository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
                 .maxMessages(MEMORY_WINDOW_SIZE)

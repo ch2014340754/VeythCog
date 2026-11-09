@@ -4,11 +4,10 @@
 
     <resultMap id="KnowledgeDocMap" type="com.vc.knowledge.entity.KnowledgeDoc">
         <id property="id" column="id"/>
-        <result property="libType" column="lib_type"/>
         <result property="title" column="title"/>
         <result property="summary" column="summary"/>
         <result property="tags" column="tags" typeHandler="com.vc.knowledge.handler.StringArrayTypeHandler"/>
-        <result property="blockData" column="block_data"/>
+        <result property="blockData" column="block_data" typeHandler="com.vc.knowledge.handler.JsonbTypeHandler"/>
         <result property="markdownText" column="markdown_text"/>
         <result property="isVectorized" column="is_vectorized"/>
         <result property="createdAt" column="created_at"/>
@@ -17,11 +16,10 @@
     </resultMap>
 
     <select id="selectDocList" resultMap="KnowledgeDocMap">
-        SELECT id, lib_type, title, summary, tags, block_data, markdown_text,
+        SELECT id, title, summary, tags, block_data, markdown_text,
                is_vectorized, created_at, updated_at, deleted
         FROM knowledge_doc
         WHERE deleted = false
-          AND lib_type = #{libType}
         <if test="keyword != null and keyword != ''">
           AND to_tsvector('simple',
                 title || ' ' || coalesce(summary, '') || ' ' || coalesce(markdown_text, ''))

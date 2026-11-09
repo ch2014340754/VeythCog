@@ -13,8 +13,6 @@ public class DocDetail implements Serializable {
 
     private Long id;
 
-    private String libType;
-
     private String title;
 
     private String summary;

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vc.chat.mapper.ChatMessageMapper">
+
+    <resultMap id="ConversationRowMap" type="com.vc.chat.dto.ChatConversationRow">
+        <result column="conversation_id" property="conversationId"/>
+        <result column="message_count" property="messageCount"/>
+        <result column="first_user" property="firstUser"/>
+        <result column="last_content" property="lastContent"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- 会话聚合：记忆主键为 userId:conversationId，故按前缀收敛，避免跨用户串数据 -->
+    <select id="selectConversations" resultMap="ConversationRowMap">
+        SELECT c.conversation_id,
+               c.message_count,
+               c.created_at,
+               c.updated_at,
+               (SELECT m.content
+                  FROM chat_message m
+                 WHERE m.conversation_id = c.conversation_id
+                   AND m.role = 'user'
+                 ORDER BY m.seq
+                 LIMIT 1) AS first_user,
+               (SELECT m.content
+                  FROM chat_message m
+                 WHERE m.conversation_id = c.conversation_id
+                 ORDER BY m.seq DESC
+                 LIMIT 1) AS last_content
+          FROM (SELECT conversation_id,
+                       count(*) AS message_count,
+                       min(created_at) AS created_at,
+                       max(created_at) AS updated_at
+                  FROM chat_message
+                 WHERE conversation_id LIKE #{prefix}
+                 GROUP BY conversation_id) c
+         ORDER BY c.updated_at DESC
+    </select>
+
+    <select id="selectMessages" resultType="com.vc.chat.dto.ChatMessageRow">
+        SELECT id, role, content, created_at
+          FROM chat_message
+         WHERE conversation_id = #{conversationId}
+         ORDER BY seq
+    </select>
+
+    <select id="selectConversationIds" resultType="java.lang.String">
+        SELECT DISTINCT conversation_id
+          FROM chat_message
+         ORDER BY conversation_id
+    </select>
+
+    <delete id="deleteByConversationId">
+        DELETE FROM chat_message
+         WHERE conversation_id = #{conversationId}
+    </delete>
+
+    <!-- 全量覆盖写：seq 由下标生成，保证回读顺序与写入顺序一致 -->
+    <insert id="insertBatch">
+        INSERT INTO chat_message (conversation_id, seq, role, content)
+        VALUES
+        <foreach collection="messages" item="m" index="seq" separator=",">
+            (#{conversationId}, #{seq}, #{m.role}, #{m.content})
+        </foreach>
+    </insert>
+</mapper>

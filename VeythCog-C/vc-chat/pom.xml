@@ -29,6 +29,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+        <!-- 数据访问：MyBatis-Plus（chat_message 记忆表的 SQL 收敛在 mapper XML） -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
         <!-- 数据库：PostgreSQL -->
         <dependency>
             <groupId>org.postgresql</groupId>

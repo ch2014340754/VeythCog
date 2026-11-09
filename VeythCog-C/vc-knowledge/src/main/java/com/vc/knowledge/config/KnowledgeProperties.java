@@ -29,7 +29,19 @@ public class KnowledgeProperties {
         /** 默认召回条数 */
         private int topN = 5;
         /** L2 距离阈值，超过该距离的片段被过滤（需按实际向量分布核查） */
-        private double distanceThreshold = 0.8;
+        private double distanceThreshold = 1.2;
+        /** 检索结果 rerank（用 llm.aux-model 指定的小模型重排） */
+        private Rerank rerank = new Rerank();
+    }
+
+    @Data
+    public static class Rerank {
+        /** 是否启用 rerank */
+        private boolean enabled = true;
+        /** 送入 rerank 的候选条数（最终仍只保留 topN） */
+        private int candidates = 10;
+        /** 每个候选片段送入提示词的最大字符数 */
+        private int maxChunkChars = 400;
     }
 
     @Data

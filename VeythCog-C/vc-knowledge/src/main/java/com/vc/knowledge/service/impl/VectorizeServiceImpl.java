@@ -13,14 +13,14 @@ import com.vc.knowledge.mapper.KnowledgeEmbeddingMapper;
 import com.vc.knowledge.service.KnowledgeEmbeddingService;
 import com.vc.knowledge.service.VectorizeService;
 import com.vc.knowledge.splitter.RecursiveCharacterTextSplitter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * 向量化 / RAG 召回实现（MyBatis-Plus + pgvector）。
@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class VectorizeServiceImpl implements VectorizeService {
+
+    private static final Logger log = LoggerFactory.getLogger(VectorizeServiceImpl.class);
 
     private static final int MAX_TOP_N = 50;
 
@@ -57,8 +59,6 @@ public class VectorizeServiceImpl implements VectorizeService {
     @Transactional
     public int vectorize(Long userId, Long docId) {
         KnowledgeDoc doc = requireDoc(docId);
-        checkPrivateAccess(userId, doc.getLibType());
-        checkDemoReadOnly(doc.getLibType());
 
         String md = doc.getMarkdownText();
         if (md == null || md.isBlank()) {
@@ -91,7 +91,7 @@ public class VectorizeServiceImpl implements VectorizeService {
         embeddingService.saveBatch(rows);
 
         doc.setIsVectorized(true);
-        doc.setUpdatedAt(LocalDateTime.now());
+        doc.setUpdatedAt(OffsetDateTime.now());
         docMapper.updateById(doc);
         return chunks.size();
     }
@@ -100,13 +100,11 @@ public class VectorizeServiceImpl implements VectorizeService {
     @Transactional
     public void unvectorize(Long userId, Long docId) {
         KnowledgeDoc doc = requireDoc(docId);
-        checkPrivateAccess(userId, doc.getLibType());
-        checkDemoReadOnly(doc.getLibType());
 
         embeddingService.remove(new LambdaQueryWrapper<KnowledgeEmbedding>()
                 .eq(KnowledgeEmbedding::getDocId, docId));
         doc.setIsVectorized(false);
-        doc.setUpdatedAt(LocalDateTime.now());
+        doc.setUpdatedAt(OffsetDateTime.now());
         docMapper.updateById(doc);
     }
 
@@ -116,13 +114,6 @@ public class VectorizeServiceImpl implements VectorizeService {
         if (docs.isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "文档不存在");
         }
-        // 强制同库，禁止跨库混合召回
-        Set<String> libTypes = docs.stream().map(KnowledgeDoc::getLibType).collect(Collectors.toSet());
-        if (libTypes.size() > 1) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不能跨库混合召回");
-        }
-        String libType = libTypes.iterator().next();
-        checkPrivateAccess(userId, libType);
 
         List<Long> validIds = docs.stream().map(KnowledgeDoc::getId).toList();
         int limit = Math.max(1, Math.min(topN <= 0 ? properties.getRetrieve().getTopN() : topN, MAX_TOP_N));
@@ -131,7 +122,22 @@ public class VectorizeServiceImpl implements VectorizeService {
         String modelId = embeddingProvider.modelId();
         double threshold = properties.getRetrieve().getDistanceThreshold();
 
-        return embeddingMapper.retrieveByDocIds(validIds, queryVector, modelId, threshold, limit);
+        List<RetrieveChunk> chunks =
+                embeddingMapper.retrieveByDocIds(validIds, queryVector, modelId, threshold, limit);
+        if (!chunks.isEmpty()) {
+            return chunks;
+        }
+
+        // 阈值无命中兜底：仍在选中 docIds 范围内取最近的 topN。
+        // Qwen embedding 已归一化，L2 距离范围 [0,2]，不同文档间普遍在 0.5~1.0，
+        // 阈值配得偏紧时会"一条都召不回"，用户表现为"答案不来自选中文档"。
+        List<RetrieveChunk> fallback =
+                embeddingMapper.retrieveByDocIds(validIds, queryVector, modelId, null, limit);
+        if (!fallback.isEmpty()) {
+            log.warn("RAG 阈值无命中，已回退 topN（未过滤距离）: 阈值={}, 回退条数={}, 最近距离={}",
+                    threshold, fallback.size(), fallback.get(0).getScore());
+        }
+        return fallback;
     }
 
     // ---------------- 私有辅助 ----------------
@@ -151,15 +157,4 @@ public class VectorizeServiceImpl implements VectorizeService {
         return docMapper.selectBatchIds(docIds);
     }
 
-    private void checkPrivateAccess(Long userId, String libType) {
-        if ("private".equals(libType) && userId == null) {
-            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "未登录");
-        }
-    }
-
-    private void checkDemoReadOnly(String libType) {
-        if ("demo".equals(libType)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "演示库文档禁止编辑");
-        }
-    }
 }

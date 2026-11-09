@@ -13,10 +13,6 @@ import java.util.List;
 @Data
 public class DocSaveRequest implements Serializable {
 
-    /** private / demo */
-    @NotBlank(message = "libType 不能为空")
-    private String libType;
-
     @NotBlank(message = "title 不能为空")
     private String title;
 

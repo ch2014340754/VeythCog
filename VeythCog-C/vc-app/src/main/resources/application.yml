@@ -25,6 +25,14 @@ spring:
           dimensions: 1024
           text-type: document
 llm:
+  # 辅助小模型：知识库摘要/标签生成 + RAG 检索 rerank，与用户对话模型解耦
+  aux-model:
+    vendor: dashscope
+    # 当前账号实测：qwen-turbo 返回 429（限流/未开通），qwen-plus 返回 403（无权限），
+    # 仅 deepseek-v4-pro-0813 可用，故先指向它；账号开通 qwen 系列后改回 qwen-turbo 即可。
+    model-code: deepseek-v4-pro-0813
+    temperature: 0.1
+    max-input-chars: 3000
   vendors:
     dashscope:
       # 阿里百炼 AK（与 spring.ai.dashscope.api-key 保持一致，后期统一迁 Nacos）
@@ -42,7 +50,6 @@ server:
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789}
   expire-hours: 24
-
 
 springdoc:
   swagger-ui:
@@ -65,7 +72,6 @@ knife4j:
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
   type-aliases-package: com.vc.knowledge.entity
-  type-handlers-package: com.vc.knowledge.handler
   configuration:
     map-underscore-to-camel-case: true
 
@@ -76,8 +82,15 @@ knowledge:
     overlap: 64
   retrieve:
     top-n: 5
-    # L2 距离阈值：超过该距离的片段被过滤；需按实际向量分布核查调整
-    distance-threshold: 0.8
+    # L2 距离阈值（仅作质量过滤，无命中时自动回退 topN）。
+    # qwen embedding 已归一化，L2 距离范围 [0, 2]；实测不同分片间 0.5~1.3。
+    # 原值 0.8 在真实数据上会过滤掉全部候选（最近邻也在 0.87 以上），故调整为 1.2。
+    distance-threshold: 1.2
+    # 向量召回后用小模型 rerank：候选多召回一些，再按相关性截取 topN
+    rerank:
+      enabled: true
+      candidates: 10
+      max-chunk-chars: 400
   embedding:
     # 必须与 spring.ai.dashscope.embedding.options.model 保持一致
     model-id: qwen3.7-text-embedding-flash

@@ -235,7 +235,7 @@ src/
 复制 `.env.development` 为 `.env.local` 并填值（`.env.local` 不提交）：
 
 ```bash
-VITE_API_BASE=http://localhost:8080/api   # 业务后端
+VITE_API_BASE=http://localhost:8123/api   # 业务后端（vc-app 监听 8123，context-path=/api）
 VITE_LLM_BASE=https://api.openai.com/v1   # 大模型 API
 VITE_LARK_APP_ID=                         # 飞书 App ID
 VITE_USE_MOCK=true                        # false 时走真实请求

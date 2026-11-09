@@ -9,11 +9,10 @@ import java.util.List;
 
 /**
  * 知识库文档服务：CRUD + 导入导出 + 关键词列表检索。
- * userId 为 null 表示匿名访客（仅可访问 demo 库只读）。
  */
 public interface KnowledgeService {
 
-    PageResult<DocListItem> list(Long userId, String libType, String keyword,
+    PageResult<DocListItem> list(Long userId, String keyword,
                                  List<String> tags, String sortField, String sortOrder,
                                  int current, int pageSize);
 
@@ -25,7 +24,13 @@ public interface KnowledgeService {
 
     void delete(Long userId, Long docId);
 
-    Long importMd(Long userId, String libType, String title, List<String> tags, String markdownText);
+    Long importMd(Long userId, String title, List<String> tags, String markdownText);
 
     String exportMd(Long userId, Long docId);
+
+    /**
+     * 仅更新元数据（摘要 / 标签），不影响正文与向量化状态。
+     * <p>{@code null} 表示"该字段不动"，用于"仅填充空值"场景。</p>
+     */
+    void updateMetadata(Long userId, Long docId, String summary, List<String> tags);
 }

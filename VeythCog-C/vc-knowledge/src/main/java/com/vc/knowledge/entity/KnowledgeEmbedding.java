@@ -8,7 +8,7 @@ import com.vc.knowledge.handler.VectorTypeHandler;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 /**
  * 文档向量分片表实体（MyBatis-Plus，对应 knowledge_embedding 表）。
@@ -34,5 +34,5 @@ public class KnowledgeEmbedding implements Serializable {
     /** 生成该向量的 embedding 模型标识，用于禁止不同模型向量混查 */
     private String embeddingModel;
 
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 }
