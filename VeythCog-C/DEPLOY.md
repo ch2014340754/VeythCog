@@ -165,16 +165,29 @@ services:
     脚本的脏工作区检查已改为 `git -c core.fileMode=false diff --quiet`，以后 chmod 不再误判。
     ✅ 长期根治（本地仓库，让仓库记录 100755）：`git update-index --chmod=+x VeythCog-C/deploy.sh` 后 commit+push，服务器 pull 下来自带可执行位，无需再 chmod。
 
-15. ❌ 坑15：镜像构建在 `[build 15/15] mvn install` 阶段失败，报
-    `Non-resolvable parent POM for com.vc:veythcog-c ... spring-boot-starter-parent:pom:3.5.8 (absent): Could not transfer ... from/to spring-milestones (https://repo.spring.io/milestone): repo.spring.io: Temporary failure in name resolution`
-    ✅ 原因：两件事叠加。(1) 根 pom 里声明了 `spring-milestones` 仓库，而 `maven-settings.xml` 只把 central 镜像到阿里云，`repo.spring.io` 仍是直连；国内服务器/容器里该域名解析经常失败，parent POM 解析一断，整条构建就中止。(2) 3.5.8 是 GA 版本，milestone 仓库里本来就没有这个制品（该 URL 返回 404），声明它纯属多余。
-    ✅ 解决：根 pom 删除 `spring-milestones` 仓库声明；`maven-settings.xml` 的 `mirrorOf` 改为 `external:*`，所有远程仓库统一走阿里云；Dockerfile 构建前清掉缓存里的 `*.lastUpdated` 并加 `-U`，避免上次失败留下的「缺失」标记让 Maven 跳过重试。
-    ✅ 服务器侧先自测仓库可达（不通就先修 DNS，别急着重建）：
+15. ❌ 坑15：镜像构建在 `[build N/N] mvn install` 阶段失败，报
+    `Non-resolvable parent POM for com.vc:veythcog-c ... spring-boot-starter-parent:pom:3.5.8 (absent): Could not transfer ... from/to aliyun-central (https://maven.aliyun.com/repository/central): maven.aliyun.com: Temporary failure in name resolution`
+    ✅ 这是**两层问题**，要分开修：
+
+    **(a) 仓库声明多余**：根 pom 曾声明 `spring-milestones`，而 `maven-settings.xml` 只镜像 central，`repo.spring.io` 走直连。3.5.8 是 GA 版本，milestone 仓库里本来就没有（该 URL 返回 404），这个声明纯属多余。已删除该仓库，`mirrorOf` 改为 `external:*`，所有远程仓库统一走阿里云。
+
+    **(b) 真正的拦路虎：构建容器 DNS 不可用**。改完仓库后报错变成 `maven.aliyun.com: Temporary failure in name resolution` —— 说明问题不在仓库配置，而是 **BuildKit 的 RUN 容器解析不了任何域名**。宿主机能 `docker pull` 不代表构建容器能解析：`docker pull` 由 daemon 自己解析，而 Dockerfile 的 RUN 容器是复制宿主的 `/etc/resolv.conf` 进去的，宿主若跑 systemd-resolved / 本机 dnsmasq，里面就是 `nameserver 127.0.0.53` / `127.0.0.1`，在容器网络里根本不可达，于是全部域名解析失败。
+    ✅ 解决（按代价从小到大，任选其一即可）：
     ```bash
-    docker run --rm maven:3.9-eclipse-temurin-21 sh -c "getent hosts maven.aliyun.com"   # 有输出=容器 DNS 正常
-    curl -sI https://maven.aliyun.com/repository/central/org/springframework/boot/spring-boot-starter-parent/3.5.8/spring-boot-starter-parent-3.5.8.pom | head -1
+    # 1) 先确认根因（nameserver 是 127.x 就是它）
+    cat /etc/resolv.conf
+    docker run --rm --network=host maven:3.9-eclipse-temurin-21 sh -c 'getent hosts maven.aliyun.com'
+
+    # 2) 首选：构建时共享宿主网络（deploy.sh 已默认加 --network=host，无需改配置、不动线上容器）
+    docker build --network=host -t veyth-cog-backend:test .
+
+    # 3) 根治：给 Docker 显式指定 DNS（会重启 docker，现有容器需重新 up）
+    cat /etc/docker/daemon.json          # 已有内容的话合并进去，别覆盖 registry-mirrors
+    #   { "dns": ["223.5.5.5", "119.29.29.29"] }
+    systemctl restart docker
+    cd /opt && docker compose up -d      # 把被重启中断的容器拉起来
     ```
-    若 `getent` 无输出（容器内 DNS 全挂），在 `/etc/docker/daemon.json` 加 `{"dns":["223.5.5.5","119.29.29.29"]}`，再 `systemctl restart docker` 后重试。
+    关闭 host 网络构建：`BUILD_NETWORK= bash deploy.sh`（显式传空值）。
 
 16. ❌ 坑16：Dockerfile 构建链里已有 `mvn -f vc-nav/pom.xml`，但 COPY 列表漏了 vc-nav 的 pom 与源码（`/workspace/vc-nav/pom.xml` 不存在）
     ✅ 解决：补齐 `COPY vc-nav/pom.xml vc-nav/` 与 `COPY vc-nav vc-nav`。**新增模块纳入生产构建时，COPY pom / COPY 源码 / mvn -f 三处必须同步**，否则网络修好后仍会在这里挂。
@@ -197,7 +210,8 @@ cd /opt/veyth_cog/veyth-cog/VeythCog-C && git pull
 ### 2. 服务器构建镜像
 ```bash
 cd /opt/veyth_cog/veyth-cog/VeythCog-C
-docker build -t veyth-cog-backend:v1 .
+docker build --network=host -t veyth-cog-backend:v1 .
+# --network=host：构建容器共享宿主网络栈，绕开「容器内 DNS 解析失败」（详见坑15）
 # 构建上下文=后端根目录；多阶段构建，需联网拉 maven:3.9-eclipse-temurin-21 / eclipse-temurin:21-jre + Maven 依赖
 # 首次约 5~15 分钟；Dockerfile 已配阿里云 Maven 镜像 + BuildKit 依赖缓存（--mount=type=cache,target=/root/.m2），
 # 之后改源码重建不再重复下载依赖（需 Docker 23+ / BuildKit，旧版加 DOCKER_BUILDKIT=1）
@@ -396,7 +410,7 @@ deploy rollback v20261106-1430   # 回滚到指定 tag
 流程（任一步失败立即中止）：
 1. 环境检查：docker / compose 插件 / 仓库 / Dockerfile / docker-compose.yml；
 2. `git pull --ff-only`：**有未提交改动会先中止**（不会覆盖手改文件），打印前后 commit；
-3. `DOCKER_BUILDKIT=1 docker build -t veyth-cog-backend:<tag> .`（沿用 BuildKit 依赖缓存）；
+3. `DOCKER_BUILDKIT=1 docker build --network=host -t veyth-cog-backend:<tag> .`（沿用 BuildKit 依赖缓存；host 网络用于绕开容器 DNS，见坑15，可用 `BUILD_NETWORK= deploy` 关闭）；
 4. 写 `/opt/.env` 的 `BACKEND_TAG=<tag>` → `docker compose config` 校验变量生效 → `docker compose up -d --no-deps backend`；
 5. 轮询 `http://127.0.0.1:8123/api/health` 直到 200，失败自动打印 `docker logs --tail=80 backend`。
 
@@ -420,7 +434,7 @@ deploy rollback v20261106-1430    # 自动改 .env + 重建 + 健康检查
 ### 8.5 手动命令（无脚本时等价操作）
 ```bash
 cd /opt/veyth-cog && git pull
-cd /opt/veyth-cog/VeythCog-C && docker build -t "veyth-cog-backend:v$(date +%Y%m%d-%H%M)" .
+cd /opt/veyth-cog/VeythCog-C && docker build --network=host -t "veyth-cog-backend:v$(date +%Y%m%d-%H%M)" .
 sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=<刚构建的tag>/" /opt/.env
 cd /opt && docker compose up -d --no-deps backend
 ```

@@ -33,6 +33,8 @@ ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"                      # docker compose 
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8123/api/health}"
 HEALTH_TRIES="${HEALTH_TRIES:-10}"
 KEEP_IMAGES="${KEEP_IMAGES:-3}"                                # 发版后保留最近 N 个 tag（含当前版）
+BUILD_NETWORK="${BUILD_NETWORK-host}"                          # 构建容器共享宿主网络：容器自身 DNS 不通时靠它
+#                              ↑ 注意用 `-` 而非 `:-`：显式传 BUILD_NETWORK=（空）可关闭 --network
 # ------------------------------
 
 log()  { printf '\n\033[1;36m[%s] %s\033[0m\n' "$(date '+%H:%M:%S')" "$*"; }
@@ -160,7 +162,20 @@ cmd_release() {
   if [ "$before" = "$after" ]; then warn "已是最新（$before），按当前代码构建"; else ok "代码更新 $before -> $after"; fi
 
   log "2/5 构建镜像 ${IMAGE}:${tag}"
-  ( cd "$BACKEND_DIR" && DOCKER_BUILDKIT=1 docker build -t "${IMAGE}:${tag}" . ) || die "镜像构建失败"
+  local net_flag=""
+  if [ -n "${BUILD_NETWORK}" ]; then net_flag="--network=${BUILD_NETWORK}"; fi
+  if [ -n "$net_flag" ]; then warn "构建网络=${BUILD_NETWORK}（容器内 DNS 不通时用宿主网络）"; fi
+
+  # 前置自检：仓库域名解析不了时 mvn 必挂，先把真实原因摆出来，别让它 20 秒后才暴露
+  if ! docker run --rm $net_flag maven:3.9-eclipse-temurin-21 \
+        sh -c 'getent hosts maven.aliyun.com' >/dev/null 2>&1; then
+    warn "自检：构建容器解析不了 maven.aliyun.com（容器 DNS 不可用，构建大概率失败）"
+    warn "  排查：cat /etc/resolv.conf —— nameserver 若是 127.x（systemd-resolved / 本机 dnsmasq），就是根因"
+    warn "  根治：/etc/docker/daemon.json 增加 \"dns\": [\"223.5.5.5\", \"119.29.29.29\"]，再 systemctl restart docker"
+    warn "  详见 DEPLOY.md 坑15（重启 docker 会中断现有容器，之后需 docker compose up -d 拉起）"
+  fi
+
+  ( cd "$BACKEND_DIR" && DOCKER_BUILDKIT=1 docker build $net_flag -t "${IMAGE}:${tag}" . ) || die "镜像构建失败"
   ok "镜像构建完成：${IMAGE}:${tag}"
 
   log "3/5 切换 tag 并重建 ${SERVICE}"
