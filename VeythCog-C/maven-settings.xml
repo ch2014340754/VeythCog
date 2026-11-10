@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 国内构建 Maven 依赖加速：仅把 Maven Central 镜像到阿里云，spring-milestones 仓库保持直连（防止里程碑制品缺失） -->
+<!-- 容器内构建专用 Maven settings：所有远程仓库统一经阿里云镜像取，禁止直连任何境外仓库。
+     mirrorOf 用 external:*：本地仓库与 file:// 仓库不受影响，其余（central 及 pom 中可能声明的任何仓库）
+     全部重定向到阿里云 Central。
+     历史坑：镜像里只 mirror central 时，pom 声明的 spring-milestones（repo.spring.io）会直连，
+     国内服务器/容器 DNS 解析失败即中断整条构建（Temporary failure in name resolution）。 -->
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
@@ -8,7 +12,7 @@
       <id>aliyun-central</id>
       <name>Aliyun Central Mirror</name>
       <url>https://maven.aliyun.com/repository/central</url>
-      <mirrorOf>central</mirrorOf>
+      <mirrorOf>external:*</mirrorOf>
     </mirror>
   </mirrors>
 </settings>

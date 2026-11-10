@@ -5,8 +5,9 @@
 # 技术栈：Java 21 + Spring Boot 3.5 + Maven 多模块（聚合根 pom）。
 #
 # 构建上下文须为「项目根目录」（fly.toml 与本文件同目录，从根目录部署），
-# 至少包含：pom.xml + vc-common / vc-llm / vc-chat / vc-knowledge / vc-app。
+# 至少包含：pom.xml + vc-common / vc-llm / vc-chat / vc-knowledge / vc-nav / vc-app。
 #   vc-learn（学习沙箱）无需进入生产构建上下文，本 Dockerfile 不引用它。
+#   注意：vc-nav 是 vc-app 的编译依赖，pom 与源码都必须进上下文，漏一个即构建失败。
 #
 # 构建要点：
 #   根 pom.xml 的 <modules> 引用了 vc-learn；若用聚合 reactor（-pl vc-app -am），
@@ -19,7 +20,7 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
-# 国内 Maven 依赖加速：用阿里云镜像覆盖官方 global settings（只镜像 central，milestone 仓库仍直连）
+# 国内 Maven 依赖加速：统一阿里云镜像；镜像内不允许任何直连境外仓库（见 maven-settings.xml）
 COPY maven-settings.xml /usr/share/maven/conf/settings.xml
 
 # 1) 复制根 pom 与生产模块 pom（不含 vc-learn）
@@ -28,6 +29,7 @@ COPY vc-common/pom.xml      vc-common/
 COPY vc-llm/pom.xml         vc-llm/
 COPY vc-chat/pom.xml        vc-chat/
 COPY vc-knowledge/pom.xml   vc-knowledge/
+COPY vc-nav/pom.xml         vc-nav/
 COPY vc-app/pom.xml         vc-app/
 
 # 2) 复制生产模块源码（vc-learn 不需要）
@@ -35,23 +37,29 @@ COPY vc-common      vc-common
 COPY vc-llm         vc-llm
 COPY vc-chat        vc-chat
 COPY vc-knowledge   vc-knowledge
+COPY vc-nav         vc-nav
 COPY vc-app         vc-app
 
 # 3) 按依赖拓扑逐个构建并安装到本地仓库，最后打包 vc-app：
-#    vc-common → vc-llm → vc-knowledge → vc-chat → vc-app
+#    vc-common → vc-llm → vc-knowledge → vc-chat → vc-nav → vc-app
 #    （逐个 -f 构建，避免聚合 reactor 对 vc-learn 的依赖）
 #    先 install -N 根聚合 pom：子模块 pom 的 parent 是根 pom，解析依赖时
 #    必须在本地仓库找到它，否则报 "Could not find artifact com.vc:veythcog-c:pom"
 #    --mount=type=cache,target=/root/.m2：把 Maven 依赖仓库做成宿主级持久缓存，
 #    源码改动触发本层重建时不再重复下载依赖（需 BuildKit，现代 Docker/Podman 默认支持）
+#    先清掉缓存里的 *.lastUpdated：上一次网络失败留下的「缺失」标记会让 Maven 跳过重试、
+#    继续报 absent，即使域名已经恢复
+#    -U 强制刷新缓存未命中的制品；-ntp 关掉下载进度条，日志干净但真实报错仍可见
+#    （刻意不用 -q：它会吞掉仓库连接失败的真实原因，只留一句 parent POM 解析失败）
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -q -B -f pom.xml install -N -DskipTests \
- && mvn -q -B -f vc-common/pom.xml    install -DskipTests \
- && mvn -q -B -f vc-llm/pom.xml       install -DskipTests \
- && mvn -q -B -f vc-knowledge/pom.xml install -DskipTests \
- && mvn -q -B -f vc-chat/pom.xml      install -DskipTests \
- && mvn -q -B -f vc-nav/pom.xml       install -DskipTests \
- && mvn -q -B -f vc-app/pom.xml       package -DskipTests
+    find /root/.m2 -name '*.lastUpdated' -delete 2>/dev/null; \
+    mvn -B -ntp -U -f pom.xml install -N -DskipTests \
+ && mvn -B -ntp -U -f vc-common/pom.xml    install -DskipTests \
+ && mvn -B -ntp -U -f vc-llm/pom.xml       install -DskipTests \
+ && mvn -B -ntp -U -f vc-knowledge/pom.xml install -DskipTests \
+ && mvn -B -ntp -U -f vc-chat/pom.xml      install -DskipTests \
+ && mvn -B -ntp -U -f vc-nav/pom.xml       install -DskipTests \
+ && mvn -B -ntp -U -f vc-app/pom.xml       package -DskipTests
 
 # ---------- 阶段 2：精简运行镜像 ----------
 FROM eclipse-temurin:21-jre

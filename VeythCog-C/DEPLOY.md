@@ -165,6 +165,20 @@ services:
     脚本的脏工作区检查已改为 `git -c core.fileMode=false diff --quiet`，以后 chmod 不再误判。
     ✅ 长期根治（本地仓库，让仓库记录 100755）：`git update-index --chmod=+x VeythCog-C/deploy.sh` 后 commit+push，服务器 pull 下来自带可执行位，无需再 chmod。
 
+15. ❌ 坑15：镜像构建在 `[build 15/15] mvn install` 阶段失败，报
+    `Non-resolvable parent POM for com.vc:veythcog-c ... spring-boot-starter-parent:pom:3.5.8 (absent): Could not transfer ... from/to spring-milestones (https://repo.spring.io/milestone): repo.spring.io: Temporary failure in name resolution`
+    ✅ 原因：两件事叠加。(1) 根 pom 里声明了 `spring-milestones` 仓库，而 `maven-settings.xml` 只把 central 镜像到阿里云，`repo.spring.io` 仍是直连；国内服务器/容器里该域名解析经常失败，parent POM 解析一断，整条构建就中止。(2) 3.5.8 是 GA 版本，milestone 仓库里本来就没有这个制品（该 URL 返回 404），声明它纯属多余。
+    ✅ 解决：根 pom 删除 `spring-milestones` 仓库声明；`maven-settings.xml` 的 `mirrorOf` 改为 `external:*`，所有远程仓库统一走阿里云；Dockerfile 构建前清掉缓存里的 `*.lastUpdated` 并加 `-U`，避免上次失败留下的「缺失」标记让 Maven 跳过重试。
+    ✅ 服务器侧先自测仓库可达（不通就先修 DNS，别急着重建）：
+    ```bash
+    docker run --rm maven:3.9-eclipse-temurin-21 sh -c "getent hosts maven.aliyun.com"   # 有输出=容器 DNS 正常
+    curl -sI https://maven.aliyun.com/repository/central/org/springframework/boot/spring-boot-starter-parent/3.5.8/spring-boot-starter-parent-3.5.8.pom | head -1
+    ```
+    若 `getent` 无输出（容器内 DNS 全挂），在 `/etc/docker/daemon.json` 加 `{"dns":["223.5.5.5","119.29.29.29"]}`，再 `systemctl restart docker` 后重试。
+
+16. ❌ 坑16：Dockerfile 构建链里已有 `mvn -f vc-nav/pom.xml`，但 COPY 列表漏了 vc-nav 的 pom 与源码（`/workspace/vc-nav/pom.xml` 不存在）
+    ✅ 解决：补齐 `COPY vc-nav/pom.xml vc-nav/` 与 `COPY vc-nav vc-nav`。**新增模块纳入生产构建时，COPY pom / COPY 源码 / mvn -f 三处必须同步**，否则网络修好后仍会在这里挂。
+
 ## 五、后端部署流程（首选：服务器 git 拉源码 → 服务器构建 → compose 启动）
 
 > 源码已通过 git 克隆到服务器 `/opt/veyth_cog/veyth-cog/`，后端根目录为 `/opt/veyth_cog/veyth-cog/VeythCog-C`（含 pom.xml / Dockerfile / vc-* 模块）。直接在服务器构建，省去本地打包+传大文件。

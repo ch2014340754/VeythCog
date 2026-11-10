@@ -140,16 +140,14 @@
         <module>vc-learn</module>
     </modules>
 
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
+    <!-- 不在 pom 里声明任何额外远程仓库：
+         本项目所有依赖（Spring Boot 3.5.8、Spring AI 1.1.2、Spring AI Alibaba 1.1.2.0、
+         knife4j-next 5.8.1、mybatis-plus 3.5.7、springdoc 2.8.9）均为 GA 版本，全部在 Maven Central 上，
+         经 maven-settings.xml 的阿里云镜像即可获取。
+         历史坑：此处曾声明 spring-milestones（https://repo.spring.io/milestone），
+         国内服务器/容器内该域名解析经常失败（Temporary failure in name resolution），
+         导致 parent POM 解析被中断、整条镜像构建失败；且 GA 版本在 milestone 仓库本就是 404。
+         如将来确需里程碑/快照制品，请在 maven-settings.xml 里另行配置镜像，不要直接改这里。 -->
 
     <build>
         <plugins>
