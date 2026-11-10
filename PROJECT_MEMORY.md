@@ -71,6 +71,18 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 **vc-common**（`com.vc.common`）：`BaseResponse`、`ResultUtils`、`PageRequest`、异常体系（`BusinessException` / `ErrorCode` / `ThrowUtils`）。
 
+**vc-common · 对象存储（`com.vc.common.s3`，2026-11-10 新增）** —— RustFS（S3 协议，兼容 MinIO）基础设施封装：
+- `S3Properties`：绑定 `storage.s3.*`（endpoint / access-key / secret-key / region / path-style / 预签名有效期 / 超时），密钥不外露到 `toString`。
+- `S3StorageConfiguration`：只注册配置、`S3ClientProvider`、`S3StorageClient`、`S3PresignService`；`storage.s3.enabled=false` 时整体不装配。**无 Controller / 无鉴权 / 无业务库操作**。
+- `S3ClientProvider`：懒加载 `S3Client` + `S3Presigner`（`UrlConnectionHttpClient`、强制 pathStyle）；配置缺失不阻断应用启动，首次调用才抛 `CONFIGURATION` 异常。
+- `S3StorageClient`：`upload`（byte[] / InputStream / Path）、`delete`（幂等）、`exists`（HEAD 404 视为不存在）。
+- `S3PresignService`：`presignPutUrl` / `presignGetUrl`（可带下载文件名、上限 7 天）、`publicUrl`（仅匿名可读桶）。
+- `S3Bucket` 枚举统一桶名：`public-icons`（公开只读）、`wallpapers`（私有，仅预签名）。
+- `S3ObjectKeyUtils`：`{prefix}/{yyyy}/{MM}/{dd}/{uuid}.{ext}` 生成 key + key 安全校验（拒绝 `..`、首尾 `/`、控制字符）。
+- `S3FileValidator`：后缀白名单 / MIME 白名单 / 文件头魔数与扩展名一致性校验，白名单由业务传入。
+- 异常族：`StorageException`（`CONFIGURATION` / `NETWORK` / `SERVICE` / `VALIDATION`）及 `StorageNetworkException`、`StorageServiceException`、`StorageValidationException`。
+- 示例配置：`vc-common/src/main/resources/application-s3-example.yml`；真实配置在 `vc-app` 的 `application.yml`（环境变量 `RUSTFS_*`）。
+
 **vc-llm**（`com.vc.llm`）—— LLM 调度网关（面试深水区①）：
 - `enums/LlmVendor`：**供应商固定枚举**（`dashscope` 阿里百炼 / `deepseek`），不建表。
 - `entity/LlmModel`（模型目录）、`entity/UserLlmBinding`（用户-模型绑定中间表）。

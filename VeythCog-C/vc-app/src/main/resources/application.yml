@@ -46,6 +46,21 @@ server:
   servlet:
     context-path: /api
 
+# 对象存储（RustFS，S3 协议；兼容 MinIO）。vc-common 提供基础设施封装，桶定义见 S3Bucket 枚举。
+# 密钥只走环境变量 / application-local.yml，禁止写进本文件。
+# 未配置时应用仍可正常启动，首次调用上传或预签名才抛出配置异常。
+storage:
+  s3:
+    enabled: true
+    endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
+    access-key: ${RUSTFS_ACCESS_KEY:}
+    secret-key: ${RUSTFS_SECRET_KEY:}
+    region: ${RUSTFS_REGION:us-east-1}
+    path-style-access: true
+    presign-expiry: 15m
+    connect-timeout: 5s
+    socket-timeout: 30s
+
 # JWT 配置（本地默认值；生产由环境变量覆盖）
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789}
@@ -74,6 +89,7 @@ mybatis-plus:
   type-aliases-package: com.vc.knowledge.entity
   configuration:
     map-underscore-to-camel-case: true
+
 
 # 知识库业务配置（切片 / 检索 / embedding）
 knowledge:

@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# 对象存储（S3 协议）示例配置 —— 复制到实际运行模块的 application.yml 即可
+# 目标存储：RustFS（S3 协议完全兼容 MinIO），后续切 MinIO / AWS S3 只改本段配置
+#
+# 约定：
+#   1. endpoint / access-key / secret-key 一律走环境变量或 application-local.yml，
+#      禁止把密钥写进提交到仓库的文件；
+#   2. 自建 S3（RustFS / MinIO）必须 path-style（http://host:port/bucket/key）；
+#   3. 桶名由 com.vc.common.s3.S3Bucket 枚举统一维护，配置文件里不出现桶名。
+# ---------------------------------------------------------------------------
+storage:
+  s3:
+    # 关闭后本模块整体不装配（vc-common 的 s3 包不注册任何 Bean）
+    enabled: true
+    # 服务地址，必须带协议；自建存储用内网地址，例如 http://rustfs:9000
+    endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
+    access-key: ${RUSTFS_ACCESS_KEY:}
+    secret-key: ${RUSTFS_SECRET_KEY:}
+    # SigV4 签名区域，RustFS / MinIO 任意合法值均可
+    region: ${RUSTFS_REGION:us-east-1}
+    # 自建 S3 必须 true；AWS S3 / 阿里 OSS 等虚拟主机风格可改 false
+    path-style-access: true
+    # 预签名 URL 默认有效期（S3 SigV4 上限 7 天）
+    presign-expiry: 15m
+    connect-timeout: 5s
+    socket-timeout: 30s

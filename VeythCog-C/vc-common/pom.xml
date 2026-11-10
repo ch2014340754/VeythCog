@@ -11,9 +11,24 @@
 
     <artifactId>vc-common</artifactId>
     <name>vc-common</name>
-    <description>公共基础库：通用响应 / 异常体系 / 工具（纯 POJO，不依赖任何 Spring Starter）</description>
+    <description>公共基础库：通用响应 / 异常体系 / 工具 / 对象存储（S3 协议）基础设施封装</description>
 
     <!-- 纯公共库：不引入 web / AI / 持久化，避免污染 -->
     <dependencies>
+        <!-- 仅依赖 Spring 核心注解与配置绑定能力（非 starter），用于存储配置类 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <!-- AWS SDK v2：S3 客户端 / 预签名器 -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+        <!-- 纯 JDK 的 HTTP 实现，避免隐式依赖 Netty / Apache HttpClient -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+        </dependency>
     </dependencies>
 </project>
