@@ -53,6 +53,10 @@ storage:
   s3:
     enabled: true
     endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
+    # 预签名 URL 用的公网地址（浏览器可解析的域名），与上面的内网 endpoint 分开：
+    #   容器内网 http://rustfs:9000 签出来的地址，公网浏览器解析不了（拿不到壁纸/附件）
+    #   留空则沿用 endpoint，仅适合纯内网或本地开发
+    public-endpoint: ${RUSTFS_PUBLIC_ENDPOINT:}
     access-key: ${RUSTFS_ACCESS_KEY:}
     secret-key: ${RUSTFS_SECRET_KEY:}
     region: ${RUSTFS_REGION:us-east-1}

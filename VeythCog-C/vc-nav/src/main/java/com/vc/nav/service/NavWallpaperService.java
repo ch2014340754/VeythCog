@@ -16,18 +16,24 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 壁纸服务：从 S3 wallpapers 桶随机取一张 / 列出清单 / 锁定。
- * <p>wallpapers 桶为私有桶，所有访问都走预签名 URL（7 天有效期）。</p>
+ * <p>wallpapers 桶为私有桶，所有访问都走预签名 URL。</p>
+ * <p>有效期取 7 天（SigV4 上限）：前端会把 URL 直接塞给 img，若用默认 15 分钟，
+ * 页面开久一点再刷新就会 403，壁纸"自己消失"。</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class NavWallpaperService {
+
+    /** 壁纸预签名 URL 有效期：7 天（S3 SigV4 上限），避免长时间挂着的页面刷新即 403 */
+    private static final Duration WALLPAPER_URL_EXPIRY = Duration.ofDays(7);
 
     private final S3ClientProvider clientProvider;
     private final S3PresignService presignService;
@@ -45,7 +51,7 @@ public class NavWallpaperService {
         List<String> keys = listWallpaperKeys();
         List<WallpaperItem> result = new ArrayList<>(keys.size());
         for (String key : keys) {
-            String url = presignService.presignGetUrl(S3Bucket.WALLPAPERS, key);
+            String url = presignService.presignGetUrl(S3Bucket.WALLPAPERS, key, WALLPAPER_URL_EXPIRY);
             result.add(new WallpaperItem(key, url));
         }
         return result;
@@ -61,7 +67,7 @@ public class NavWallpaperService {
             return null;
         }
         String key = keys.get(ThreadLocalRandom.current().nextInt(keys.size()));
-        String url = presignService.presignGetUrl(S3Bucket.WALLPAPERS, key);
+        String url = presignService.presignGetUrl(S3Bucket.WALLPAPERS, key, WALLPAPER_URL_EXPIRY);
         return new WallpaperItem(key, url);
     }
 

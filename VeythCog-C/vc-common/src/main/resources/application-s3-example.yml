@@ -14,6 +14,9 @@ storage:
     enabled: true
     # 服务地址，必须带协议；自建存储用内网地址，例如 http://rustfs:9000
     endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
+    # 预签名 URL 用的公网地址（浏览器能解析的域名）。不填 = 用 endpoint，
+    # 只能本地/内网用；线上填 https://api.veythcog.top 这类地址，由 Nginx 把桶路径反代到 RustFS。
+    public-endpoint: ${RUSTFS_PUBLIC_ENDPOINT:}
     access-key: ${RUSTFS_ACCESS_KEY:}
     secret-key: ${RUSTFS_SECRET_KEY:}
     # SigV4 签名区域，RustFS / MinIO 任意合法值均可

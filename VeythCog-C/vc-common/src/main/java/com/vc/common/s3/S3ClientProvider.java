@@ -120,13 +120,22 @@ public class S3ClientProvider implements AutoCloseable {
 
     private S3Presigner buildPresigner() {
         S3Properties props = validatedProperties();
+        // 预签名 URL 要给浏览器/第三方用，主机名必须是它们能解析的地址；
+        // 未配置 publicEndpoint 时退回 endpoint（纯内网或本地开发场景）。
+        String signEndpoint = isBlank(props.getPublicEndpoint())
+                ? props.getEndpoint().trim()
+                : props.getPublicEndpoint().trim();
         try {
-            return S3Presigner.builder()
-                    .endpointOverride(URI.create(props.getEndpoint()))
+            S3Presigner presigner = S3Presigner.builder()
+                    .endpointOverride(URI.create(signEndpoint))
                     .region(Region.of(props.getRegion()))
                     .credentialsProvider(credentialsProvider(props))
                     .serviceConfiguration(s3Configuration(props))
                     .build();
+            if (!isBlank(props.getPublicEndpoint())) {
+                log.info("预签名地址使用公网 endpoint：{}（客户端直连仍走 {}）", signEndpoint, props.getEndpoint());
+            }
+            return presigner;
         } catch (RuntimeException e) {
             throw new StorageException(StorageException.StorageErrorType.CONFIGURATION,
                     "对象存储预签名器构建失败：" + e.getMessage(), e);
@@ -181,6 +190,18 @@ public class S3ClientProvider implements AutoCloseable {
         } catch (IllegalArgumentException e) {
             throw new StorageException(StorageException.StorageErrorType.CONFIGURATION,
                     "storage.s3.endpoint 不是合法地址（需形如 http://host:9000）：" + properties.getEndpoint(), e);
+        }
+        if (!isBlank(properties.getPublicEndpoint())) {
+            try {
+                URI uri = URI.create(properties.getPublicEndpoint().trim());
+                if (uri.getScheme() == null || uri.getHost() == null) {
+                    throw new IllegalArgumentException("缺少协议或主机名");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new StorageException(StorageException.StorageErrorType.CONFIGURATION,
+                        "storage.s3.public-endpoint 不是合法地址（需形如 https://api.example.com）："
+                                + properties.getPublicEndpoint(), e);
+            }
         }
         if (isBlank(properties.getRegion())) {
             properties.setRegion("us-east-1");

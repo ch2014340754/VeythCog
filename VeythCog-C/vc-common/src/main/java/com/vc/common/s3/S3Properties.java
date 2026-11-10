@@ -37,6 +37,19 @@ public class S3Properties {
     /** 服务地址，必须带协议，例如 http://rustfs:9000（自建 S3 一律走 pathStyle，不要填 CDN 域名） */
     private String endpoint;
 
+    /**
+     * 对外可访问的服务地址，只用于<b>生成</b>预签名 URL 与公开直链，不用于后端发起请求。
+     *
+     * <p>为什么需要它：{@code endpoint} 是容器内网地址（如 {@code http://rustfs:9000}），
+     * 用它签出来的 URL 主机名是 {@code rustfs}，公网浏览器根本解析不了，图片/附件必然加载失败。
+     * SigV4 签名把 Host 算进了 canonical request，所以不能「签内网地址、让浏览器换成公网域名访问」——
+     * 必须直接用公网地址签。</p>
+     *
+     * <p>示例：{@code https://api.veythcog.top}（Nginx 把桶名路径原样反代到 RustFS），
+     * 或独立子域名 {@code https://s3.veythcog.top}。留空则沿用 {@code endpoint}（仅适合纯内网/本地）。</p>
+     */
+    private String publicEndpoint;
+
     /** 访问密钥 ID（禁止硬编码，走配置或环境变量） */
     @ToString.Exclude
     private String accessKey;

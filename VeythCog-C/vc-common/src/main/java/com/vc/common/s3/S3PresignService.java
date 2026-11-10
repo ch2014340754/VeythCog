@@ -151,7 +151,11 @@ public class S3PresignService {
             throw new StorageValidationException(
                     "桶 " + targetBucket.getBucketName() + " 为私有桶，不提供公开直链，请使用下载预签名 URL");
         }
-        String endpoint = properties.getEndpoint();
+        // 公开直链同样要给浏览器用，优先取公网 endpoint（内网 endpoint 外部解析不了）
+        String publicEndpoint = properties.getPublicEndpoint();
+        String endpoint = publicEndpoint != null && !publicEndpoint.trim().isEmpty()
+                ? publicEndpoint
+                : properties.getEndpoint();
         if (endpoint == null || endpoint.trim().isEmpty()) {
             throw new StorageException(StorageException.StorageErrorType.CONFIGURATION,
                     "生成公开直链需要配置 storage.s3.endpoint");

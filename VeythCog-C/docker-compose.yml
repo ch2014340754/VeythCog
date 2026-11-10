@@ -73,6 +73,8 @@ services:
       # 外置配置目录（数据卷挂载到宿主机 ./backend-config，改配置免重建镜像，见第六章）
       SPRING_CONFIG_ADDITIONAL_LOCATION: file:/app/config/
       RUSTFS_ENDPOINT: http://rustfs:9000
+      # 预签名 URL 要给浏览器用，必须是公网可解析地址；Nginx 需把 /<桶名>/ 反代到 127.0.0.1:9000
+      RUSTFS_PUBLIC_ENDPOINT: ${RUSTFS_PUBLIC_ENDPOINT:-https://api.veythcog.top}
       RUSTFS_ACCESS_KEY: cKLihUFiu5Ruo6ObWpv1
       RUSTFS_SECRET_KEY: cKLihUFiu5Ruo6ObWpv1.
       RUSTFS_REGION: us-east-1

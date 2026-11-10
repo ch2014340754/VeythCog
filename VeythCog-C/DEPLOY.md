@@ -192,6 +192,68 @@ services:
 16. ❌ 坑16：Dockerfile 构建链里已有 `mvn -f vc-nav/pom.xml`，但 COPY 列表漏了 vc-nav 的 pom 与源码（`/workspace/vc-nav/pom.xml` 不存在）
     ✅ 解决：补齐 `COPY vc-nav/pom.xml vc-nav/` 与 `COPY vc-nav vc-nav`。**新增模块纳入生产构建时，COPY pom / COPY 源码 / mvn -f 三处必须同步**，否则网络修好后仍会在这里挂。
 
+17. ❌ 坑17：镜像构建成功，但容器起不来，报
+    `failed to set up container networking: driver failed programming external connectivity on endpoint veyth-cog-backend ... Unable to enable DNAT rule: (iptables failed: iptables --wait -t nat -A DOCKER -p tcp -d 0/0 --dport 8123 -j DNAT --to-destination 172.20.0.4:8123: iptables: No chain/target/match by that name)`
+    ✅ 含义：镜像本身没问题，是 Docker 在给容器写端口转发时找不到 iptables 的 `DOCKER` 链。`docker compose` 重建容器时会先删旧容器，所以**这一刻 backend 是停着的，公网 502，要先恢复**。
+    ✅ 三类成因，按概率排：
+    1. **DOCKER 链被清空**：重启 docker、`firewall-cmd --reload`、手动 `iptables -F` 之后都可能出现；docker 只有自己启动时才重建这条链。
+    2. **NAT 内核模块没加载**：`nf_nat` / `iptable_nat` 缺失（内核升级、模块被卸）。
+    3. **iptables 后端混用**：系统同时装 `iptables-legacy` 与 `iptables-nft`，docker 用一套建链、另一套查不到。
+    ✅ 修复（第一条命令集通常一次解决）：
+    ```bash
+    modprobe nf_nat; modprobe iptable_nat
+    systemctl restart firewalld 2>/dev/null || true    # 让 firewalld 先重载完，避免它再清一次
+    systemctl restart docker                           # docker 启动时重建 DOCKER 链（容器 restart:unless-stopped 会自动回来）
+    iptables -t nat -S DOCKER | head -5                # 能看到 -A DOCKER ... 即恢复
+    cd /opt && docker compose up -d                    # 兜底：把容器全部拉起来
+    curl -s http://127.0.0.1:8123/api/health
+    ```
+    若 `iptables -t nat -S DOCKER` 仍为空，继续查：
+    ```bash
+    iptables -V; iptables-legacy -V 2>/dev/null; iptables-nft -V 2>/dev/null   # 看是否两套后端混用
+    grep -i iptables /etc/docker/daemon.json    # 出现 "iptables": false 必须改成 true 或删掉该键
+    ```
+    ⚠️ 此后重启 docker 必须同时确认：docker 重建的链不要再被 firewalld 的 reload 清掉；顺序上「先重启 firewalld，再重启 docker」最稳。
+
+18. ❌ 坑18：壁纸/附件在**部分设备**上加载不出来，Network 里那条请求的地址是 `https://rustfs:9000/wallpapers/xxx.jpg?...`
+    ✅ 原因：后端用 `storage.s3.endpoint`（容器内服务名 `http://rustfs:9000`）生成预签名 URL，这个主机名只有 Docker 网络内部认识，公网浏览器必然解析失败。而且 **SigV4 签名把 Host 算进了 canonical request**，所以不能「签内网地址、让浏览器换成公网域名访问」——换 Host 就是 403，必须直接用公网地址签。
+    ✅ 有的设备"看起来正常"，通常是浏览器缓存住了历史图片，或前端兜底成了本地默认壁纸，并不是真的从 S3 取到了。
+    ✅ 解决：新增配置 `storage.s3.public-endpoint`（环境变量 `RUSTFS_PUBLIC_ENDPOINT`），**只用于生成 URL，不用于后端发起请求**；客户端仍走内网 `RUSTFS_ENDPOINT`。
+    ```dotenv
+    # /opt/.env（compose 已内置默认 https://api.veythcog.top，可在此覆盖）
+    RUSTFS_PUBLIC_ENDPOINT=https://api.veythcog.top
+    ```
+    ⚠️ 服务器实际生效的是 `/opt/compose.yml`（和仓库里的 `docker-compose.yml` 是两份），所以要在 **`/opt/compose.yml` 的 `backend.environment`** 里补一行（缩进与其它键一致）：
+    ```yaml
+        RUSTFS_PUBLIC_ENDPOINT: https://api.veythcog.top
+    ```
+    不改这一行，即使 `.env` 里写了变量也不会传进容器（compose 文件没引用它）。改完 `docker compose up -d --no-deps backend` 生效。
+    ✅ Nginx（宝塔站点 `api.veythcog.top` → 站点设置 → 配置文件）追加：**路径原样转发**，桶名做一级路径，这样签名里的 URI 与 Host 都不变：
+    ```nginx
+    # S3 对象直读：桶名即一级路径，必须原样转发（不能 rewrite/去前缀，否则签名校验失败）
+    location /wallpapers/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host $host;              # 必须保持外网 Host，SigV4 要校验它
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 100m;                # 走预签名 PUT 上传大文件时放宽
+        proxy_request_buffering off;
+        proxy_buffering off;
+    }
+    # 公开图标桶同理（匿名可读的 public-icons）
+    location /public-icons/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host $host;
+    }
+    ```
+    验证：
+    ```bash
+    curl -sI "https://api.veythcog.top/wallpapers/随便一个已存在的key.jpg"   # 期望 200 或 403(签名问题)，不能是 404/502
+    docker logs --tail=50 veyth-cog-backend | grep 预签名                     # 应出现「预签名地址使用公网 endpoint」
+    ```
+    补充：壁纸预签名有效期已从默认 15 分钟提到 7 天（见 `NavWallpaperService`），避免页面挂久了刷新即 403。
+
 ## 五、后端部署流程（首选：服务器 git 拉源码 → 服务器构建 → compose 启动）
 
 > 源码已通过 git 克隆到服务器 `/opt/veyth_cog/veyth-cog/`，后端根目录为 `/opt/veyth_cog/veyth-cog/VeythCog-C`（含 pom.xml / Dockerfile / vc-* 模块）。直接在服务器构建，省去本地打包+传大文件。
