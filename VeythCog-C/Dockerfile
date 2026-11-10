@@ -50,6 +50,7 @@ RUN --mount=type=cache,target=/root/.m2 \
  && mvn -q -B -f vc-llm/pom.xml       install -DskipTests \
  && mvn -q -B -f vc-knowledge/pom.xml install -DskipTests \
  && mvn -q -B -f vc-chat/pom.xml      install -DskipTests \
+ && mvn -q -B -f vc-nav/pom.xml       install -DskipTests \
  && mvn -q -B -f vc-app/pom.xml       package -DskipTests
 
 # ---------- 阶段 2：精简运行镜像 ----------

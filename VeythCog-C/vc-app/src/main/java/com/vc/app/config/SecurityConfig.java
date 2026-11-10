@@ -50,10 +50,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
+        // 生产域名 + 本地开发任意端口（Vite dev 可能自动选 3001/3002）
+        config.setAllowedOriginPatterns(List.of(
                 "https://www.veythcog.top",
-                "http://localhost:5173",
-                "http://localhost:3000"));
+                "http://localhost:*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
         config.setMaxAge(3600L);

@@ -1,16 +1,16 @@
-import React from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Icon } from '@iconify/react';
-import messageSquareIcon from '@iconify-icons/lucide/message-square';
-import bookOpenIcon from '@iconify-icons/lucide/book-open';
-import wrenchIcon from '@iconify-icons/lucide/wrench';
-import shieldIcon from '@iconify-icons/lucide/shield-check';
-import UserMenu from '@/components/UserMenu';
 import FloatingMusicPlayer from '@/components/FloatingMusicPlayer';
+import UserMenu from '@/components/UserMenu';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import bookOpenIcon from '@iconify-icons/lucide/book-open';
+import messageSquareIcon from '@iconify-icons/lucide/message-square';
+import shieldIcon from '@iconify-icons/lucide/shield-check';
+import wrenchIcon from '@iconify-icons/lucide/wrench';
+import { Icon } from '@iconify/react';
+import React from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 const NAV_ITEMS = [
   { path: '/chat', icon: messageSquareIcon, label: '对话' },
@@ -45,9 +45,9 @@ const MainLayout: React.FC = () => {
         className="glass-effect"
         style={{
           position: 'fixed',
-          top: 16,
-          left: 16,
-          bottom: 16,
+          top: 10,
+          left: 10,
+          bottom: 10,
           width: 72,
           borderRadius: 'var(--radius-xl)',
           display: 'flex',
@@ -58,8 +58,17 @@ const MainLayout: React.FC = () => {
           gap: 4,
         }}
       >
-        {/* Logo 区域 - 渡思 VeythCog 内联标识 */}
+        {/* Logo 区域 - 点击回 /home，丝滑 hover */}
         <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate('/home')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              navigate('/home');
+            }
+          }}
           style={{
             width: 48,
             height: 48,
@@ -67,7 +76,17 @@ const MainLayout: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 12,
+            cursor: 'pointer',
+            borderRadius: 'var(--radius-md)',
+            transition: `all 0.2s var(--spring)`,
           }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = colors.primary10;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+          title="回到导航首页"
         >
           <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} />
         </div>
@@ -167,11 +186,11 @@ const MainLayout: React.FC = () => {
       {/* 右侧内容区 - 留出导航栏空间 */}
       <main
         style={{
-          marginLeft: 104, // 72 + 16 + 16 间距
+          marginLeft: 92, // 72 + 10 + 10 间距
           flex: 1,
           height: '100vh',
           overflow: 'hidden',
-          padding: '16px 16px 16px 0',
+          padding: '10px 10px 10px 0',
         }}
       >
         <div

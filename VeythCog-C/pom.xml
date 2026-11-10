@@ -122,6 +122,11 @@
                 <artifactId>vc-knowledge</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>com.vc</groupId>
+                <artifactId>vc-nav</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -130,6 +135,7 @@
         <module>vc-llm</module>
         <module>vc-chat</module>
         <module>vc-knowledge</module>
+        <module>vc-nav</module>
         <module>vc-app</module>
         <module>vc-learn</module>
     </modules>

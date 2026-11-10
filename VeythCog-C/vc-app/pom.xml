@@ -31,6 +31,10 @@
             <groupId>com.vc</groupId>
             <artifactId>vc-knowledge</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-nav</artifactId>
+        </dependency>
 
         <!-- Web / 安全 / 校验 / 持久化 -->
         <dependency>

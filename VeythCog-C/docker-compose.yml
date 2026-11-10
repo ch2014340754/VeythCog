@@ -1,22 +1,84 @@
+version: '3.8'
 services:
-  # PostgreSQL + pgvector：业务数据 + RAG 向量检索，单库两用（轻量化）
-  postgres:
-    image: pgvector/pgvector:pg16
-    container_name: veythcog-postgres
+  pg-vector:
+    image: pgvector/pgvector:pg15
+    container_name: pg-vector
     restart: unless-stopped
     environment:
-      POSTGRES_DB: veythcog
-      POSTGRES_USER: veythcog
-      POSTGRES_PASSWORD: veythcog
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: veyth_cog
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U veythcog -d veythcog"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d veyth_cog"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-volumes:
-  pgdata:
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    user: root
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@veyth.cog
+      PGADMIN_DEFAULT_PASSWORD: Admin@123456
+    volumes:
+      - ./pgadmin-data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      - pg-vector
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: veyth-rustfs
+    restart: unless-stopped
+    command: /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - RUSTFS_ACCESS_KEY=admin
+      - RUSTFS_SECRET_KEY=ch257000
+      - RUSTFS_ADDRESS=:9000
+      - RUSTFS_CONSOLE_ADDRESS=:9001
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_LOG=warn
+    volumes:
+      - /opt/veyth-rustfs/data:/data:Z
+      - /etc/localtime:/etc/localtime:ro
+
+  backend:
+    image: veyth-cog-backend:${BACKEND_TAG:-v1}
+    container_name: veyth-cog-backend
+    restart: unless-stopped
+    environment:
+      # 数据源覆盖为服务器本机的 pg-vector（同网络走容器名；镜像默认是 localhost，见踩坑6）
+      SPRING_DATASOURCE_URL: jdbc:postgresql://pg-vector:5432/veyth_cog
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # AI 供应商 Key（必填，见 .env.example）
+      DASHSCOPE_API_KEY: "sk-xxx-填写实际key"
+      DASHSCOPE_MODEL: "qwen-plus"        # 无默认值，缺失会导致启动失败（见踩坑7），按百炼可用模型填写
+      DEEPSEEK_API_KEY: ""                # 可留空，绑定 DeepSeek 模型时才会用到
+      # JWT 密钥（生产务必换成长随机串，勿用默认值）
+      JWT_SECRET: "change-me-to-a-long-random-string-0123456789abcdef"
+      # JVM 内存限制（轻量服务器建议）
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+      # 外置配置目录（数据卷挂载到宿主机 ./backend-config，改配置免重建镜像，见第六章）
+      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/app/config/
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      RUSTFS_ACCESS_KEY: cKLihUFiu5Ruo6ObWpv1
+      RUSTFS_SECRET_KEY: cKLihUFiu5Ruo6ObWpv1.
+      RUSTFS_REGION: us-east-1
+    volumes:
+      - ./backend-config:/app/config:ro
+    ports:
+      - "8123:8123"
+    depends_on:
+      - pg-vector

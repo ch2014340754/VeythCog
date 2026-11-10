@@ -7,6 +7,7 @@ import { getPreset } from '@/styles/presets';
 import MainLayout from '@/layouts/MainLayout';
 import ChatPage from '@/pages/Chat';
 import KnowledgePage from '@/pages/Knowledge';
+import HomePage from '@/pages/Home';
 import ToolsLayout from '@/pages/tools/ToolsLayout';
 import LoginPage from '@/pages/Login';
 import SettingsPage from '@/pages/Settings';
@@ -68,7 +69,6 @@ const AppContent: React.FC = () => {
                 </RequireAuth>
               }
             >
-              <Route path="/" element={<Navigate to="/chat" replace />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
               <Route path="/tools/*" element={<ToolsLayout />} />
@@ -102,7 +102,20 @@ const AppContent: React.FC = () => {
             </Route>
 
             {/* 兜底 */}
-            <Route path="*" element={<Navigate to="/chat" replace />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
+
+            {/* 导航首页（独立布局，不经过 MainLayout） */}
+            <Route
+              path="/home"
+              element={
+                <RequireAuth>
+                  <HomePage />
+                </RequireAuth>
+              }
+            />
+
+            {/* 根路径默认跳首页 */}
+            <Route path="/" element={<Navigate to="/home" replace />} />
           </Routes>
         </ErrorBoundary>
       </BrowserRouter>

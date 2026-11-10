@@ -15,7 +15,7 @@ import org.mybatis.spring.annotation.MapperScan;
 @SpringBootApplication(scanBasePackages = "com.vc")
 @EnableJpaRepositories(basePackages = "com.vc")
 @EntityScan(basePackages = "com.vc")
-@MapperScan({"com.vc.knowledge.mapper", "com.vc.chat.mapper"})
+@MapperScan({"com.vc.knowledge.mapper", "com.vc.chat.mapper", "com.vc.nav.mapper"})
 public class VcAppApplication {
 
     public static void main(String[] args) {
