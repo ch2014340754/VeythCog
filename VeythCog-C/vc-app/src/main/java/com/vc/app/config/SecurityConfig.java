@@ -73,6 +73,9 @@ public class SecurityConfig {
                         // 异步分发（SseEmitter/SSE 流式）已在上层请求完成认证，放行避免二次鉴权
                         .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
                         .requestMatchers("/auth/**", "/health/**", "/error").permitAll()
+                        // 壁纸缩略图由 <img> 直连（无法携带 Authorization），且 key 必须命中桶内对象才返回，
+                        // 这里放行以便浏览器请求；其余 /nav 接口仍需 JWT。
+                        .requestMatchers("/nav/wallpaper/thumb").permitAll()
                         // 接口文档（knife4j / springdoc）
                         .requestMatchers("/doc.html", "/v3/api-docs/**", "/swagger-ui.html",
                                 "/swagger-ui/**", "/webjars/**", "/favicon.ico")

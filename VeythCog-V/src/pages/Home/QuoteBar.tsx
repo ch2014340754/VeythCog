@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useNavStore } from '@/stores/navStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 
 /**
  * 底部文案栏：写死 5 条，5s 轮播。
@@ -17,7 +17,7 @@ const QUOTES = [
 const QuoteBar: React.FC = () => {
   const [idx, setIdx] = React.useState(0);
   const { colors } = useTheme();
-  const wallpaper = useNavStore((s) => s.wallpaper);
+  const wallpaper = useWallpaperStore((s) => s.active);
 
   React.useEffect(() => {
     const timer = setInterval(() => setIdx((i) => (i + 1) % QUOTES.length), 5000);

@@ -48,6 +48,14 @@ function getToken(): string | null {
   return useAuthStore.getState().token;
 }
 
+/**
+ * 拼出可直接给 <img src> / <a href> 用的接口地址。
+ * 这类请求由浏览器直连、拿不到 Authorization，只用于已放行的静态资源接口（如壁纸缩略图）。
+ */
+export function apiUrl(path: string, query?: Record<string, string | number | undefined>): string {
+  return buildUrl(path, query);
+}
+
 export async function request<T = unknown>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { method = 'GET', query, body, headers = {}, timeout = 30000 } = opts;
 

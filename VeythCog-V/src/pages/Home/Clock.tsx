@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useNavStore } from '@/stores/navStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 
 /**
  * 大时钟 + 公历日期 + 星期。
@@ -9,7 +9,7 @@ import { useNavStore } from '@/stores/navStore';
 const Clock: React.FC = () => {
   const [now, setNow] = React.useState(new Date());
   const { colors } = useTheme();
-  const wallpaper = useNavStore((s) => s.wallpaper);
+  const wallpaper = useWallpaperStore((s) => s.active);
 
   React.useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -33,11 +33,12 @@ const Clock: React.FC = () => {
       <div
         style={{
           fontSize: 96,
-          fontWeight: 200,
+          fontWeight: 300,
           letterSpacing: 4,
           lineHeight: 1.1,
           textShadow: mainShadow,
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          // 跟随全站字体：标题用 --font-heading，正文用 --font-body
+          fontFamily: 'var(--font-heading)',
         }}
       >
         {hh}:{mm}
@@ -48,6 +49,7 @@ const Clock: React.FC = () => {
           marginTop: 8,
           color: subColor,
           textShadow: subShadow,
+          fontFamily: 'var(--font-body)',
         }}
       >
         {dateStr}

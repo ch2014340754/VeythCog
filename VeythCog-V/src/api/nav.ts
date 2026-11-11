@@ -88,6 +88,10 @@ export const listWallpapers = () =>
 export const lockWallpaper = (key: string | null) =>
   http.put<void>('/nav/wallpaper/lock', { key });
 
+/** 当前用户锁定的壁纸（未设置返回 null） */
+export const getCurrentWallpaper = () =>
+  http.get<WallpaperItem | null>('/nav/wallpaper/current');
+
 // ============ 配置 ============
 
 export const getNavSetting = () =>

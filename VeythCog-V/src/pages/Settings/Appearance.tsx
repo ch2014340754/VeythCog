@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Button, Input, Segmented, Slider, Switch } from 'antd';
-import type { InputRef } from 'antd';
+import React, { useState } from 'react';
+import { Button, Segmented, Slider, Switch } from 'antd';
 import { Icon } from '@iconify/react';
 import sunIcon from '@iconify-icons/lucide/sun';
 import moonIcon from '@iconify-icons/lucide/moon';
@@ -10,12 +9,12 @@ import imageIcon from '@iconify-icons/lucide/image';
 import checkIcon from '@iconify-icons/lucide/check';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
+import WallpaperManagerModal from '@/components/WallpaperManagerModal';
 import { getPreset, presetNames } from '@/styles/presets';
 import {
   BUILTIN_BACKGROUNDS,
-  OVERLAY_STRENGTHS,
   parseBackground,
-  type OverlayStrength,
 } from '@/styles/backgrounds';
 import type { AppearanceMode } from '@/types';
 
@@ -27,33 +26,20 @@ const AppearancePage: React.FC = () => {
   const setGlassOpacity = useSettingsStore((s) => s.setGlassOpacity);
   const background = useSettingsStore((s) => s.background);
   const setBackground = useSettingsStore((s) => s.setBackground);
-  const overlayStrength = useSettingsStore((s) => s.overlayStrength);
-  const setOverlayStrength = useSettingsStore((s) => s.setOverlayStrength);
+  const overlayOpacity = useSettingsStore((s) => s.overlayOpacity);
+  const setOverlayOpacity = useSettingsStore((s) => s.setOverlayOpacity);
 
-  // 自定义 URL 输入
+  // 全站唯一壁纸（S3，与账号绑定）
+  const activeWallpaper = useWallpaperStore((s) => s.active);
+  const clearWallpaper = useWallpaperStore((s) => s.clear);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
+
   const parsedBg = parseBackground(background);
-  const [urlInput, setUrlInput] = useState(parsedBg.kind === 'url' ? (parsedBg.url ?? '') : '');
-  const inputRef = useRef<InputRef>(null);
 
-  // 背景切换时同步输入框（如在其它入口清空）
-  useEffect(() => {
-    if (parsedBg.kind === 'url') {
-      setUrlInput(parsedBg.url ?? '');
-    }
-  }, [background]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const applyUrl = () => {
-    const raw = (urlInput || '').trim();
-    if (!raw) {
-      inputRef.current?.focus();
-      return;
-    }
-    // 仅接受 http(s) 或 data 链接，避免注入 CSS
-    if (!/^(https?:\/\/|data:image\/)/i.test(raw)) {
-      inputRef.current?.focus();
-      return;
-    }
-    setBackground(`url:${raw}`);
+  /** 选择纯色/渐变兜底：同时清空壁纸，避免两套背景并存 */
+  const applyFallback = (id: string | null) => {
+    setBackground(id ? `preset:${id}` : 'none');
+    if (activeWallpaper) clearWallpaper();
   };
 
   const appearanceOptions: { label: React.ReactNode; value: AppearanceMode }[] = [
@@ -171,13 +157,71 @@ const AppearancePage: React.FC = () => {
       >
         <div style={sectionTitle(colors)}>背景</div>
 
-        {/* 内置图库 */}
+        {/* 当前壁纸（全站唯一，与账号绑定） */}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 20 }}>
+          <div
+            style={{
+              width: 120,
+              height: 72,
+              borderRadius: 12,
+              overflow: 'hidden',
+              border: `1px solid ${colors.border}`,
+              background: colors.surfaceElevated,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {activeWallpaper ? (
+              activeWallpaper.kind === 'video' ? (
+                <video
+                  src={activeWallpaper.url}
+                  muted
+                  loop
+                  autoPlay
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : (
+                <img
+                  src={activeWallpaper.url}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              )
+            ) : (
+              <span style={{ fontSize: 12, color: colors.textTertiary }}>纯色兜底</span>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
+              {activeWallpaper
+                ? activeWallpaper.kind === 'video' ? '动态壁纸' : '静态壁纸'
+                : '未设置壁纸'}
+            </div>
+            <div style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
+              全站共用一张壁纸，切换页面不会变化；选好后保存到你的账号
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <Button type="primary" onClick={() => setWallpaperOpen(true)}>
+                壁纸管理
+              </Button>
+              {activeWallpaper && <Button onClick={() => clearWallpaper()}>清除壁纸</Button>}
+            </div>
+          </div>
+        </div>
+
+        {/* 纯色兜底 */}
+        <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontWeight: 600 }}>
+          纯色兜底
+        </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
-          {/* 默认（无背景） */}
+          {/* 默认（主题纯色） */}
           <BgCard
-            active={parsedBg.kind === 'none'}
+            active={parsedBg.kind === 'none' && !activeWallpaper}
             label="默认"
-            onClick={() => setBackground('none')}
+            onClick={() => applyFallback(null)}
             colors={colors}
           >
             <div
@@ -197,15 +241,13 @@ const AppearancePage: React.FC = () => {
           </BgCard>
 
           {BUILTIN_BACKGROUNDS.map((bg) => {
-            const active = parsedBg.kind === 'preset' && parsedBg.id === bg.id;
-            const isImage = bg.type === 'image';
-            const grad = isImage ? 'transparent' : `linear-gradient(135deg, ${bg.swatch[0]} 0%, ${bg.swatch[1]} 50%, ${bg.swatch[2]} 100%)`;
+            const active = parsedBg.kind === 'preset' && parsedBg.id === bg.id && !activeWallpaper;
             return (
               <BgCard
                 key={bg.id}
                 active={active}
                 label={bg.label}
-                onClick={() => setBackground(`preset:${bg.id}`)}
+                onClick={() => applyFallback(bg.id)}
                 colors={colors}
               >
                 <div
@@ -213,7 +255,7 @@ const AppearancePage: React.FC = () => {
                     width: '100%',
                     height: '100%',
                     borderRadius: 10,
-                    backgroundImage: isImage ? `url(${bg.image})` : grad,
+                    backgroundImage: `linear-gradient(135deg, ${bg.swatch[0]} 0%, ${bg.swatch[1]} 50%, ${bg.swatch[2]} 100%)`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.35)',
@@ -224,48 +266,26 @@ const AppearancePage: React.FC = () => {
           })}
         </div>
 
-        {/* 自定义图片 URL */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontWeight: 600 }}>
-            自定义图片
+        {/* 壁纸遮罩强度（0-100 连续可调） */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: colors.textSecondary }}>壁纸遮罩强度</span>
+            <span style={{ fontSize: 12, color: colors.textTertiary }}>{overlayOpacity}%</span>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Input
-              ref={inputRef}
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              onPressEnter={applyUrl}
-              placeholder="https://example.com/background.jpg"
-              allowClear
-              prefix={<Icon icon={imageIcon} width={14} color={colors.textTertiary} />}
-            />
-            <Button type="primary" onClick={applyUrl} style={{ minWidth: 76 }}>
-              应用
-            </Button>
-          </div>
-          <div style={{ marginTop: 6, fontSize: 12, color: colors.textTertiary }}>
-            支持 http(s) 或 data 链接；开启背景后建议开启上方"全局毛玻璃"以获得通透质感。
+          <Slider
+            min={0}
+            max={100}
+            value={overlayOpacity}
+            onChange={setOverlayOpacity}
+            style={{ maxWidth: 320 }}
+          />
+          <div style={{ marginTop: 4, fontSize: 12, color: colors.textTertiary }}>
+            0 为完全不加遮罩；调高可压暗壁纸，确保文字清晰可读，对静态与动态壁纸都生效。
           </div>
         </div>
-
-        {/* 遮罩强度（仅自定义图片生效） */}
-        {parsedBg.kind === 'url' && (
-          <div>
-            <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontWeight: 600 }}>
-              遮罩强度
-            </div>
-            <Segmented
-              value={overlayStrength}
-              options={OVERLAY_STRENGTHS.map((o) => ({ label: o.label, value: o.key }))}
-              onChange={(val) => setOverlayStrength(val as OverlayStrength)}
-              style={{ maxWidth: 240 }}
-            />
-            <div style={{ marginTop: 6, fontSize: 12, color: colors.textTertiary }}>
-              调高可压暗图片，确保文字清晰可读。
-            </div>
-          </div>
-        )}
       </section>
+
+      <WallpaperManagerModal open={wallpaperOpen} onClose={() => setWallpaperOpen(false)} />
 
       {/* 全局毛玻璃 */}
       <section

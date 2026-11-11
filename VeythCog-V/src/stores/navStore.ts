@@ -7,12 +7,10 @@ import { persist } from 'zustand/middleware';
 import {
   getCategories,
   getBookmarks,
-  getRandomWallpaper,
   getNavSetting,
   updateNavSetting,
   type NavCategory,
   type NavBookmark,
-  type WallpaperItem,
 } from '@/api/nav';
 
 interface NavState {
@@ -22,8 +20,6 @@ interface NavState {
   activeCategoryId: number | null;
   /** 当前分类下的书签列表 */
   bookmarks: NavBookmark[];
-  /** 当前壁纸 */
-  wallpaper: WallpaperItem | null;
   /** 当前搜索引擎 */
   searchEngine: 'baidu' | 'google' | 'bing';
   /** 是否正在加载书签（细进度条用） */
@@ -35,8 +31,6 @@ interface NavState {
   loadBookmarks: (categoryId: number) => Promise<void>;
   /** 切换当前分类 */
   setActiveCategory: (id: number) => Promise<void>;
-  /** 加载随机壁纸 */
-  loadRandomWallpaper: () => Promise<void>;
   /** 设置搜索引擎 */
   setSearchEngine: (engine: 'baidu' | 'google' | 'bing') => void;
   /** 从后端拉取用户配置（搜索引擎 / 上次分类） */
@@ -49,7 +43,6 @@ export const useNavStore = create<NavState>()(
       categories: [],
       activeCategoryId: null,
       bookmarks: [],
-      wallpaper: null,
       searchEngine: 'baidu',
       loadingBookmarks: false,
 
@@ -57,12 +50,16 @@ export const useNavStore = create<NavState>()(
         try {
           const list = await getCategories();
           set({ categories: list });
-          // 如果当前没有选中分类，自动选第一个或默认分类
-          if (get().activeCategoryId == null && list.length > 0) {
-            const defaultCat = list.find((c) => c.isDefault) ?? list[0];
-            set({ activeCategoryId: defaultCat.id });
-            await get().loadBookmarks(defaultCat.id);
-          }
+          if (list.length === 0) return;
+          // 无论是否已有持久化的 activeCategoryId，都要拉一次书签，
+          // 否则刷新后分类高亮着但图标区是空的
+          const current = get().activeCategoryId;
+          const exists = current != null && list.some((c) => c.id === current);
+          const targetId = exists
+            ? (current as number)
+            : (list.find((c) => c.isDefault) ?? list[0]).id;
+          if (!exists) set({ activeCategoryId: targetId });
+          await get().loadBookmarks(targetId);
         } catch (e) {
           console.error('[navStore] loadCategories failed', e);
         }
@@ -87,15 +84,6 @@ export const useNavStore = create<NavState>()(
         await get().loadBookmarks(id);
         // fire-and-forget 持久化 activeCategoryId
         updateNavSetting({ activeCategoryId: id }).catch(() => {});
-      },
-
-      loadRandomWallpaper: async () => {
-        try {
-          const wp = await getRandomWallpaper();
-          if (wp) set({ wallpaper: wp });
-        } catch (e) {
-          console.error('[navStore] loadRandomWallpaper failed', e);
-        }
       },
 
       setSearchEngine: (engine) => {

@@ -16,7 +16,9 @@ import ProvidersSettings from '@/pages/Settings/Providers';
 import LarkBindSettings from '@/pages/Settings/LarkBind';
 import AppearanceSettings from '@/pages/Settings/Appearance';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import WallpaperBackdrop from '@/components/WallpaperBackdrop';
 import { useAuthStore } from '@/stores/authStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 import AdminPage from '@/pages/Admin';
 import AdminUsers from '@/pages/Admin/Users';
 import AdminRoles from '@/pages/Admin/Roles';
@@ -47,6 +49,15 @@ const RequireAdmin: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 const AppContent: React.FC = () => {
   const { presetName, isDark } = useTheme();
+  const token = useAuthStore((s) => s.token);
+  const loadActiveWallpaper = useWallpaperStore((s) => s.loadActive);
+  const resetWallpaper = useWallpaperStore((s) => s.reset);
+
+  // 登录后读取用户预设壁纸；登出清空（登录页保持光斑背景）
+  React.useEffect(() => {
+    if (token) loadActiveWallpaper();
+    else resetWallpaper();
+  }, [token, loadActiveWallpaper, resetWallpaper]);
 
   const antdTheme = useMemo(() => {
     const preset = getPreset(presetName, isDark);
@@ -55,6 +66,7 @@ const AppContent: React.FC = () => {
 
   return (
     <ConfigProvider theme={antdTheme}>
+      <WallpaperBackdrop />
       <BrowserRouter>
         <ErrorBoundary>
           <Routes>

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useLayoutEffect, useCallback, useMemo } from 'react';
 import type { PresetName, AppearanceMode } from '../types';
 import { getPreset } from '../styles/presets';
-import { resolveBackground } from '../styles/backgrounds';
+import { overlayColor, resolveBackground } from '../styles/backgrounds';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useWallpaperStore } from '../stores/wallpaperStore';
 
 /** 主题颜色集合 - 供组件 inline style 直接使用，避免 CSS 变量解析延迟 */
 export interface ThemeColors {
@@ -240,7 +241,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
   const glassOpacity = useSettingsStore((s) => s.glassOpacity);
   const background = useSettingsStore((s) => s.background);
-  const overlayStrength = useSettingsStore((s) => s.overlayStrength);
+  const overlayOpacity = useSettingsStore((s) => s.overlayOpacity);
+  const activeWallpaper = useWallpaperStore((s) => s.active);
 
   const isDark = useMemo(() => computeIsDark(appearanceMode), [appearanceMode]);
 
@@ -258,10 +260,30 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     document.body.classList.toggle('glass-on', glassEnabled);
   }, [glassEnabled]);
 
-  // 背景：内置渐变 / 自定义图片（随亮暗与遮罩强度联动）
+  // 背景：全站唯一壁纸（用户绑定）优先，无壁纸时回落纯色/渐变兜底
   useLayoutEffect(() => {
-    const { active, css, overlay } = resolveBackground(background, isDark, overlayStrength);
     const body = document.body;
+
+    // 动态壁纸由 WallpaperBackdrop 全屏渲染，body 只保留纯色，避免两层叠加
+    if (activeWallpaper?.kind === 'video') {
+      body.classList.remove('has-bg');
+      body.style.backgroundImage = '';
+      body.style.setProperty('--bg-overlay', 'transparent');
+      return;
+    }
+
+    if (activeWallpaper?.kind === 'image') {
+      body.classList.add('has-bg');
+      body.style.backgroundImage = `url("${activeWallpaper.url}")`;
+      body.style.backgroundSize = 'cover';
+      body.style.backgroundPosition = 'center';
+      body.style.backgroundRepeat = 'no-repeat';
+      body.style.backgroundAttachment = 'scroll';
+      body.style.setProperty('--bg-overlay', overlayColor(overlayOpacity, isDark));
+      return;
+    }
+
+    const { active, css } = resolveBackground(background, isDark);
     if (active) {
       body.classList.add('has-bg');
       body.style.backgroundImage = css;
@@ -269,13 +291,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       body.style.backgroundPosition = 'center';
       body.style.backgroundRepeat = 'no-repeat';
       body.style.backgroundAttachment = 'scroll';
-      body.style.setProperty('--bg-overlay', overlay);
+      body.style.setProperty('--bg-overlay', 'transparent');
     } else {
       body.classList.remove('has-bg');
       body.style.backgroundImage = '';
       body.style.setProperty('--bg-overlay', 'transparent');
     }
-  }, [background, overlayStrength, isDark]);
+  }, [activeWallpaper, background, overlayOpacity, isDark]);
 
   // 监听系统主题变化（仅在 system 模式下生效）
   useLayoutEffect(() => {

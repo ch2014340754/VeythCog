@@ -4,6 +4,7 @@ import VeythCogLogo from '@/components/VeythCogLogo';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
 import shieldIcon from '@iconify-icons/lucide/shield-check';
@@ -26,6 +27,9 @@ const MainLayout: React.FC = () => {
   const glassOpacity = useSettingsStore((s) => s.glassOpacity);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+  // 有壁纸时导航图标不再用主题灰（半透明毛玻璃 + 深色壁纸下会糊成一片），改用近白色
+  const hasWallpaper = useWallpaperStore((s) => s.active !== null);
+  const idleIconColor = hasWallpaper ? 'rgba(255,255,255,0.88)' : colors.textSecondary;
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
@@ -115,7 +119,7 @@ const MainLayout: React.FC = () => {
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
                 background: active ? colors.primary10 : 'transparent',
-                color: active ? colors.primary : colors.textSecondary,
+                color: active ? colors.primary : idleIconColor,
                 transition: `all 0.2s var(--spring)`,
                 position: 'relative',
                 outline: 'none',
@@ -169,7 +173,7 @@ const MainLayout: React.FC = () => {
               cursor: 'pointer',
               marginBottom: 4,
               background: isActive('/admin') ? colors.primary10 : 'transparent',
-              color: isActive('/admin') ? colors.primary : colors.textSecondary,
+              color: isActive('/admin') ? colors.primary : idleIconColor,
               transition: `all 0.2s var(--spring)`,
               outline: 'none',
             }}

@@ -9,7 +9,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { LlmModelItem } from '@/types';
 import { getModels } from '@/api/llm';
-import type { BackgroundValue, OverlayStrength } from '@/styles/backgrounds';
+import type { BackgroundValue } from '@/styles/backgrounds';
 
 /** 模型唯一 id = vendor:modelCode */
 export function modelId(vendor: string, modelCode: string): string {
@@ -29,19 +29,12 @@ interface SettingsState {
   glassEnabled: boolean;
   /** 毛玻璃朦胧感（玻璃面板不透明度 10-90，默认 60） */
   glassOpacity: number;
-  /** 背景（内置渐变 / 自定义 URL）：'none' | 'preset:<id>' | 'url:<地址>' */
+  /** 纯色/渐变兜底背景：'none' | 'preset:<id>'（壁纸由 wallpaperStore 管理） */
   background: BackgroundValue;
-  /** 自定义图片遮罩强度 */
-  overlayStrength: OverlayStrength;
+  /** 壁纸遮罩强度（0-100，0 = 不加遮罩） */
+  overlayOpacity: number;
   /** 加载中 */
   loadingModels: boolean;
-
-  // ---- 旧版壁纸字段（WallpaperLayer 组件残留，保留兼容，后续清理） ----
-  wallpaperEnabled: boolean;
-  wallpaperPreset: string;
-  wallpaperUrl: string;
-  wallpaperBlur: number;
-  wallpaperBrightness: number;
 
   /** 从后端拉取我的绑定模型；当前模型无效时自动选默认模型 */
   loadModels: () => Promise<void>;
@@ -52,7 +45,7 @@ interface SettingsState {
   setGlassEnabled: (v: boolean) => void;
   setGlassOpacity: (v: number) => void;
   setBackground: (v: BackgroundValue) => void;
-  setOverlayStrength: (v: OverlayStrength) => void;
+  setOverlayOpacity: (v: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -65,13 +58,8 @@ export const useSettingsStore = create<SettingsState>()(
       glassEnabled: false,
       glassOpacity: 60,
       background: 'none',
-      overlayStrength: 'medium',
+      overlayOpacity: 58,
       loadingModels: false,
-      wallpaperEnabled: false,
-      wallpaperPreset: 'none',
-      wallpaperUrl: '',
-      wallpaperBlur: 0,
-      wallpaperBrightness: 1,
 
       loadModels: async () => {
         set({ loadingModels: true });
@@ -101,40 +89,44 @@ export const useSettingsStore = create<SettingsState>()(
       setGlassEnabled: (v) => set({ glassEnabled: v }),
       setGlassOpacity: (v) => set({ glassOpacity: v }),
       setBackground: (v) => set({ background: v }),
-      setOverlayStrength: (v) => set({ overlayStrength: v }),
+      setOverlayOpacity: (v) => set({ overlayOpacity: v }),
     }),
     {
       name: 'mywork:settings',
-      version: 4,
+      version: 7,
       migrate: (persisted: any, version) => {
+        const state: any = persisted ? { ...persisted } : {};
+
         // v1（旧扁平 providers）→ 全新结构：丢弃旧 providers/models，回到空绑定列表
-        if (version < 2 && persisted && !Array.isArray(persisted.models)) {
-          return {
-            streamEnabled: true,
-            sidebarCollapsed: !!persisted.sidebarCollapsed,
-            glassEnabled: !!persisted.glassEnabled,
-            background: persisted.background ?? 'none',
-            overlayStrength: persisted.overlayStrength ?? 'medium',
-            models: [],
-            currentModelId: null,
-          };
+        if (version < 2 && !Array.isArray(state.models)) {
+          state.models = [];
+          state.currentModelId = null;
         }
         // v2 → v3：补默认背景字段
-        if (version < 3 && persisted) {
-          return {
-            ...persisted,
-            background: persisted.background ?? 'none',
-            overlayStrength: persisted.overlayStrength ?? 'medium',
-          };
+        if (version < 3) {
+          state.background = state.background ?? 'none';
         }
-        // v3 → v4：补毛玻璃雾氦感默认值
-        if (version < 4 && persisted) {
-          return {
-            ...persisted,
-            glassOpacity: typeof persisted.glassOpacity === 'number' ? persisted.glassOpacity : 60,
-          };
+        // v3 → v4：补毛玻璃朦胧感默认值
+        if (version < 4) {
+          state.glassOpacity = typeof state.glassOpacity === 'number' ? state.glassOpacity : 60;
         }
-        return persisted;
+        // v5 → v6：壁纸改为全局唯一（存后端 nav_setting），清理自定义 URL 背景
+        if (version < 6 && typeof state.background === 'string' && state.background.startsWith('url:')) {
+          state.background = 'none';
+        }
+        // v6 → v7：遮罩强度由三档改为 0-100 连续值
+        if (version < 7) {
+          const legacy = state.overlayStrength as string | undefined;
+          const map: Record<string, number> = { soft: 42, medium: 58, deep: 72 };
+          if (typeof state.overlayOpacity !== 'number') {
+            state.overlayOpacity = map[legacy ?? 'medium'] ?? 58;
+          }
+          delete state.overlayStrength;
+        }
+        // 兜底：任何缺失都回到可用默认值
+        if (typeof state.overlayOpacity !== 'number') state.overlayOpacity = 58;
+        if (state.background == null) state.background = 'none';
+        return state;
       },
     },
   ),

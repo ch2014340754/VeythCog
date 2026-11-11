@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import UserMenu from '@/components/UserMenu';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
@@ -31,6 +32,9 @@ const HomeSidebar: React.FC = () => {
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+  // 壁纸模式下主题灰会糊在深色壁纸上，未选中项改用近白色
+  const hasWallpaper = useWallpaperStore((s) => s.active !== null);
+  const idleIconColor = hasWallpaper ? 'rgba(255,255,255,0.88)' : colors.textSecondary;
 
   const [visible, setVisible] = React.useState(false);
   const hideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,7 +146,7 @@ const HomeSidebar: React.FC = () => {
                 borderRadius: 'var(--radius-md)',
                 cursor: 'pointer',
                 background: active ? colors.primary10 : 'transparent',
-                color: active ? colors.primary : colors.textSecondary,
+                color: active ? colors.primary : idleIconColor,
                 transition: `all 0.2s var(--spring)`,
                 position: 'relative',
                 outline: 'none',
@@ -191,7 +195,7 @@ const HomeSidebar: React.FC = () => {
               cursor: 'pointer',
               marginBottom: 4,
               background: isActive('/admin') ? colors.primary10 : 'transparent',
-              color: isActive('/admin') ? colors.primary : colors.textSecondary,
+              color: isActive('/admin') ? colors.primary : idleIconColor,
               transition: `all 0.2s var(--spring)`,
               outline: 'none',
             }}

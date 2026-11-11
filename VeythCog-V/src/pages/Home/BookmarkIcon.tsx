@@ -1,7 +1,9 @@
 import React from 'react';
 import type { NavBookmark } from '@/api/nav';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useNavStore } from '@/stores/navStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { glassBlur, whiteGlass } from '@/styles/homeSurface';
 
 interface Props {
   bookmark: NavBookmark;
@@ -17,14 +19,16 @@ interface Props {
 const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMenu }) => {
   const [imgError, setImgError] = React.useState(false);
   const { colors } = useTheme();
-  const wallpaper = useNavStore((s) => s.wallpaper);
+  const wallpaper = useWallpaperStore((s) => s.active);
+  const glassOpacity = useSettingsStore((s) => s.glassOpacity);
 
   const isWallpaperMode = !!wallpaper?.url;
   const nameColor = isWallpaperMode ? '#fff' : colors.text;
   const nameShadow = isWallpaperMode ? '0 1px 4px rgba(0,0,0,0.4)' : 'none';
-  const hoverBg = isWallpaperMode ? 'rgba(255,255,255,0.1)' : colors.primary10;
-  const iconBg = isWallpaperMode ? 'rgba(255,255,255,0.15)' : colors.glassBg;
-  const iconBorder = isWallpaperMode ? 'transparent' : colors.glassBorder;
+  // 毛玻璃与悬停高亮都走主题：壁纸模式用白色玻璃变体（厚度跟随全局朦胧度）
+  const hoverBg = isWallpaperMode ? 'rgba(255,255,255,0.12)' : colors.primary10;
+  const iconBg = isWallpaperMode ? whiteGlass(glassOpacity, 0.1, 0.3) : colors.glassBg;
+  const iconBorder = isWallpaperMode ? 'rgba(255,255,255,0.28)' : colors.glassBorder;
   const fallbackTextColor = isWallpaperMode ? '#fff' : colors.text;
   const actionBg = isWallpaperMode ? 'rgba(0,0,0,0.6)' : colors.surfaceOverlay;
   const actionColor = isWallpaperMode ? '#fff' : colors.text;
@@ -75,7 +79,8 @@ const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMe
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: imgError ? (isWallpaperMode ? 'rgba(0,0,0,0.3)' : colors.surfaceElevated) : iconBg,
-          backdropFilter: 'blur(10px)',
+          backdropFilter: glassBlur(glassOpacity),
+          WebkitBackdropFilter: glassBlur(glassOpacity),
           border: `1px solid ${iconBorder}`,
         }}
       >
@@ -97,7 +102,7 @@ const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMe
       <span
         style={{
           color: nameColor,
-          fontSize: 12,
+          fontSize: 13,
           textShadow: nameShadow,
           maxWidth: 80,
           overflow: 'hidden',

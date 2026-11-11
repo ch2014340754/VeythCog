@@ -1,6 +1,9 @@
 import React from 'react';
 import { useNavStore } from '@/stores/navStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/contexts/ThemeContext';
+import { glassBlur, whiteGlass } from '@/styles/homeSurface';
 
 interface Props {
   onAddCategory?: () => void;
@@ -17,8 +20,9 @@ const CategorySidebar: React.FC<Props> = ({ onAddCategory }) => {
   const categories = useNavStore((s) => s.categories);
   const activeCategoryId = useNavStore((s) => s.activeCategoryId);
   const setActiveCategory = useNavStore((s) => s.setActiveCategory);
-  const wallpaper = useNavStore((s) => s.wallpaper);
+  const wallpaper = useWallpaperStore((s) => s.active);
   const { colors } = useTheme();
+  const glassOpacity = useSettingsStore((s) => s.glassOpacity);
   const [visible, setVisible] = React.useState(false);
   const hideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -33,8 +37,9 @@ const CategorySidebar: React.FC<Props> = ({ onAddCategory }) => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
   }, []);
 
-  const sidebarBg = isWallpaperMode ? 'rgba(255,255,255,0.08)' : colors.glassBg;
-  const sidebarBorder = isWallpaperMode ? 'rgba(255,255,255,0.1)' : colors.glassBorder;
+  // 毛玻璃与激活态跟全局主题一致；壁纸模式改用白色玻璃变体
+  const sidebarBg = isWallpaperMode ? whiteGlass(glassOpacity, 0.06, 0.2) : colors.glassBg;
+  const sidebarBorder = isWallpaperMode ? 'rgba(255,255,255,0.14)' : colors.glassBorder;
   const itemActiveBg = isWallpaperMode ? 'rgba(255,255,255,0.2)' : colors.primary10;
   const itemColor = isWallpaperMode ? '#fff' : colors.text;
   const addColor = isWallpaperMode ? 'rgba(255,255,255,0.5)' : colors.textTertiary;
@@ -71,8 +76,8 @@ const CategorySidebar: React.FC<Props> = ({ onAddCategory }) => {
           padding: '80px 0 20px',
           gap: 4,
           background: sidebarBg,
-          backdropFilter: 'blur(16px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+          backdropFilter: glassBlur(glassOpacity),
+          WebkitBackdropFilter: glassBlur(glassOpacity),
           borderLeft: `1px solid ${sidebarBorder}`,
           transform: visible ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 0.2s ease-out',

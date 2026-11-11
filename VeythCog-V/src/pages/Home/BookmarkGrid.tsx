@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavStore } from '@/stores/navStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { deleteBookmark, type NavBookmark } from '@/api/nav';
+import { useTheme } from '@/contexts/ThemeContext';
 import BookmarkIcon from './BookmarkIcon';
 
 interface Props {
@@ -14,8 +16,15 @@ interface Props {
  */
 const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContextMenu }) => {
   const bookmarks = useNavStore((s) => s.bookmarks);
-  const { wallpaper } = useNavStore();
+  const wallpaper = useWallpaperStore((s) => s.active);
+  const { colors } = useTheme();
   const isWallpaperMode = !!wallpaper?.url;
+
+  // 「添加图标」占位卡：无壁纸时跟随主题 token，有壁纸时用白色变体
+  const addHoverBg = isWallpaperMode ? 'rgba(255,255,255,0.1)' : colors.primary10;
+  const addDashColor = isWallpaperMode ? 'rgba(255,255,255,0.3)' : colors.border;
+  const addIconColor = isWallpaperMode ? 'rgba(255,255,255,0.5)' : colors.textTertiary;
+  const addTextColor = isWallpaperMode ? 'rgba(255,255,255,0.7)' : colors.textSecondary;
 
   const handleDelete = async (b: NavBookmark) => {
     if (!confirm(`删除书签「${b.title}」？`)) return;
@@ -64,7 +73,7 @@ const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContex
             padding: 8,
             borderRadius: 12,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = isWallpaperMode ? 'rgba(255,255,255,0.1)' : 'rgba(128,128,128,0.1)')}
+          onMouseEnter={(e) => (e.currentTarget.style.background = addHoverBg)}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
           <div
@@ -72,17 +81,17 @@ const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContex
               width: 58,
               height: 58,
               borderRadius: 14,
-              border: `2px dashed ${isWallpaperMode ? 'rgba(255,255,255,0.3)' : 'rgba(128,128,128,0.3)'}`,
+              border: `2px dashed ${addDashColor}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: isWallpaperMode ? 'rgba(255,255,255,0.5)' : 'rgba(128,128,128,0.5)',
+              color: addIconColor,
               fontSize: 28,
             }}
           >
             +
           </div>
-          <span style={{ color: isWallpaperMode ? 'rgba(255,255,255,0.7)' : 'rgba(128,128,128,0.7)', fontSize: 12 }}>添加图标</span>
+          <span style={{ color: addTextColor, fontSize: 13 }}>添加图标</span>
         </div>
       </div>
     </div>
