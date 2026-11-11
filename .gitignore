@@ -10,7 +10,9 @@
 Thumbs.db
 
 ### VS Code（冲突规则请自行调整）###
-.vscode/
+.vscode/*
+!/.vscode/settings.json
+!/.vscode/tasks.json
 VeythCog-V/.vscode/*
 !VeythCog-V/.vscode/extensions.json
 

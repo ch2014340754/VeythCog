@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: 后端+前端",
+      "detail": "释放 8123/3000 → mvn 打包 → 起后端 → 起前端（推荐日常用这个）",
+      "type": "shell",
+      "command": "${workspaceFolder}\\VeythCog-C\\scripts\\dev.cmd",
+      "args": [],
+      "group": { "kind": "build", "isDefault": true },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "dev: 只后端",
+      "detail": "打包后前台启动 vc-app（:8123），日志直接输出到面板",
+      "type": "shell",
+      "command": "${workspaceFolder}\\VeythCog-C\\scripts\\dev.cmd",
+      "args": ["backend"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "dev: 只前端",
+      "detail": "只启动 Vite dev server（:3000）",
+      "type": "shell",
+      "command": "${workspaceFolder}\\VeythCog-C\\scripts\\dev.cmd",
+      "args": ["frontend"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "dev: 停掉 8123/3000",
+      "detail": "杀掉占端口的旧进程，不启动任何东西",
+      "type": "shell",
+      "command": "${workspaceFolder}\\VeythCog-C\\scripts\\dev.cmd",
+      "args": ["stop"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "dev: 重启后端（不重新打包）",
+      "detail": "纯重启，秒级；适合只改配置/想重来一次",
+      "type": "shell",
+      "command": "${workspaceFolder}\\VeythCog-C\\scripts\\dev.cmd",
+      "args": ["backend", "-SkipBuild"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    }
+  ]
+}

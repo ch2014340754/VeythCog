@@ -14,6 +14,14 @@ import VeythCogLogo from '@/components/VeythCogLogo';
 
 type Mode = 'login' | 'register';
 
+/**
+ * 登录后落地页：优先回跳来源页（RequireAuth 记录），否则回导航首页 /home。
+ * 设计口径见 openspec/changes/p1-nav-homepage：/home 是登录后默认落地页，根路径 / 也指向 /home。
+ * 来源页为 /login 时视为无效（避免自跳），同样回落 /home。
+ */
+const resolveLanding = (from?: string | null) =>
+  from && from !== '/login' ? from : '/home';
+
 const LoginPage: React.FC = () => {
   const { colors } = useTheme();
   const navigate = useNavigate();
@@ -66,7 +74,7 @@ const LoginPage: React.FC = () => {
       const mockToken = useAuthStore.getState().token === MOCK_TOKEN;
       const from = mockToken
         ? '/tools'
-        : ((location.state as { from?: string } | null)?.from ?? '/chat');
+        : resolveLanding((location.state as { from?: string } | null)?.from);
       navigate(from, { replace: true });
     } catch (e) {
       message.error(e instanceof Error ? e.message : '登录失败');
@@ -104,7 +112,7 @@ const LoginPage: React.FC = () => {
     try {
       await useAuthStore.getState().login(pendingAutoLogin.username, pendingAutoLogin.password);
       const t = useAuthStore.getState().token;
-      navigate(t === MOCK_TOKEN ? '/tools' : '/chat', { replace: true });
+      navigate(t === MOCK_TOKEN ? '/tools' : '/home', { replace: true });
     } catch {
       message.error('自动登录失败，请手动登录');
       setMode('login');
@@ -132,7 +140,7 @@ const LoginPage: React.FC = () => {
     const from =
       token === MOCK_TOKEN
         ? '/tools'
-        : ((location.state as { from?: string } | null)?.from ?? '/chat');
+        : resolveLanding((location.state as { from?: string } | null)?.from);
     return <Navigate to={from} replace />;
   }
 

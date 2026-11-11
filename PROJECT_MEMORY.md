@@ -234,13 +234,22 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - **当前 active：PostgreSQL（个人服务器 docker 容器，连接串在 application-local.yml）**；`docs/architecture.md` 记的"MySQL 先行"已过时。
 - **安全红线**：`application-local.yml` 含**真实 DashScope AK 与数据库密码，严禁写入任何文档/提交 Git**；密钥一律环境变量注入（`DASHSCOPE_API_KEY` / `DEEPSEEK_API_KEY` / `JWT_SECRET` / DB 密码）。
 - AK 未配置时：可绑定但对话报「该模型未配置密钥」（`ErrorCode.SYSTEM_ERROR`）。
-- 启动：`mvn -pl vc-app -am spring-boot:run`（或 `-pl vc-chat -am` 编译）。
+- **启动（唯一推荐方式，后端+前端一条命令）**：`pwsh VeythCog-C/scripts/dev.ps1`，或双击 `VeythCog-C/scripts/dev.cmd`，或在 Trae 里跑任务 `dev: 后端+前端`（`tasks.json` 已内置，Ctrl+Shift+P → Tasks: Run Task）。
+  脚本固定流程：① **先释放端口**（8123 / 3000 上有旧进程就先 Stop-Process，确认端口真空了才继续）→ ② mvn 打包（默认离线，`-Online` 联网）→ ③ 打包失败立即中止，绝不启动旧 class → ④ 后端 `java -jar` 起在后台（日志 `vc-app/target/dev-logs/backend.log`）→ ⑤ 前端 Vite 前台跑在 3000。
+  子命令：`dev.ps1 backend`（只后端，前台）、`dev.ps1 frontend`（只前端）、`dev.ps1 stop`（只释放 8123/3000）。
+  常用参数：`-SkipBuild`（纯重启，秒级）、`-BackendPort 8124 -FrontendPort 3001`（另起一份做冒烟，不占主端口）、`-JdkHome`（强制指定 JDK）。
+- **本机 JDK 现状（2026-11-11 清理，11-12 重启后收尾完成）**：只剩 `I:\Java\jdk-21`（21.0.12）。`I:\Java\jdk-11`、`I:\Java\jdk-17`、`D:\Java\jdk1.8.0_121`、`I:\Java\jdk-11.0.28_windows-x64_bin.exe` 已全部删除（jdk-17 曾有 12 个 dll 被 JVM 映射锁住，重启后才删干净）。`JAVA_HOME` 用户级与机器级都指向 jdk-21，用户 PATH 首位是 `I:\Java\jdk-21\bin`；已验证新开壳里 `java` 解析到 `I:\Java\jdk-21\bin\java.exe`（21.0.12）。改环境前的备份在 `C:\Users\dsf\java-env-backup-20261111.txt`。
+  ⚠️ 仅剩一处收尾：机器 PATH 里还留着 `C:\Program Files\Common Files\Oracle\Java\javapath`（Oracle 装的 Java 17 启动器垫片，指向已删除的 jdk-17，现已失效）和一条重复的 `I:\Java\jdk-21\bin`；删这两项要管理员权限，已被用户级 jdk-21 压住、不影响使用。
+- **JDK 必须 21（坑在这里）**：class 是 Java 21 编的（class major=65），拿 JDK 17（61）跑就报 `UnsupportedClassVersionError`。脚本会自己挑可用 JDK：`-JdkHome` → `VEYTH_JAVA_HOME` → `JAVA_HOME`（**版本 ≥21 才用**，不够就警告并切到 jdk-21）→ 常见安装路径 → PATH，然后**回写 `$env:JAVA_HOME`**，保证 mvn 编译与 java 运行是同一个 JDK；启动前还会读 `VcAppApplication.class` 的 major 版本与运行 JDK 比对，不一致直接中止并提示 `mvn clean` 重编。想看当前用哪套，脚本启动时会打印 `java = ... (Java 21)` 与 `JAVA_HOME = ...`。
+- **为什么不再直接在 IDE 里 Run（血泪教训，同类问题已复发 3 次）**：Trae / VS Code 的 Java 扩展跑 `com.vc.app.VcAppApplication` 时，classpath 直接指向各模块 `target/classes`；增量编译没跑成或编译失败时，进程照样启动并加载**上一版旧 class**（`java.debug.settings.onBuildFailureProceed` 为 true 时更隐蔽）。症状是「代码明明改了却不生效」：新增接口 404、`/nav/wallpaper/thumb` 已 permitAll 仍 401、返回值还是旧的，而 IDE 控制台一声不响。
+  判断是否踩坑：比对源码 mtime 与 `vc-app/target/classes/**/*.class` 的 mtime（脚本每次启动会打印 jar 与最新源码时间，jar 早于源码会黄字告警）。
+  仓库根 `.vscode/settings.json` 已开 `java.autobuild.enabled`、关 `java.debug.settings.onBuildFailureProceed`（`.vscode/settings.json` 与 `tasks.json` 已从 .gitignore 放行，随仓库生效）。
 - 种子账号：`admin / admin123`，默认绑定 `dashscope/qwen-plus`。
 
 ### 8.2 前端
 - `.env.development`（已提交）：`VITE_API_BASE=http://localhost:8123/api`（与后端 8123 对齐，2026-11-09 修正原 8080 错配）；`.env.production` 指向 `https://api.veythcog.top/api`；`src/config/index.ts` 兜底默认 8123。
 - 登录页「运行模式」默认收起并走真实后端（`bypassMode=false`）；展开后单选切换 mock/真实，可临时覆盖 apiBase（persist key `veythcog:mode:v3`）。⚠️ 改 `.env` 后需重启 dev server（Vite 不热更 env）。
-- 启动：`npm install && npm run dev`（:3000）；构建：`npm run build`（tsc + vite）。
+- 启动：用统一脚本 `VeythCog-C/scripts/dev.ps1`（`all` 默认带前端；只想起前端用 `dev.ps1 frontend`）；脚本会先释放 3000 上的旧 Vite 再起，node_modules 缺失时自动 `npm install`。构建：`npm run build`（tsc + vite）。
 
 ### 8.3 数据库
 - `docker-compose.yml`：`pgvector/pgvector:pg16`（个人服务器 docker 容器，单库两用，已启用 pgvector 扩展）。
