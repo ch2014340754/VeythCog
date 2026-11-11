@@ -22,15 +22,17 @@ const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv)$/i;
 /** 清单缓存：预签名 URL 7 天有效，这里按 6 天缓存，避免每次开弹窗都重新签名、重新下载 */
 const LIST_CACHE_KEY = 'veythcog:nav:wallpaper-list';
 const LIST_TTL = 6 * 24 * 60 * 60 * 1000;
+/** 缓存命中后仍超过这个时长，就在后台静默刷新一次（新上传的壁纸能及时出现在壁纸库） */
+const LIST_SILENT_REFRESH_AFTER = 10 * 60 * 1000;
 
-function readCachedList(): WallpaperItem[] | null {
+function readCachedList(): { items: WallpaperItem[]; ts: number } | null {
   try {
     const raw = sessionStorage.getItem(LIST_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed?.ts || !Array.isArray(parsed.items)) return null;
     if (Date.now() - parsed.ts > LIST_TTL) return null;
-    return parsed.items as WallpaperItem[];
+    return { items: parsed.items as WallpaperItem[], ts: parsed.ts as number };
   } catch {
     return null;
   }
@@ -47,6 +49,15 @@ function writeCachedList(items: WallpaperItem[]) {
 /** 按对象 key 后缀判断壁纸类型（gif 仍按静态图渲染，浏览器可直接播放） */
 export function wallpaperKind(key: string): WallpaperKind {
   return VIDEO_EXT.test(key) ? 'video' : 'image';
+}
+
+/**
+ * 解析某张壁纸的类型：**以服务端下发的 kind 为准**，缺失时（旧缓存 / 旧接口）才回退后缀判断。
+ * 前端所有渲染点都必须走这里，避免出现把 mp4 塞进 <img> 的裂图。
+ */
+export function resolveWallpaperKind(item: { key: string; kind?: WallpaperKind }): WallpaperKind {
+  if (item.kind === 'video' || item.kind === 'image') return item.kind;
+  return wallpaperKind(item.key);
 }
 
 interface WallpaperState {
@@ -78,7 +89,7 @@ export const useWallpaperStore = create<WallpaperState>((set, get) => ({
   loadActive: async () => {
     try {
       const item = await getCurrentWallpaper();
-      set({ active: item ? { ...item, kind: wallpaperKind(item.key) } : null });
+      set({ active: item ? { ...item, kind: resolveWallpaperKind(item) } : null });
     } catch (e) {
       console.error('[wallpaperStore] loadActive failed', e);
     }
@@ -86,12 +97,15 @@ export const useWallpaperStore = create<WallpaperState>((set, get) => ({
 
   loadList: async (force = false) => {
     if (get().loadingList) return;
-    // 本会话已有清单，或命中上次会话的缓存 → 直接用，不再请求（URL 不变，浏览器可复用图片缓存）
+    // 本会话已有清单，或命中上次会话的缓存 → 先用它渲染（无感），必要时再静默刷新
     if (!force) {
       if (get().list.length > 0) return;
       const cached = readCachedList();
-      if (cached && cached.length > 0) {
-        set({ list: cached });
+      if (cached && cached.items.length > 0) {
+        set({ list: cached.items });
+        if (Date.now() - cached.ts > LIST_SILENT_REFRESH_AFTER) {
+          void get().loadList(true);
+        }
         return;
       }
     }
@@ -109,7 +123,7 @@ export const useWallpaperStore = create<WallpaperState>((set, get) => ({
 
   select: async (item) => {
     // 先本地生效（无感切换），再落库到用户配置
-    set({ active: { ...item, kind: wallpaperKind(item.key) } });
+    set({ active: { ...item, kind: resolveWallpaperKind(item) } });
     try {
       await lockWallpaper(item.key);
     } catch (e) {
@@ -121,7 +135,7 @@ export const useWallpaperStore = create<WallpaperState>((set, get) => ({
     try {
       const item = await getRandomWallpaper();
       if (!item) return;
-      set({ active: { ...item, kind: wallpaperKind(item.key) } });
+      set({ active: { ...item, kind: resolveWallpaperKind(item) } });
       await lockWallpaper(item.key);
     } catch (e) {
       console.error('[wallpaperStore] switchRandom failed', e);

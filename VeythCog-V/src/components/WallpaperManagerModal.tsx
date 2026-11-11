@@ -5,8 +5,9 @@ import closeIcon from '@iconify-icons/lucide/x';
 import imageIcon from '@iconify-icons/lucide/image';
 import filmIcon from '@iconify-icons/lucide/film';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWallpaperStore, wallpaperKind } from '@/stores/wallpaperStore';
+import { useWallpaperStore, resolveWallpaperKind } from '@/stores/wallpaperStore';
 import { apiUrl } from '@/api/client';
+import WallpaperMedia from '@/components/WallpaperMedia';
 
 interface Props {
   open: boolean;
@@ -23,27 +24,6 @@ const TAB_META: { key: Tab; label: string; icon: typeof imageIcon }[] = [
 /** 壁纸缩略图地址：后端同源代理，缩到 480px 并带 7 天长缓存，只需下载一次 */
 const thumbUrl = (key: string) =>
   apiUrl('/nav/wallpaper/thumb', { key });
-
-/**
- * 缩略图：直连后端缩略图接口 + 原生懒加载。
- * 地址只由壁纸 key 决定，稳定不变，浏览器可长期命中 HTTP 缓存。
- */
-const ThumbImage: React.FC<{ itemKey: string }> = ({ itemKey }) => (
-  <img
-    src={thumbUrl(itemKey)}
-    alt=""
-    loading="lazy"
-    decoding="async"
-    style={{
-      position: 'absolute',
-      inset: 0,
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover',
-      display: 'block',
-    }}
-  />
-);
 
 /**
  * 壁纸管理弹窗（参照 iTab 壁纸库）：左侧分类、右侧缩略图网格。
@@ -66,14 +46,14 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
     let image = 0;
     let video = 0;
     for (const item of list) {
-      if (wallpaperKind(item.key) === 'video') video += 1;
+      if (resolveWallpaperKind(item) === 'video') video += 1;
       else image += 1;
     }
     return { image, video };
   }, [list]);
 
   const items = React.useMemo(
-    () => list.filter((item) => wallpaperKind(item.key) === tab),
+    () => list.filter((item) => resolveWallpaperKind(item) === tab),
     [list, tab],
   );
 
@@ -210,7 +190,7 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
             >
               {items.map((item) => {
                 const selected = active?.key === item.key;
-                const kind = wallpaperKind(item.key);
+                const kind = resolveWallpaperKind(item);
                 return (
                   <div
                     key={item.key}
@@ -234,26 +214,13 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
                       e.currentTarget.style.transform = 'translateY(0)';
                     }}
                   >
-                    {kind === 'video' ? (
-                      <video
-                        src={item.url}
-                        muted
-                        loop
-                        playsInline
-                        autoPlay
-                        preload="metadata"
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          display: 'block',
-                        }}
-                      />
-                    ) : (
-                      <ThumbImage itemKey={item.key} />
-                    )}
+                    {/* 类型由服务端下发的 kind 决定：静态图走缩略图接口，动态壁纸走 <video> 播原视频 */}
+                    <WallpaperMedia
+                      item={item}
+                      imageSrc={kind === 'image' ? thumbUrl(item.key) : undefined}
+                      style={{ position: 'absolute', inset: 0, height: '100%' }}
+                      fallbackText={kind === 'video' ? '视频加载失败' : '缩略图加载失败'}
+                    />
 
                     {selected && (
                       <div

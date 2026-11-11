@@ -29,7 +29,9 @@ import java.io.ByteArrayOutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -59,10 +61,50 @@ public class NavWallpaperService {
     private final S3PresignService presignService;
     private final NavSettingMapper settingMapper;
 
+    /** 静态图后缀白名单（只认这些才当壁纸下发） */
+    private static final Set<String> IMAGE_EXTENSIONS =
+            Set.of("jpg", "jpeg", "png", "webp", "gif", "bmp", "avif");
+
+    /** 动态壁纸后缀白名单（浏览器 <video> 能直接播的容器格式） */
+    private static final Set<String> VIDEO_EXTENSIONS =
+            Set.of("mp4", "webm", "mov", "m4v", "ogv");
+
+    /** 壁纸类型：由服务端判定并随清单下发，前端不再靠文件名猜 */
+    public static final String KIND_IMAGE = "image";
+    public static final String KIND_VIDEO = "video";
+
     /**
-     * 壁纸项（key + 预签名 URL）。
+     * 壁纸项（key + 预签名 URL + 类型）。
+     * <p>kind 是权威判定：前端据此决定用 {@code <img>} 还是 {@code <video>} 渲染，
+     * 避免把 mp4 塞进 img 变成裂图。</p>
      */
-    public record WallpaperItem(String key, String url) {}
+    public record WallpaperItem(String key, String url, String kind) {}
+
+    /** 按 key 后缀判定壁纸类型；非白名单后缀返回 null（不是壁纸） */
+    public static String kindOf(String key) {
+        String ext = extensionOf(key);
+        if (ext == null) {
+            return null;
+        }
+        if (VIDEO_EXTENSIONS.contains(ext)) {
+            return KIND_VIDEO;
+        }
+        if (IMAGE_EXTENSIONS.contains(ext)) {
+            return KIND_IMAGE;
+        }
+        return null;
+    }
+
+    private static String extensionOf(String key) {
+        if (key == null) {
+            return null;
+        }
+        int dot = key.lastIndexOf('.');
+        if (dot < 0 || dot == key.length() - 1) {
+            return null;
+        }
+        return key.substring(dot + 1).toLowerCase(Locale.ROOT);
+    }
 
     /**
      * 缩略图（字节 + Content-Type）。由后端缩放后下发，配合长缓存头，
@@ -78,6 +120,10 @@ public class NavWallpaperService {
     public Thumb thumb(String key) {
         if (key == null || key.isBlank() || key.contains("/") || key.contains("..")) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "壁纸 key 不合法");
+        }
+        // 动态壁纸必须由前端用 <video> 直接播预签名 URL；缩略图接口只服务静态图
+        if (KIND_VIDEO.equals(kindOf(key))) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "动态壁纸不支持缩略图，请直接使用视频地址");
         }
         Thumb cached = thumbCache.get(key);
         if (cached != null) {
@@ -159,7 +205,7 @@ public class NavWallpaperService {
         List<WallpaperItem> result = new ArrayList<>(keys.size());
         for (String key : keys) {
             String url = presignService.presignGetUrl(S3Bucket.WALLPAPERS, key, WALLPAPER_URL_EXPIRY);
-            result.add(new WallpaperItem(key, url));
+            result.add(new WallpaperItem(key, url, kindOf(key)));
         }
         return result;
     }
@@ -175,7 +221,7 @@ public class NavWallpaperService {
         }
         String key = keys.get(ThreadLocalRandom.current().nextInt(keys.size()));
         String url = presignService.presignGetUrl(S3Bucket.WALLPAPERS, key, WALLPAPER_URL_EXPIRY);
-        return new WallpaperItem(key, url);
+        return new WallpaperItem(key, url, kindOf(key));
     }
 
     /**
@@ -192,7 +238,7 @@ public class NavWallpaperService {
             return null;
         }
         String url = presignService.presignGetUrl(S3Bucket.WALLPAPERS, key, WALLPAPER_URL_EXPIRY);
-        return new WallpaperItem(key, url);
+        return new WallpaperItem(key, url, kindOf(key));
     }
 
     /**
@@ -228,10 +274,17 @@ public class NavWallpaperService {
             ListObjectsV2Response response = client.listObjectsV2(request);
             List<String> keys = new ArrayList<>();
             for (S3Object obj : response.contents()) {
+                String key = obj.key();
                 // 跳过目录占位（以 / 结尾的 key）
-                if (!obj.key().endsWith("/")) {
-                    keys.add(obj.key());
+                if (key.endsWith("/")) {
+                    continue;
                 }
+                // 只下发白名单后缀的壁纸文件，桶里混进的其它文件（zip/txt/无后缀）直接忽略
+                if (kindOf(key) == null) {
+                    log.warn("跳过非壁纸文件 key={}", key);
+                    continue;
+                }
+                keys.add(key);
             }
             return keys;
         } catch (Exception e) {

@@ -38,6 +38,8 @@ export interface NavSetting {
 export interface WallpaperItem {
   key: string;
   url: string;
+  /** 服务端判定的壁纸类型；老接口/缓存里可能缺失，前端会按后缀回退 */
+  kind?: 'image' | 'video';
 }
 
 // ============ 分类 ============

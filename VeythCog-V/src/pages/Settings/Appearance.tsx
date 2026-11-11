@@ -11,6 +11,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 import WallpaperManagerModal from '@/components/WallpaperManagerModal';
+import WallpaperMedia from '@/components/WallpaperMedia';
 import { getPreset, presetNames } from '@/styles/presets';
 import {
   BUILTIN_BACKGROUNDS,
@@ -174,22 +175,7 @@ const AppearancePage: React.FC = () => {
             }}
           >
             {activeWallpaper ? (
-              activeWallpaper.kind === 'video' ? (
-                <video
-                  src={activeWallpaper.url}
-                  muted
-                  loop
-                  autoPlay
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                />
-              ) : (
-                <img
-                  src={activeWallpaper.url}
-                  alt=""
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                />
-              )
+              <WallpaperMedia item={activeWallpaper} />
             ) : (
               <span style={{ fontSize: 12, color: colors.textTertiary }}>纯色兜底</span>
             )}
