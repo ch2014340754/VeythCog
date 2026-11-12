@@ -3,6 +3,11 @@ spring:
     name: vc-app
   profiles:
     active: local
+  servlet:
+    multipart:
+      # 头像上限 2MB；留出 multipart 开销，避免被 Spring 默认 1MB 提前拦截
+      max-file-size: 5MB
+      max-request-size: 10MB
   jpa:
     hibernate:
       ddl-auto: none      # 表结构由 docs/sql/*.sql 脚本管理，不用 Hibernate 自动建

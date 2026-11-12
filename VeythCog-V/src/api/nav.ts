@@ -1,7 +1,7 @@
 /**
  * 导航首页 API（iTab 风格新标签页）
  */
-import { http, uploadFile } from './client';
+import { apiUrl, http, uploadFile } from './client';
 
 // ============ 类型 ============
 
@@ -152,6 +152,13 @@ export const getRandomWallpaper = () =>
 
 export const listWallpapers = () =>
   http.get<WallpaperItem[]>('/nav/wallpaper/list');
+
+/**
+ * 动态壁纸视频地址：后端同源代理（支持 Range），不能直接用清单里的 S3 预签名地址。
+ * 对象存储对带 Range 的预签名请求会重置连接，浏览器 <video> 的首帧请求正好走 Range。
+ */
+export const wallpaperVideoUrl = (key: string) =>
+  apiUrl('/nav/wallpaper/video', { key });
 
 export const lockWallpaper = (key: string | null) =>
   http.put<void>('/nav/wallpaper/lock', { key });

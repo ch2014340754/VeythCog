@@ -2,7 +2,7 @@
  * 认证 API（对接后端 vc-chat）
  *   login  → POST /auth/login  { username, password } → { token, username, nickname }
  */
-import { http } from '@/api/client';
+import { http, uploadFile } from '@/api/client';
 import { MOCK_TOKEN } from '@/config';
 import { useModeStore } from '@/stores/modeStore';
 import { mockUsers, addMockUser } from '@/mock/users';
@@ -20,6 +20,8 @@ interface LoginData {
   nickname?: string;
   /** 角色：admin / user（后端下发） */
   role?: string;
+  /** 头像 S3 公开直链（可选） */
+  avatarUrl?: string;
 }
 
 /** 登录 */
@@ -61,6 +63,7 @@ export async function login(username: string, password: string): Promise<LoginRe
     user: {
       id: data.username,
       name: data.nickname || data.username,
+      avatar: data.avatarUrl || undefined,
       role,
     },
   };
@@ -94,9 +97,50 @@ export async function register(params: RegisterParams): Promise<void> {
   });
 }
 
-/** 获取当前用户（后端暂未提供 /auth/me，返回 null） */
+/** 后端 GET /auth/me 返回体 */
+interface UserProfileData {
+  id: number;
+  username: string;
+  nickname?: string;
+  email?: string;
+  avatarUrl?: string;
+  role?: string;
+}
+
+/** 获取当前用户资料（含头像直链） */
 export async function fetchMe(): Promise<User | null> {
-  return null;
+  if (useModeStore.getState().bypassMode) return null;
+  const data = await http.get<UserProfileData>('/auth/me');
+  const role: 'admin' | 'user' = data.role === 'admin' ? 'admin' : 'user';
+  return {
+    id: String(data.id),
+    name: data.nickname || data.username,
+    email: data.email || undefined,
+    avatar: data.avatarUrl || undefined,
+    role,
+  };
+}
+
+/** 头像上传结果 */
+export interface AvatarUploadResult {
+  avatarKey: string;
+  avatarUrl: string;
+}
+
+/** 上传头像到 S3 并绑定当前用户 */
+export async function uploadAvatar(file: File): Promise<AvatarUploadResult> {
+  if (useModeStore.getState().bypassMode) {
+    throw new Error('本地绕过模式未接后端，无法上传头像');
+  }
+  return uploadFile<AvatarUploadResult>('/auth/avatar', file);
+}
+
+/** 恢复默认头像：清除后端绑定并删除 S3 对象 */
+export async function removeAvatar(): Promise<void> {
+  if (useModeStore.getState().bypassMode) {
+    throw new Error('本地绕过模式未接后端，无法修改头像');
+  }
+  await http.del('/auth/avatar');
 }
 
 /** 退出登录（后端无服务端会话，仅前端清 token） */

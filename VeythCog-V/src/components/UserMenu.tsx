@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Popover, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
@@ -19,9 +19,50 @@ const UserMenu: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('account');
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   const initial = (user?.name ?? '?').trim().charAt(0).toUpperCase();
   const loggedIn = !!user;
+  const avatarUrl = user?.avatar;
+
+  useEffect(() => {
+    setAvatarBroken(false);
+  }, [avatarUrl]);
+
+  /** 头像圆块：有真实头像优先展示，加载失败回退昵称首字母 */
+  const renderAvatar = (size: number, ring: boolean) => (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        background: loggedIn ? colors.primary : colors.divider,
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 700,
+        fontSize: size >= 40 ? 15 : 16,
+        flexShrink: 0,
+        overflow: 'hidden',
+        transition: `all 0.2s var(--spring)`,
+        boxShadow: ring && loggedIn ? `0 0 0 3px ${colors.primary15}` : 'none',
+      }}
+    >
+      {loggedIn && avatarUrl && !avatarBroken ? (
+        <img
+          src={avatarUrl}
+          alt={user!.name}
+          onError={() => setAvatarBroken(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : loggedIn ? (
+        initial
+      ) : (
+        <Icon icon={userIcon} width={18} color={colors.textSecondary} />
+      )}
+    </div>
+  );
 
   /** 打开设置弹窗（在当前页弹出，不跳转） */
   const openSettings = (tab: SettingsTab) => {
@@ -61,23 +102,7 @@ const UserMenu: React.FC = () => {
     <div className="glass-panel" style={{ width: 260, padding: '8px 0' }}>
       {/* 顶部用户信息 */}
       <div style={{ padding: '8px 16px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: '50%',
-            background: loggedIn ? colors.primary : colors.divider,
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 16,
-            fontWeight: 700,
-            flexShrink: 0,
-          }}
-        >
-          {loggedIn ? initial : <Icon icon={userIcon} width={18} color={colors.textSecondary} />}
-        </div>
+        {renderAvatar(40, false)}
         <div style={{ minWidth: 0 }}>
           <div
             style={{
@@ -156,25 +181,10 @@ const UserMenu: React.FC = () => {
         overlayStyle={{ borderRadius: 'var(--radius-lg)' }}
       >
         <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: '50%',
-            background: loggedIn ? colors.primary : colors.divider,
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            fontWeight: 700,
-            fontSize: 15,
-            flexShrink: 0,
-            transition: `all 0.2s var(--spring)`,
-            boxShadow: loggedIn ? `0 0 0 3px ${colors.primary15}` : 'none',
-          }}
+          style={{ cursor: 'pointer', flexShrink: 0 }}
           title={loggedIn ? user!.name : '未登录'}
         >
-          {loggedIn ? initial : <Icon icon={userIcon} width={18} color={colors.textSecondary} />}
+          {renderAvatar(40, true)}
         </div>
       </Popover>
 

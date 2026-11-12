@@ -1,4 +1,5 @@
 import React from 'react';
+import { wallpaperVideoUrl } from '@/api/nav';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,8 +10,8 @@ import { overlayColor } from '@/styles/backgrounds';
  * 位于所有页面内容之下（z-index: -1），不接受鼠标事件。
  *
  * 注意：type 为 video 的壁纸绝对不能用 <img> 渲染（mp4 进 img 只会裂图），
- * 这里统一走 <video autoPlay muted loop playsInline>，并允许浏览器直接向
- * S3 预签名地址发起带 Range 的分段请求。
+ * 这里统一走 <video autoPlay muted loop playsInline>；视频走同源后端代理，
+ * 由后端带 Range 转发 S3——对象存储会重置带 Range 的预签名请求，直连必然首帧失败。
  */
 const WallpaperBackdrop: React.FC = () => {
   const active = useWallpaperStore((s) => s.active);
@@ -31,7 +32,7 @@ const WallpaperBackdrop: React.FC = () => {
     >
       <video
         key={active.key}
-        src={active.url}
+        src={wallpaperVideoUrl(active.key)}
         autoPlay
         loop
         muted

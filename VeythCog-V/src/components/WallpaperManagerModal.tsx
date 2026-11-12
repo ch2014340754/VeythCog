@@ -2,6 +2,9 @@ import React from 'react';
 import { Modal, Spin } from 'antd';
 import { Icon } from '@iconify/react';
 import closeIcon from '@iconify-icons/lucide/x';
+import refreshIcon from '@iconify-icons/lucide/refresh-cw';
+import maximizeIcon from '@iconify-icons/lucide/maximize-2';
+import minimizeIcon from '@iconify-icons/lucide/minimize-2';
 import imageIcon from '@iconify-icons/lucide/image';
 import filmIcon from '@iconify-icons/lucide/film';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -37,10 +40,63 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
   const loadList = useWallpaperStore((s) => s.loadList);
   const select = useWallpaperStore((s) => s.select);
   const [tab, setTab] = React.useState<Tab>('image');
+  const [expanded, setExpanded] = React.useState(false);
 
   React.useEffect(() => {
     if (open) loadList();
+    else setExpanded(false);
   }, [open, loadList]);
+
+  /** 顶部工具按钮：统一 34px 灰底圆角样式，跟随主题 */
+  const toolButton = (
+    icon: typeof closeIcon,
+    label: string,
+    onClick: () => void,
+    options?: { active?: boolean; spinning?: boolean; disabled?: boolean },
+  ) => {
+    const { active = false, spinning = false, disabled = false } = options ?? {};
+    const idleBg = 'rgba(120,125,150,0.14)';
+    const hoverBg = 'rgba(120,125,150,0.26)';
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        title={label}
+        disabled={disabled}
+        style={{
+          width: 34,
+          height: 34,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: 'none',
+          borderRadius: 10,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.55 : 1,
+          background: active ? colors.primary10 : idleBg,
+          color: active ? colors.primary : colors.textSecondary,
+          transition: 'background .15s ease, color .15s ease',
+        }}
+        onMouseEnter={(e) => {
+          if (disabled) return;
+          e.currentTarget.style.background = hoverBg;
+          e.currentTarget.style.color = colors.text;
+        }}
+        onMouseLeave={(e) => {
+          if (disabled) return;
+          e.currentTarget.style.background = active ? colors.primary10 : idleBg;
+          e.currentTarget.style.color = active ? colors.primary : colors.textSecondary;
+        }}
+      >
+        <Icon
+          icon={icon}
+          width={16}
+          style={spinning ? { animation: 'spin 1s linear infinite' } : undefined}
+        />
+      </button>
+    );
+  };
 
   const counts = React.useMemo(() => {
     let image = 0;
@@ -62,45 +118,29 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
       open={open}
       onCancel={onClose}
       footer={null}
-      width={920}
-      centered
+      width={expanded ? '100vw' : 920}
+      centered={!expanded}
       closable={false}
       title={null}
-      styles={{ body: { padding: 0 }, content: { padding: 0, overflow: 'hidden', borderRadius: 16 } }}
+      style={expanded ? { top: 0, margin: 0, maxWidth: '100vw', paddingBottom: 0 } : undefined}
+      styles={{
+        body: { padding: 0 },
+        content: {
+          padding: 0,
+          overflow: 'hidden',
+          borderRadius: expanded ? 0 : 16,
+          height: expanded ? '100vh' : undefined,
+        },
+      }}
     >
-      <div style={{ position: 'relative', display: 'flex', height: 'min(600px, 76vh)', background: colors.surface }}>
-        {/* 关闭按钮：灰底圆角方块（参照 iTab 壁纸库右上角） */}
-        <button
-          onClick={onClose}
-          aria-label="关闭"
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            zIndex: 3,
-            width: 34,
-            height: 34,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: 'none',
-            borderRadius: 10,
-            cursor: 'pointer',
-            background: 'rgba(120,125,150,0.14)',
-            color: colors.textSecondary,
-            transition: 'background .15s ease, color .15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(120,125,150,0.26)';
-            e.currentTarget.style.color = colors.text;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(120,125,150,0.14)';
-            e.currentTarget.style.color = colors.textSecondary;
-          }}
-        >
-          <Icon icon={closeIcon} width={16} />
-        </button>
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          height: expanded ? '100vh' : 'min(600px, 76vh)',
+          background: colors.surface,
+        }}
+      >
         {/* 左栏：分类 */}
         <div
           style={{
@@ -152,9 +192,33 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
           </div>
         </div>
 
-        {/* 右栏：缩略图网格 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-          {loadingList && (
+        {/* 右栏：顶部工具栏 + 缩略图网格 */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              gap: 8,
+              padding: '12px 16px 0',
+              flexShrink: 0,
+            }}
+          >
+            {toolButton(refreshIcon, loadingList ? '正在刷新壁纸' : '刷新壁纸', () => void loadList(true), {
+              disabled: loadingList,
+              spinning: loadingList,
+            })}
+            {toolButton(
+              expanded ? minimizeIcon : maximizeIcon,
+              expanded ? '退出全屏' : '放大弹窗至全屏',
+              () => setExpanded((v) => !v),
+              { active: expanded },
+            )}
+            {toolButton(closeIcon, '关闭弹窗', onClose)}
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 20px 20px' }}>
+          {loadingList && items.length === 0 && (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Spin />
             </div>
@@ -179,7 +243,7 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
             </div>
           )}
 
-          {!loadingList && items.length > 0 && (
+          {items.length > 0 && (
             <div
               style={{
                 display: 'grid',
@@ -256,6 +320,7 @@ const WallpaperManagerModal: React.FC<Props> = ({ open, onClose }) => {
               })}
             </div>
           )}
+          </div>
         </div>
       </div>
     </Modal>

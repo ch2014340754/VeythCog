@@ -9,6 +9,7 @@ import com.vc.nav.service.NavSettingService;
 import com.vc.nav.service.NavWallpaperService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -16,9 +17,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.time.Duration;
 import java.util.List;
@@ -86,6 +89,34 @@ public class NavSettingController {
                 .contentType(MediaType.parseMediaType(thumb.contentType()))
                 .cacheControl(CacheControl.maxAge(Duration.ofDays(7)).cachePublic().immutable())
                 .body(thumb.data());
+    }
+
+    /**
+     * 8. 动态壁纸视频流（服务端代理 + Range）。
+     * <p>浏览器 {@code <video>} 首帧发 Range 请求，而对象存储对带 Range 的预签名 GET 会重置连接，
+     * 因此视频改由后端流式转发；key 仍必须命中桶内对象，接口与缩略图一样放行。</p>
+     */
+    @GetMapping("/wallpaper/video")
+    public ResponseEntity<StreamingResponseBody> wallpaperVideo(
+            @RequestParam("key") String key,
+            @RequestHeader(value = HttpHeaders.RANGE, required = false) String range) {
+        NavWallpaperService.VideoStream video = wallpaperService.video(key, range);
+        StreamingResponseBody body = outputStream -> {
+            try (var stream = video.stream()) {
+                stream.transferTo(outputStream);
+            }
+        };
+        ResponseEntity.BodyBuilder builder = ResponseEntity
+                .status(video.partial() ? 206 : 200)
+                .contentType(MediaType.parseMediaType(video.contentType()))
+                .contentLength(video.length())
+                .header("Accept-Ranges", "bytes")
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(7)).cachePublic().immutable());
+        if (video.partial()) {
+            builder.header("Content-Range",
+                    "bytes " + video.start() + "-" + video.end() + "/" + video.totalLength());
+        }
+        return builder.body(body);
     }
 
     private Long currentUserId() {

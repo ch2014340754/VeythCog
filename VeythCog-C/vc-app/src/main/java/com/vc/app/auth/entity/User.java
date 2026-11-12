@@ -41,6 +41,10 @@ public class User implements Serializable {
     @Column(length = 128)
     private String email = "";
 
+    /** 头像 S3 对象 key；展示时由后端生成公开直链 */
+    @Column(name = "avatar_key", length = 512)
+    private String avatarKey = "";
+
     /** 状态：active / disabled */
     @Column(length = 16)
     private String status = "active";

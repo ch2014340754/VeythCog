@@ -15,6 +15,8 @@ import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -113,6 +115,26 @@ public class NavWallpaperService {
     public record Thumb(byte[] data, String contentType) {}
 
     /**
+     * 动态壁纸视频流（服务端代理，避免浏览器直连预签名地址时 Range 请求被对象存储重置）。
+     *
+     * @param stream       S3 响应流，调用方负责关闭
+     * @param contentType  Content-Type
+     * @param totalLength  对象总字节数
+     * @param start        本次返回的起始字节（含）
+     * @param end          本次返回的结束字节（含）
+     */
+    public record VideoStream(ResponseInputStream<GetObjectResponse> stream, String contentType,
+                              long totalLength, long start, long end) {
+        public long length() {
+            return end - start + 1;
+        }
+
+        public boolean partial() {
+            return start > 0 || end < totalLength - 1;
+        }
+    }
+
+    /**
      * 生成（或取缓存中的）壁纸缩略图。
      * key 只允许桶内平铺对象（不含路径分隔符），配合 getObject 的存在性校验，
      * 既不能用作任意路径探测，也省掉每次请求都 list 一遍桶的开销。
@@ -157,9 +179,93 @@ public class NavWallpaperService {
     }
 
     /**
-     * 等比缩到 {@link #THUMB_WIDTH} 宽并转 JPEG。
-     * 无法解码的格式（如 webp 无 ImageIO 插件）或本来就比目标小的图，直接回传原始字节。
+     * 动态壁纸视频流：由后端代理 S3，按浏览器 Range 请求返回 206。
+     * <p>预签名地址虽然能整段 GET，但对象存储在带 Range 的预签名请求上会直接重置连接，
+     * 浏览器 {@code <video>} 首帧恰好依赖 Range，因此不能把预签名地址直接交给视频元素。</p>
      */
+    public VideoStream video(String key, String rangeHeader) {
+        if (key == null || key.isBlank() || key.contains("/") || key.contains("..")) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "壁纸 key 不合法");
+        }
+        if (!KIND_VIDEO.equals(kindOf(key))) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "该壁纸不是动态壁纸");
+        }
+        try {
+            S3Client client = clientProvider.getS3Client();
+            HeadObjectResponse meta = client.headObject(HeadObjectRequest.builder()
+                    .bucket(S3Bucket.WALLPAPERS.getBucketName())
+                    .key(key)
+                    .build());
+            long total = meta.contentLength();
+            if (total <= 0) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "壁纸不存在或已删除");
+            }
+            String contentType = meta.contentType();
+            if (contentType == null || contentType.isBlank()) {
+                contentType = key.toLowerCase(Locale.ROOT).endsWith(".webm") ? "video/webm" : "video/mp4";
+            }
+            long[] range = parseRange(rangeHeader, total);
+            GetObjectRequest request = GetObjectRequest.builder()
+                    .bucket(S3Bucket.WALLPAPERS.getBucketName())
+                    .key(key)
+                    .range("bytes=" + range[0] + "-" + range[1])
+                    .build();
+            ResponseInputStream<GetObjectResponse> stream = client.getObject(request);
+            return new VideoStream(stream, contentType, total, range[0], range[1]);
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "壁纸不存在或已删除");
+            }
+            log.warn("读取动态壁纸失败 key={}：{}", key, e.getMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "动态壁纸读取失败");
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("代理动态壁纸失败 key={}：{}", key, e.getMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "动态壁纸读取失败");
+        }
+    }
+
+    /**
+     * 解析单段 Range（bytes=start-end / bytes=start- / bytes=-suffix）。
+     * 非法或越界时退回整段，避免浏览器拿到无法理解的 416。
+     */
+    private static long[] parseRange(String header, long total) {
+        long[] full = new long[]{0, total - 1};
+        if (header == null || header.isBlank() || !header.startsWith("bytes=")) {
+            return full;
+        }
+        String spec = header.substring(6).split(",")[0].trim();
+        int dash = spec.indexOf('-');
+        if (dash < 0) {
+            return full;
+        }
+        try {
+            String startText = spec.substring(0, dash).trim();
+            String endText = spec.substring(dash + 1).trim();
+            long start;
+            long end;
+            if (startText.isEmpty()) {
+                long suffix = Long.parseLong(endText);
+                if (suffix <= 0) {
+                    return full;
+                }
+                start = Math.max(0, total - suffix);
+                end = total - 1;
+            } else {
+                start = Long.parseLong(startText);
+                end = endText.isEmpty() ? total - 1 : Math.min(Long.parseLong(endText), total - 1);
+            }
+            if (start < 0 || start >= total || start > end) {
+                return full;
+            }
+            return new long[]{start, end};
+        } catch (NumberFormatException e) {
+            return full;
+        }
+    }
+
+
     private Thumb shrink(byte[] raw, String contentType, String key) {
         String fallbackType = contentType == null || contentType.isBlank() ? guessContentType(key) : contentType;
         try {

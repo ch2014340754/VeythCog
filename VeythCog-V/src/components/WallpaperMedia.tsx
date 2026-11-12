@@ -1,6 +1,6 @@
 import React from 'react';
 import { resolveWallpaperKind } from '@/stores/wallpaperStore';
-import type { WallpaperItem } from '@/api/nav';
+import { wallpaperVideoUrl, type WallpaperItem } from '@/api/nav';
 
 interface Props {
   item: WallpaperItem;
@@ -35,10 +35,11 @@ const WallpaperMedia: React.FC<Props> = ({
 }) => {
   const [failed, setFailed] = React.useState(false);
 
-  // 切换壁纸时重置失败状态（key 变了就是另一个资源）
+  // 刷新清单后 key 可能不变、只有预签名 url 换新；失败状态也必须跟着地址重置，
+  // 否则“刷新壁纸”后仍停在上一轮的失败占位上。
   React.useEffect(() => {
     setFailed(false);
-  }, [item.key]);
+  }, [item.key, item.url, imageSrc]);
 
   if (failed) {
     return (
@@ -64,7 +65,7 @@ const WallpaperMedia: React.FC<Props> = ({
     return (
       <video
         key={item.key}
-        src={item.url}
+        src={wallpaperVideoUrl(item.key)}
         autoPlay={autoPlay}
         loop
         muted

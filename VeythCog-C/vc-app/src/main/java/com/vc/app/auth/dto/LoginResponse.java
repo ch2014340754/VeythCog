@@ -14,6 +14,9 @@ public class LoginResponse implements Serializable {
 
     private String nickname;
 
+    /** 头像 S3 公开直链；未设置时为 null */
+    private String avatarUrl;
+
     /** 角色：admin / user */
     private String role;
 }
