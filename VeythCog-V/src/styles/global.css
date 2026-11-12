@@ -653,3 +653,28 @@ body.dark .ant-select-focused .ant-select-selector {
   background-color: rgba(31, 35, 64, 0.4);
 }
 
+/* ========================================
+   导航分类切换：从底部弹入
+   参照 iTab 的 flip 入场（300ms ease，收尾用强 ease-out 做出"弹出"感）。
+   只挂在新分类数据真正到位的那一刻，同一分类的静默刷新不会重播。
+   ======================================== */
+@keyframes vc-nav-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.vc-nav-pop {
+  animation: vc-nav-pop-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vc-nav-pop {
+    animation: none;
+  }
+}
+
+

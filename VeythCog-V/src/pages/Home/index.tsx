@@ -72,6 +72,8 @@ const HomePage: React.FC = () => {
   const loadSetting = useNavStore((s) => s.loadSetting);
   const categories = useNavStore((s) => s.categories);
   const activeCategoryId = useNavStore((s) => s.activeCategoryId);
+  /** 书签数据实际所属分类：数据到位才变，用它触发切分类的入场动画 */
+  const dataCategoryId = useNavStore((s) => s.dataCategoryId);
   const setActiveCategory = useNavStore((s) => s.setActiveCategory);
   // 全站唯一壁纸：由全局 wallpaperStore 管理，导航页只负责入口
   const activeWallpaper = useWallpaperStore((s) => s.active);
@@ -82,7 +84,6 @@ const HomePage: React.FC = () => {
   const [editingBookmark, setEditingBookmark] = React.useState<NavBookmark | null>(null);
   const [categoryManageOpen, setCategoryManageOpen] = React.useState(false);
   const [wallpaperManagerOpen, setWallpaperManagerOpen] = React.useState(false);
-  const [fading, setFading] = React.useState(false);
   /** 右键菜单：书签菜单 / 空白区菜单，同一时间只允许一个 */
   const [menu, setMenu] = React.useState<
     | { kind: 'bookmark'; bookmark: NavBookmark; x: number; y: number }
@@ -151,7 +152,7 @@ const HomePage: React.FC = () => {
     if (debounceRef.current) return;
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
-    }, 300);
+    }, 220);
 
     const idx = categories.findIndex((c) => c.id === activeCategoryId);
     if (idx < 0 || categories.length <= 1) return;
@@ -163,9 +164,7 @@ const HomePage: React.FC = () => {
       nextIdx = (idx - 1 + categories.length) % categories.length;
     }
 
-    setFading(true);
     setActiveCategory(categories[nextIdx].id);
-    setTimeout(() => setFading(false), 300);
   };
 
   // 空白处右键：新增图标 / 换张壁纸
@@ -238,13 +237,13 @@ const HomePage: React.FC = () => {
         <Clock />
         <SearchBar />
 
-        {/* 切换区：仅书签网格随分类切换淡出，搜索框不参与 */}
+        {/* 切换区：搜索框不参与，只有书签网格从底部弹入。
+            key 取 dataCategoryId —— 新分类的书签真正到位时才重挂载、播一次；
+            同一分类内的静默刷新（图标同步完成）不会重播。 */}
         <div
-          style={{
-            opacity: fading ? 0.3 : 1,
-            transition: 'opacity 0.25s ease',
-            paddingTop: '40px',
-          }}
+          key={dataCategoryId ?? 'nav-empty'}
+          className="vc-nav-pop"
+          style={{ paddingTop: '40px' }}
         >
           <BookmarkGrid
             onAddBookmark={handleAddBookmark}

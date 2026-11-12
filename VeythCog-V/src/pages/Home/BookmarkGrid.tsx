@@ -70,6 +70,9 @@ const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContex
           gap: ROW_GAP,
           justifyContent: 'center',
           alignContent: 'start',
+          // 固定 4 行高度：各分类图标数不同（3 行 / 撑满 4 行后滚动）时骨架不跳，
+          // 切换只换内容、不动版式
+          minHeight: GRID_MAX_HEIGHT,
           maxHeight: GRID_MAX_HEIGHT,
           overflowY: 'auto',
           paddingRight: 6,

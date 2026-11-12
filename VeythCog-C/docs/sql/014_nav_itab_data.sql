@@ -1,23 +1,132 @@
 -- =============================================================================
--- 014_nav_itab_data.sql · 导航分类 / 书签数据入库（iTab 备份导入结果）
+-- 014_nav_itab_data.sql · 导航分类 / 书签数据入库（iTab 备份导入）
 -- -----------------------------------------------------------------------------
--- 环境：PostgreSQL 15/16；前置：012_nav.sql、013_nav_bookmark_icon.sql 已执行。
--- 内容：7 个分类 + 267 条书签（含 icon_type / icon_key / icon_text / icon_color）。
--- 目标用户：默认 admin；线上用户名不同时，把 WHERE 中的 admin 全部替换。
--- 幂等：分类按 (user_id,name) 判重；书签按 (category_id,url) 判重。
--- 同步：已存在的同 URL 书签会更新 4 个图标字段，不覆盖标题/分类/排序。
--- 前置：public-icons 桶中必须已存在对应 icon_key 对象；本 SQL 只写数据库引用。
--- 备份：pg_dump -t nav_category -t nav_bookmark -t nav_setting ...
+-- 环境：PostgreSQL 15/16（与 012 / 013 同库）
+-- 前置：app_user 表已存在。本脚本自带 schema 自愈：
+--      线上只执行过 P0 版 012、没跑 013 也能直接跑完。
+-- 目标用户：admin（线上用户名不同时，把脚本里所有 username = 'admin' 替换成实际用户名）
+-- 内容：7 个分类 + 267 条书签（含 icon_type / icon_key / icon_text / icon_color）
+-- 幂等：分类按 (user_id, name, deleted = false) 判重；
+--       书签按 (user_id, category_id, url, deleted = false) 判重；
+--       已存在的同 URL 书签只同步 4 个图标字段，不覆盖标题 / 分类 / 排序。
+-- 前置资产：public-icons 桶里需已有对应 icon_key 对象；本脚本只写数据库引用，不上传图片。
+--
+-- 2026-11-12 修订（原版线上执行报错的根因，已在临时 PostgreSQL 实例复现并验证修复）：
+--   ① 【致命】原版把源数据装进 CREATE TEMP TABLE nav_category / nav_bookmark，与真实表同名。
+--      PostgreSQL 解析未限定表名时 pg_temp 优先于 search_path，于是后面
+--      INSERT INTO nav_category (user_id, ...) 全部打到只有 4 列的临时表，报：
+--        ERROR: column "user_id" of relation "nav_category" does not exist
+--      → 临时表改名为 v_itab_category / v_itab_bookmark，彻底消除表名遮蔽。
+--   ② 原版分类补齐写成 INSERT ... JOIN nav_category v ON TRUE，实为真实表自连接。
+--      修掉 ① 的遮蔽后，会按"现有分类数量"重复插入；现有分类为 0 时则一条都不插。
+--      → 改为 CROSS JOIN 临时清单 + NOT EXISTS 判重，每个分类最多一条。
+--   ③ 线上若只执行过 P0 版 012、没跑 013，nav_bookmark 缺 5 个图标列，
+--      原版会在写数据时报 column "icon_type" does not exist。
+--      → 脚本内联 CREATE TABLE IF NOT EXISTS + ALTER ... ADD COLUMN IF NOT EXISTS，先自愈再写数据。
+--   ④ 原版 admin 不存在时静默插入 0 行，看不出失败；
+--      → 改为前置 RAISE EXCEPTION 明确报错，基础列缺失也给出可读提示。
+--   ⑤ 图标同步 UPDATE 未排除软删除行 → 补 deleted = FALSE。
 -- =============================================================================
 
 BEGIN;
 
--- 0. 本次导入数据（临时表，COMMIT 时自动删除）
-CREATE TEMP TABLE _nav_import_categories (
+-- -----------------------------------------------------------------------------
+-- 0. schema 自愈：以代码实体（com.vc.nav.entity.*）和 012 最终版 DDL 为准
+--    0.1 表不存在则建（已存在则跳过，不改动既有数据）
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS nav_category (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     BIGINT       NOT NULL REFERENCES app_user(id),
+    name        VARCHAR(32)  NOT NULL,
+    icon        VARCHAR(128) NOT NULL DEFAULT '',
+    sort_order  INT          NOT NULL DEFAULT 0,
+    is_default  BOOLEAN      NOT NULL DEFAULT FALSE,
+    deleted     BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS nav_bookmark (
+    id          BIGSERIAL PRIMARY KEY,
+    category_id BIGINT       NOT NULL REFERENCES nav_category(id),
+    user_id     BIGINT       NOT NULL REFERENCES app_user(id),
+    title       VARCHAR(64)  NOT NULL,
+    url         VARCHAR(512) NOT NULL,
+    icon_type   VARCHAR(16)  NOT NULL DEFAULT 'auto',
+    icon_key    VARCHAR(256) NULL,
+    icon_text   VARCHAR(16)  NULL,
+    icon_color  VARCHAR(16)  NULL,
+    icon_synced_at TIMESTAMPTZ NULL,
+    sort_order  INT          NOT NULL DEFAULT 0,
+    deleted     BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS nav_setting (
+    user_id              BIGINT       PRIMARY KEY REFERENCES app_user(id),
+    search_engine        VARCHAR(16)  NOT NULL DEFAULT 'baidu',
+    current_wallpaper_key VARCHAR(256) NULL,
+    active_category_id   BIGINT       NULL,
+    updated_at           TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+-- 0.2 旧库补列：等价于 013_nav_bookmark_icon.sql（P0 库缺这 5 列）
+ALTER TABLE nav_bookmark
+    ADD COLUMN IF NOT EXISTS icon_type      VARCHAR(16) NOT NULL DEFAULT 'auto',
+    ADD COLUMN IF NOT EXISTS icon_key       VARCHAR(256) NULL,
+    ADD COLUMN IF NOT EXISTS icon_text      VARCHAR(16) NULL,
+    ADD COLUMN IF NOT EXISTS icon_color     VARCHAR(16) NULL,
+    ADD COLUMN IF NOT EXISTS icon_synced_at TIMESTAMPTZ NULL;
+
+-- 0.3 icon_type 取值约束（与 NavBookmark.ICON_TYPE_* 常量一致）
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'ck_nav_bookmark_icon_type'
+          AND conrelid = 'nav_bookmark'::regclass
+    ) THEN
+        ALTER TABLE nav_bookmark
+            ADD CONSTRAINT ck_nav_bookmark_icon_type
+            CHECK (icon_type IN ('auto', 'upload', 'text'));
+    END IF;
+END $$;
+
+-- 0.4 基础列体检：缺列时直接给出可读提示，不让后面的 INSERT 报难懂的错
+DO $$
+DECLARE missing text;
+BEGIN
+    SELECT string_agg(t.c, ', ' ORDER BY t.c) INTO missing
+    FROM (VALUES ('id'), ('category_id'), ('user_id'), ('title'), ('url'),
+                 ('sort_order'), ('deleted'), ('created_at'), ('updated_at')) AS t(c)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = 'nav_bookmark'::regclass
+          AND a.attname = t.c
+          AND NOT a.attisdropped
+    );
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'nav_bookmark 缺少基础列: %。请先执行 012_nav.sql 的完整建表语句', missing;
+    END IF;
+END $$;
+
+-- 0.5 目标用户体检：不存在就报错，避免静默插入 0 行
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM app_user WHERE username = 'admin') THEN
+        RAISE EXCEPTION 'app_user 中找不到 username = ''admin'' 的用户，请把本脚本中的 admin 改成线上实际用户名';
+    END IF;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- 1. 源数据（临时表，命名加 v_ 前缀，避免与真实表 nav_* 重名）
+-- -----------------------------------------------------------------------------
+CREATE TEMP TABLE v_itab_category (
     name VARCHAR(32), icon VARCHAR(128), sort_order INT, is_default BOOLEAN
 ) ON COMMIT DROP;
 
-INSERT INTO _nav_import_categories (name, icon, sort_order, is_default) VALUES
+INSERT INTO v_itab_category (name, icon, sort_order, is_default) VALUES
     ('主页', '🏠', 10, TRUE),
     ('后端', '</>', 20, FALSE),
     ('前端', '🎨', 30, FALSE),
@@ -27,12 +136,12 @@ INSERT INTO _nav_import_categories (name, icon, sort_order, is_default) VALUES
     ('AI', '✨', 70, FALSE)
 ;
 
-CREATE TEMP TABLE _nav_import_bookmarks (
+CREATE TEMP TABLE v_itab_bookmark (
     category_name VARCHAR(32), title VARCHAR(64), url VARCHAR(512), sort_order INT,
     icon_type VARCHAR(16), icon_key VARCHAR(256), icon_text VARCHAR(16), icon_color VARCHAR(16)
 ) ON COMMIT DROP;
 
-INSERT INTO _nav_import_bookmarks
+INSERT INTO v_itab_bookmark
     (category_name, title, url, sort_order, icon_type, icon_key, icon_text, icon_color)
 VALUES
     ('主页', 'GitHub', 'https://github.com', 10, 'upload', 'icons/2026/11/12/f7191a64767940e6a939152958283697.png', NULL, NULL),
@@ -303,67 +412,99 @@ VALUES
     ('AI', '腾讯云', 'https://cloud.tencent.com/act/pro/double11-202611?fromSource=gwzcw.12021792.12021792.12021792&utm_medium=cpc&utm_id=gwzcw.12021792.12021792.12021792&msclkid=275', 450, 'upload', 'icons/2026/11/12/a690568cbbaa4d28ba64a0e999e01731.png', NULL, NULL),
     ('AI', 'Cloudflare', 'https://dash.cloudflare.com/', 460, 'upload', 'icons/2026/11/12/7e8f1a959c1749a29692154c0e192f7b.png', NULL, NULL)
 ;
-
--- 1. 分类（按名称补齐，不覆盖已有分类）
-WITH target_user AS (
-    SELECT id FROM app_user WHERE username = 'admin'
-)
+-- -----------------------------------------------------------------------------
+-- 2. 分类补齐：从临时清单 CROSS JOIN 目标用户，按名称判重（每分类最多一条）
+-- -----------------------------------------------------------------------------
 INSERT INTO nav_category (user_id, name, icon, sort_order, is_default)
-SELECT t.id, v.name, v.icon, v.sort_order, v.is_default
-FROM target_user t
-JOIN _nav_import_categories v ON TRUE
-WHERE NOT EXISTS (
-    SELECT 1 FROM nav_category nc
-    WHERE nc.user_id = t.id AND nc.name = v.name AND nc.deleted = FALSE
-);
+SELECT u.id, v.name, v.icon, v.sort_order, v.is_default
+FROM app_user u
+CROSS JOIN v_itab_category v
+WHERE u.username = 'admin'
+  AND NOT EXISTS (
+      SELECT 1 FROM nav_category nc
+      WHERE nc.user_id = u.id
+        AND nc.name = v.name
+        AND nc.deleted = FALSE
+  );
 
--- 2. 书签（首次插入；按分类名 + URL 判重，保留分类内排序）
-WITH target_user AS (
-    SELECT id FROM app_user WHERE username = 'admin'
-)
+-- -----------------------------------------------------------------------------
+-- 3. 书签首次插入：按 (分类, URL) 判重，保留分类内排序
+-- -----------------------------------------------------------------------------
 INSERT INTO nav_bookmark (user_id, category_id, title, url, sort_order,
-                           icon_type, icon_key, icon_text, icon_color)
-SELECT t.id, c.id, v.title, v.url, v.sort_order,
+                          icon_type, icon_key, icon_text, icon_color)
+SELECT u.id, c.id, v.title, v.url, v.sort_order,
        v.icon_type, v.icon_key, v.icon_text, v.icon_color
-FROM target_user t
-JOIN nav_category c ON c.user_id = t.id AND c.deleted = FALSE
-JOIN _nav_import_bookmarks v ON v.category_name = c.name
-WHERE NOT EXISTS (
-    SELECT 1 FROM nav_bookmark nb
-    WHERE nb.user_id = t.id AND nb.category_id = c.id
-      AND nb.url = v.url AND nb.deleted = FALSE
-);
+FROM app_user u
+CROSS JOIN v_itab_bookmark v
+JOIN nav_category c
+  ON c.user_id = u.id
+ AND c.name = v.category_name
+ AND c.deleted = FALSE
+WHERE u.username = 'admin'
+  AND NOT EXISTS (
+      SELECT 1 FROM nav_bookmark nb
+      WHERE nb.user_id = u.id
+        AND nb.category_id = c.id
+        AND nb.url = v.url
+        AND nb.deleted = FALSE
+  );
 
--- 3. 已存在书签：只同步图标字段（线上已有 8 条旧书签也能补齐/修复图标）
-WITH target_user AS (
-    SELECT id FROM app_user WHERE username = 'admin'
-)
+-- -----------------------------------------------------------------------------
+-- 4. 已存在书签：只同步 4 个图标字段（不覆盖标题 / 分类 / 排序；跳过软删除行）
+-- -----------------------------------------------------------------------------
 UPDATE nav_bookmark nb
 SET icon_type = v.icon_type,
     icon_key = v.icon_key,
     icon_text = v.icon_text,
     icon_color = v.icon_color,
     updated_at = now()
-FROM target_user t
-JOIN nav_category c ON c.user_id = t.id AND c.deleted = FALSE
-JOIN _nav_import_bookmarks v ON v.category_name = c.name
-WHERE nb.user_id = t.id AND nb.category_id = c.id
-  AND nb.url = v.url AND nb.deleted = FALSE
+FROM app_user u
+JOIN nav_category c
+  ON c.user_id = u.id
+ AND c.deleted = FALSE
+JOIN v_itab_bookmark v
+  ON v.category_name = c.name
+WHERE u.username = 'admin'
+  AND nb.user_id = u.id
+  AND nb.category_id = c.id
+  AND nb.url = v.url
+  AND nb.deleted = FALSE
   AND (nb.icon_type IS DISTINCT FROM v.icon_type
        OR nb.icon_key IS DISTINCT FROM v.icon_key
        OR nb.icon_text IS DISTINCT FROM v.icon_text
        OR nb.icon_color IS DISTINCT FROM v.icon_color);
 
+-- -----------------------------------------------------------------------------
+-- 5. 导入结果校验（事务内，可引用本次临时清单）
+--    清单应固定为 7 / 267；库内数量在线上原本已有书签时会更大，属正常。
+-- -----------------------------------------------------------------------------
+SELECT '本次清单分类' AS item, (SELECT count(*) FROM v_itab_category)::text AS n
+UNION ALL
+SELECT '本次清单书签', (SELECT count(*) FROM v_itab_bookmark)::text
+UNION ALL
+SELECT '库内 admin 分类', (SELECT count(*) FROM nav_category
+       WHERE user_id = (SELECT id FROM app_user WHERE username = 'admin') AND deleted = FALSE)::text
+UNION ALL
+SELECT '库内 admin 书签', (SELECT count(*) FROM nav_bookmark
+       WHERE user_id = (SELECT id FROM app_user WHERE username = 'admin') AND deleted = FALSE)::text;
+
 COMMIT;
 
--- 4. 执行后校验（应输出 7 个分类 / 267 条书签）
-SELECT c.name, count(*) AS bookmarks
-FROM nav_bookmark b JOIN nav_category c ON c.id = b.category_id
+-- -----------------------------------------------------------------------------
+-- 6. 提交后复核（只查真实表；用于确认线上落库结果）
+-- -----------------------------------------------------------------------------
+SELECT c.name AS category, count(*) AS bookmarks
+FROM nav_bookmark b
+JOIN nav_category c ON c.id = b.category_id
 WHERE b.user_id = (SELECT id FROM app_user WHERE username = 'admin')
-  AND b.deleted = FALSE AND c.deleted = FALSE
-GROUP BY c.name, c.sort_order ORDER BY c.sort_order;
+  AND b.deleted = FALSE
+  AND c.deleted = FALSE
+GROUP BY c.name, c.sort_order
+ORDER BY c.sort_order;
 
 SELECT icon_type, count(*) AS cnt, count(DISTINCT icon_key) AS unique_keys
 FROM nav_bookmark
-WHERE user_id = (SELECT id FROM app_user WHERE username = 'admin') AND deleted = FALSE
-GROUP BY icon_type ORDER BY icon_type;
+WHERE user_id = (SELECT id FROM app_user WHERE username = 'admin')
+  AND deleted = FALSE
+GROUP BY icon_type
+ORDER BY icon_type;

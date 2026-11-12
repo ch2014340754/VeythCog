@@ -20,6 +20,13 @@ interface NavState {
   activeCategoryId: number | null;
   /** 当前分类下的书签列表 */
   bookmarks: NavBookmark[];
+  /**
+   * bookmarks 实际所属的分类 id。
+   * 与 activeCategoryId 分开：切换时 activeCategoryId 立刻变（侧栏高亮即时响应），
+   * dataCategoryId 要等接口返回才变，只有它变了才播入场动画——
+   * 否则后台静默刷新（图标同步完成）也会重播。
+   */
+  dataCategoryId: number | null;
   /** 当前搜索引擎 */
   searchEngine: 'baidu' | 'google' | 'bing';
   /** 是否正在加载书签（细进度条用） */
@@ -37,12 +44,16 @@ interface NavState {
   loadSetting: () => Promise<void>;
 }
 
+/** 书签加载请求序号：用于丢弃被后续切换取代的旧响应 */
+let bookmarkLoadSeq = 0;
+
 export const useNavStore = create<NavState>()(
   persist(
     (set, get) => ({
       categories: [],
       activeCategoryId: null,
       bookmarks: [],
+      dataCategoryId: null,
       searchEngine: 'baidu',
       loadingBookmarks: false,
 
@@ -66,14 +77,17 @@ export const useNavStore = create<NavState>()(
       },
 
       loadBookmarks: async (categoryId: number) => {
+        // 连滚切换时后发请求优先：旧请求返回不覆盖新分类的数据
+        const seq = ++bookmarkLoadSeq;
         set({ loadingBookmarks: true });
         try {
           const list = await getBookmarks(categoryId);
-          set({ bookmarks: list });
+          if (seq !== bookmarkLoadSeq) return;
+          set({ bookmarks: list, dataCategoryId: categoryId });
         } catch (e) {
           console.error('[navStore] loadBookmarks failed', e);
         } finally {
-          set({ loadingBookmarks: false });
+          if (seq === bookmarkLoadSeq) set({ loadingBookmarks: false });
         }
       },
 
