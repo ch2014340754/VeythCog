@@ -5,7 +5,8 @@ import com.vc.common.ResultUtils;
 import com.vc.nav.dto.BookmarkCreateRequest;
 import com.vc.nav.dto.BookmarkReorderRequest;
 import com.vc.nav.dto.BookmarkUpdateRequest;
-import com.vc.nav.entity.NavBookmark;
+import com.vc.nav.dto.BookmarkView;
+import com.vc.nav.dto.NavIconView;
 import com.vc.nav.service.NavBookmarkService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,8 +36,20 @@ public class NavBookmarkController {
 
     /** 1. 列出某分类下的书签（按 sort_order 升序） */
     @GetMapping
-    public BaseResponse<List<NavBookmark>> list(@RequestParam Long categoryId) {
+    public BaseResponse<List<BookmarkView>> list(@RequestParam Long categoryId) {
         return ResultUtils.success(bookmarkService.list(currentUserId(), categoryId));
+    }
+
+    /** 1.0 列出全部书签：搜索框本地联想一次拉取 */
+    @GetMapping("/all")
+    public BaseResponse<List<BookmarkView>> listAll() {
+        return ResultUtils.success(bookmarkService.listAll(currentUserId()));
+    }
+
+    /** 1.1 解析单个书签图标：前端缓存未命中时调用（服务端缓存 → DB → S3 直链） */
+    @GetMapping("/{id}/icon")
+    public BaseResponse<NavIconView> icon(@PathVariable Long id) {
+        return ResultUtils.success(bookmarkService.resolveIcon(currentUserId(), id));
     }
 
     /** 2. 新建书签 */

@@ -5,16 +5,17 @@
 -- 前置：app_user 表已存在（003_app_user.sql）；本脚本不依赖 pgvector。
 -- 表：
 --   nav_category  分类表（主页 / 后端 / 前端 / 学习 / 工具 / 游戏 / AI）
---   nav_bookmark  书签表（每分类下的常用网站，图标由前端实时拼 favicon.ico）
+--   nav_bookmark  书签表（每分类下的常用网站，图标存 S3 public-icons）
 --   nav_setting   用户首页配置表（一人一行：搜索引擎 / 锁定壁纸 / 上次分类）
 -- 注意：ddl-auto=none，需对目标库执行本脚本后导航首页功能才生效。
 -- -----------------------------------------------------------------------------
--- 拍板记录（2026-11-10）：
+-- 拍板记录（2026-11-10，图标策略于 2026-11-12 由 P2 变更）：
 --   ① 入口：/home 独立入口；/ 302 到 /home；工作台 logo 点击也跳 /home。
 --   ② 滚轮热区：覆盖整个图标页面区域（书签网格主区域），不依赖右侧竖栏可见。
 --   ③ 右侧竖栏：平时隐藏，鼠标靠近右边缘 20px 热区滑入，离开 1.5s 滑出。
---   ④ favicon：前端直接拼 https://{host}/favicon.ico，onError 用「网站名前 3 字 +
---      占位色块」兜底；后端不做代理接口，书签表不存 icon_url。
+--   ④ favicon：~~前端直接拼 https://{host}/favicon.ico~~ → 已改为后端抓取并同步到
+--      S3 public-icons（icon_type/icon_key），前端缓存优先；自定义上传与文字图标也走 S3。
+--      旧库执行 013_nav_bookmark_icon.sql 补齐列。
 --   ⑤ 壁纸：P0 从 S3 wallpapers 桶预放 20 张，不做上传（后期再做管理功能）。
 --   ⑥ 分类删除：分类下有书签时不支持删除（前端禁用 + 后端 409）；不做迁移逻辑。
 -- =============================================================================
@@ -51,7 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_nav_category_user_deleted
 
 -- -----------------------------------------------------------------------------
 -- 2. 书签表 nav_bookmark
---    图标不存库：前端每次渲染时根据 url 实时拼 https://{host}/favicon.ico。
+--    图标统一存 S3 public-icons（013 起）；icon_type 区分站点抓取 / 自定义上传 / 文字图标。
 --    软删除：deleted 标记；分类删除时若该分类下有书签，后端返回 409 拒绝删除。
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS nav_bookmark (
@@ -60,6 +61,12 @@ CREATE TABLE IF NOT EXISTS nav_bookmark (
     user_id     BIGINT       NOT NULL REFERENCES app_user(id),  -- 冗余，便于按用户查询
     title       VARCHAR(64)  NOT NULL,               -- 显示名（GitHub / MDN / React）
     url         VARCHAR(512) NOT NULL,               -- 跳转地址（仅 http/https）
+    -- 图标（013 起统一存 S3 public-icons；见 013_nav_bookmark_icon.sql）
+    icon_type   VARCHAR(16)  NOT NULL DEFAULT 'auto',-- auto 站点抓取 / upload 自定义上传 / text 文字图标
+    icon_key    VARCHAR(256) NULL,                   -- public-icons 对象 key
+    icon_text   VARCHAR(16)  NULL,                   -- 文字图标内容（1~3 字符）
+    icon_color  VARCHAR(16)  NULL,                   -- 文字图标底色 #RRGGBB
+    icon_synced_at TIMESTAMPTZ NULL,                 -- 最近一次抓取尝试时间（失败冷却用）
     sort_order  INT          NOT NULL DEFAULT 0,     -- 分类内排序
     deleted     BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -70,6 +77,11 @@ COMMENT ON TABLE  nav_bookmark IS '导航书签表（分类下的常用网站）
 COMMENT ON COLUMN nav_bookmark.category_id IS '所属分类（FK→nav_category.id）';
 COMMENT ON COLUMN nav_bookmark.title       IS '显示名（图标下方文字）';
 COMMENT ON COLUMN nav_bookmark.url        IS '跳转地址（后端校验仅 http/https）';
+COMMENT ON COLUMN nav_bookmark.icon_type  IS '图标来源：auto 站点抓取 / upload 自定义上传 / text 文字图标';
+COMMENT ON COLUMN nav_bookmark.icon_key   IS 'public-icons 桶对象 key；为空表示尚未同步到 S3';
+COMMENT ON COLUMN nav_bookmark.icon_text  IS '文字图标内容（1~3 字符）';
+COMMENT ON COLUMN nav_bookmark.icon_color IS '文字图标底色（#RRGGBB）';
+COMMENT ON COLUMN nav_bookmark.icon_synced_at IS '最近一次站点图标抓取时间（成功/失败都写，失败按 1 天冷却重试）';
 COMMENT ON COLUMN nav_bookmark.sort_order  IS '分类内排序值，越小越靠前';
 COMMENT ON COLUMN nav_bookmark.deleted    IS '软删除标记';
 

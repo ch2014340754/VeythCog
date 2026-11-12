@@ -33,3 +33,16 @@
 - **DB 迁移待执行**：`knowledge_embedding` 新增 `embedding_model` 列、向量索引改为 IVFFlat L2；已建库请执行增量脚本 `openspec/sql/knowledge-migrate-v0.3.sql`（全新建库用 `knowledge-init.sql`）后才生效。
 - **P1 待办（非阻塞）**：① 前端 BlockNote 块编辑器接入（P0 用 Markdown 编辑器 + 预览替代，未加 `@blocknote/*` 依赖）；② 批量向量化/移动/打标接口；③ 会话元数据持久化。
 - **真实运行验证待做**：需启动后端 + 前端，跑通「登录 → 文档 CRUD → 向量化 → RAG 召回 → 对话引用」核心链路；`application-local.yml` 的 datasource 指向个人服务器 docker，需确认可达。
+
+## 4. 导航图标 P2（2026-11-12）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| NAV-01 | MainAgent | 库迁移：`nav_bookmark` 补 5 个图标列 + CHECK 约束 | 已完成 | `VeythCog-C/docs/sql/013_nav_bookmark_icon.sql`、`012_nav.sql` | 012 已执行 |
+| NAV-02 | MainAgent | 后端：图标抓取/上传/解析/同步 + 接口 | 已完成 | `vc-nav`（entity/dto/service）、`vc-app/web/NavIconController.java`、`NavBookmarkController.java`、`application.yml` | `vc-common` S3 封装 |
+| NAV-03 | MainAgent | 前端：弹窗重做 + 缓存优先图标加载 + multipart | 已完成 | `VeythCog-V/src/{api/client.ts,api/nav.ts,utils/iconCache.ts,pages/Home/*}` | 后端接口 |
+| NAV-04 | MainAgent | 构建与端到端验证 | 已完成（缓存命中未浏览器实测） | `openspec/changes/p2-nav-icons/tasks.md`、`design.md §7` | NAV-02/03 |
+| NAV-05 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md` | NAV-04 |
+| NAV-06 | MainAgent | iTab 备份分析导入：容错解析、URL 去重、SVG/ICO 转 PNG、S3 上传、书签合并、失败恢复与直链校验 | 已完成 | `VeythCog-C/scripts/import_itab_backup.py`、`.ai-context/itab-import-2026-11-12/*` | NAV-02 |
+| NAV-07 | MainAgent | 半图图标修复（Chrome 2 倍窗口 + alpha 裁剪，70 个 SVG 重刷）、首页书签区宽度 66.6667vw、线上同步脚本与 README | 已完成 | `.ai-context/itab-import-2026-11-12/report.md`、`VeythCog-V/src/pages/Home/BookmarkGrid.tsx`、`VeythCog-C/scripts/README-nav-import.md` | NAV-06 |
+| NAV-08 | MainAgent | SQL 入库脚本（7 分类/267 书签，幂等插入 + 同 URL 图标同步）；修复图标缓存命中后仍请求后端的问题 | 已完成 | `VeythCog-C/docs/sql/014_nav_itab_data.sql`、`README-014-nav-data.md`、`VeythCog-V/src/pages/Home/BookmarkIcon.tsx` | NAV-07 |

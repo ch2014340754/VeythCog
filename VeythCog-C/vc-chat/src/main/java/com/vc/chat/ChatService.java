@@ -27,4 +27,9 @@ public class ChatService {
     public Flux<String> streamChat(Long userId, String vendor, String modelCode, String conversationId, String message) {
         return llmChatService.stream(userId, vendor, modelCode, conversationId, message);
     }
+
+    /** 无记忆流式：搜索 AI 等一次性问答使用，不读写对话历史 */
+    public Flux<String> streamChatStateless(Long userId, String vendor, String modelCode, String message) {
+        return llmChatService.streamStateless(userId, vendor, modelCode, message);
+    }
 }

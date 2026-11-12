@@ -22,6 +22,8 @@
 | 2026-11-06 | ✏️ | 向量索引 HNSW/余弦 → IVFFlat/L2；`knowledge_embedding` 新增 `embedding_model` 列 | `openspec/sql/knowledge-init.sql`、`docs/sql/009_knowledge.sql` | 后端 Agent |
 | 2026-11-06 | ✏️ | RAG 返回增加 `chunkIndex`；前端引用卡片改显示「分片# + 距离」 | `RetrieveChunk.java`、`VeythCog-V/src/types/index.ts`、`pages/Chat/index.tsx` | 前后端 Agent |
 | 2026-11-06 | 📄 | 同步 PRD/API 契约/PROJECT_MEMORY/协作文档至 v0.3 | `openspec/knowledge-prd.md`、`openspec/api-spec.md`、`PROJECT_MEMORY.md` | 全体 Agent |
+| 2026-11-12 | 🆕 | 导航书签图标资产化：站点图标 / 自定义图标统一存 S3 `public-icons`，前端缓存优先 + DB 解析 | `openspec/changes/p2-nav-icons/*`、`docs/sql/013_nav_bookmark_icon.sql`、`vc-nav`（entity/dto/service）、`vc-app/web/NavIconController.java`、`VeythCog-V`（client/nav/iconCache/BookmarkModal/BookmarkIcon/Home） | 全体 Agent |
+| 2026-11-12 | ✏️ | 导航图标接口端到端验证：18 条历史书签同步成功 13 条；5 条因站点/网络原因保留 1 天失败冷却 | `openspec/changes/p2-nav-icons/tasks.md`、`design.md §7` | 前后端 Agent |
 
 ## 关键 spec 变更明细（v0.1 → v0.2，需全体 Agent 知悉）
 
@@ -52,3 +54,18 @@
 | ✏️ 切片 | 固定字符切片 | 自定义 `RecursiveCharacterTextSplitter`（分隔符优先级 + 代码块保护） | 向量化流程 |
 | ✏️ DB 层 | JPA + JdbcTemplate | MyBatis-Plus（LambdaWrapper + XML） | `vc-knowledge` 全模块 |
 | ✏️ 返回字段 | `chunkText/docId/title/score` | 增加 `chunkIndex` | `RetrieveChunk`、前端引用卡片 |
+
+## 2026-11-12 iTab 备份导入（NAV-06）
+
+- 来源：`iTab备份-2026.json`（106209 字节，iTab 官方导出；存在非法尾逗号，已用正则容错解析）。
+- 计划 256 条：239 条图片图标 + 17 条文字图标；跳过 5 个组件、8 个 `itab://add` 占位、4 个非 http(s) 图标、备份内 15 条重复。
+- 最终 `nav_bookmark` 267 条：新建 249 条（其中 1 条 VeythCog 重复项已合并删除）、已有书签更新图标 8 条；分类分布 主页28/后端28/前端60/学习32/工具47/游戏26/AI46。
+- 图标：upload 238、text 18、auto 11；S3 `public-icons` 245 个唯一对象被引用、247 条书签引用，逐条 HEAD 全部 200（png/x-icon/jpeg 与扩展名一致）。
+- 半图修复：70 个 SVG 图标原本只有上半张，根因是 Windows 高 DPI 下 Chrome 无头截图 CSS 视口只有窗口一半；转换器改为 2 倍窗口 + alpha 包围盒裁剪 + `--headless=new` 超时回退旧 `--headless`，68 个脚本重刷 + 2 个手工补齐（VeythCog id18、Stack Overflow id11），抽查与全量 HEAD 通过。
+- 首页书签容器由 `maxWidth:900 + margin:0 auto` 改为 `width:66.6667vw + margin:0 auto`，书签区占视口约三分之二。
+- 入库脚本整理：`import_itab_backup.py` 支持 `--token` / `--chrome` / `--work-dir`；`--dry-run` 不再创建分类；`README-nav-import.md` 补线上同步、数据库备份与独立 work-dir 规范。
+- 失败恢复：Stack Overflow（旧 `--headless` 渲染）、技术文章摘抄（延长超时）、激战2中文维基（URL 空格编码）已补上传；莫娜占卜铺连接被重置，保留文字图标。
+- 脚本 `VeythCog-C/scripts/import_itab_backup.py` 修复 `make_upload_asset` 返回值解包 bug，避免图片被误判失败；导入前备份 `nav-backup.json` 保留可回滚。
+- 首次误跑生成的 21–53 共 33 条文字副本已物理删除，数据库恢复后重跑。
+- 图标缓存修复：`BookmarkIcon` 命中 `localStorage` 描述缓存后未提前返回，仍会请求 `/nav/bookmarks/{id}/icon`；已改为缓存命中直接渲染，切换分类不再重复请求，只有首次或图标字段变化才查后端。`tsc --noEmit` 通过。
+- 新增 `docs/sql/014_nav_itab_data.sql`：7 分类 + 267 书签的纯 SQL 入库脚本（含图标字段），首次按 `(user_id,name)` / `(category_id,url)` 插入，已有同 URL 书签同步 4 个图标字段；隔离 schema 实测首次 7/267、二次仍 7/267，清空图标后可补回。说明见 `docs/sql/README-014-nav-data.md`。

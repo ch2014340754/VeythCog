@@ -65,6 +65,12 @@ storage:
     connect-timeout: 5s
     socket-timeout: 30s
 
+# 导航书签图标（P2）：启动时把 icon_type=auto 且尚未同步的书签图标补到 S3 public-icons。
+# 幂等、后台执行、失败按 1 天冷却重试；离线演示环境可设为 false。
+nav:
+  icon:
+    sync-on-startup: true
+
 # JWT 配置（本地默认值；生产由环境变量覆盖）
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789}

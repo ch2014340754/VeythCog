@@ -81,6 +81,40 @@ public class RagChatOrchestrator {
     }
 
     /**
+     * 搜索页“优先知识库”专用：全库检索已向量化文档。
+     * <p>与 {@link #retrieveSafely} 一样，失败只降级为空引用，不阻断普通回答。</p>
+     */
+    public List<RetrieveChunk> retrieveAllSafely(Long userId, String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        try {
+            int topN = Math.max(1, properties.getRetrieve().getTopN());
+            int candidates = properties.getRetrieve().getRerank().isEnabled()
+                    ? Math.max(topN, properties.getRetrieve().getRerank().getCandidates())
+                    : topN;
+
+            List<RetrieveChunk> chunks = vectorizeService.retrieveAll(userId, query, candidates);
+            if (chunks == null || chunks.isEmpty()) {
+                log.info("全库 RAG 未命中（将按普通对话作答）: query={}", query);
+                return List.of();
+            }
+            List<RetrieveChunk> ranked = reranker.rerank(query, chunks, topN);
+            if (ranked.isEmpty()) {
+                log.info("全库 RAG rerank 后为空（将按普通对话作答）: query={}", query);
+                return List.of();
+            }
+            log.info("全库 RAG 召回命中 {} 条, rerank 后保留 {} 条, best={}({})",
+                    chunks.size(), ranked.size(), ranked.get(0).getTitle(), ranked.get(0).getChunkIndex());
+            return ranked;
+        } catch (Exception e) {
+            log.error("全库 RAG 召回失败，降级为普通回答: query={}", query, e);
+            return List.of();
+        }
+    }
+
+
+    /**
      * 把召回片段拼成带编号引用的用户消息。
      * <p>无召回时原样返回用户问题，保证非 RAG 对话行为不变。</p>
      */

@@ -40,8 +40,11 @@ const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContex
   return (
     <div
       style={{
-        maxWidth: 900,
+        width: '66.6667vw',
+        minWidth: 320,
+        maxWidth: 'calc(100vw - 48px)',
         margin: '0 auto',
+        boxSizing: 'border-box',
       }}
     >
       <div

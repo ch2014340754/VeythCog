@@ -31,9 +31,19 @@
     后端端口，默认 8123。
 
 .PARAMETER JdkHome
-    指定 JDK 目录（需 21+）。默认自动挑：VEYTH_JAVA_HOME → JAVA_HOME（版本够才用）→ 常见安装路径。
-    本机常有 jdk-11 / jdk-17 / jdk-21 多套，JAVA_HOME 指到 17 时会报
-    UnsupportedClassVersionError（65 vs 61），脚本会自动纠正。
+    手动指定 JDK 目录（优先级最高）。不写就不用改脚本：脚本自己从项目配置读版本再找。
+
+.PARAMETER JavaVersion
+    覆盖项目声明的 JDK 版本（一般不用）。默认读 VeythCog-C\pom.xml 的 <java.version>。
+
+    关于 JDK 怎么挑（不再写死路径）：
+      1) 版本 = pom.xml 的 <java.version>（本项目 21），miss 才退回 maven.compiler.release/source/target；
+      2) JDK 来源依次为：-JdkHome → scripts\jdk.path（可选，填一个目录即可给换机器用）
+         → VEYTH_JAVA_HOME → .vscode\settings.json 的 java.jdt.ls.java.home / java.configuration.runtimes
+         → JAVA_HOME → 注册表 JavaSoft → 常见安装目录扫描（含 %USERPROFILE%\.jdks、
+         Trae/IDEA 自带 jbr）→ PATH 上的 java；
+      3) 优先版本完全一致的那套；没有就用版本最近的更高版本并提示；只有更低版本时直接报错
+         并列出扫到的 JDK。选定后回写 $env:JAVA_HOME，保证 mvn 与 java 用同一套。
 
 .PARAMETER FrontendPort
     前端端口，默认 3000。
@@ -52,7 +62,8 @@ param(
     [switch]$Online,
     [int]$BackendPort = 8123,
     [int]$FrontendPort = 3000,
-    [string]$JdkHome = ''
+    [string]$JdkHome = '',
+    [int]$JavaVersion = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,13 +106,21 @@ function Release-Port([int]$Port, [string]$Label) {
 }
 
 # ---------- 工具链 ----------
+function ConvertTo-JavaMajor($ver) {
+    # 1.8.0_202 记作 8；21.0.12.1 记作 21
+    if ($ver -match '^1\.([0-9]+)') { return [int]$Matches[1] }
+    $m = [regex]::Match($ver, '([0-9]+)')
+    if ($m.Success) { return [int]$m.Groups[1].Value }
+    return 0
+}
+
 function Get-JdkMajorFromRelease($jdkHome) {
     $f = Join-Path $jdkHome 'release'
     if (-not (Test-Path -LiteralPath $f)) { return 0 }
     try {
         $txt = Get-Content -LiteralPath $f -Raw -ErrorAction Stop
-        $m = [regex]::Match($txt, 'JAVA_VERSION="(\d+)')
-        if ($m.Success) { return [int]$m.Groups[1].Value }
+        $m = [regex]::Match($txt, 'JAVA_VERSION="([0-9._]+)"')
+        if ($m.Success) { return (ConvertTo-JavaMajor $m.Groups[1].Value) }
     } catch { }
     return 0
 }
@@ -116,28 +135,160 @@ function Get-JavaMajor($javaExe) {
     $ErrorActionPreference = 'Continue'
     try {
         $out = (& $javaExe -version 2>&1 | Out-String)
-        $m = [regex]::Match($out, 'version "(\d+)')
-        if ($m.Success) { return [int]$m.Groups[1].Value }
+        $m = [regex]::Match($out, 'version "([0-9._]+)')
+        if ($m.Success) { return (ConvertTo-JavaMajor $m.Groups[1].Value) }
     } catch { } finally { $ErrorActionPreference = $prev }
     return 0
 }
 
-function Resolve-Jdk {
-    $cands = @()
-    if ($JdkHome) { $cands += $JdkHome }
-    if ($env:VEYTH_JAVA_HOME) { $cands += $env:VEYTH_JAVA_HOME }
-    if ($env:JAVA_HOME) { $cands += $env:JAVA_HOME }
-    $cands += @('I:\Java\jdk-21', 'D:\Java\jdk-21', 'C:\Program Files\Java\jdk-21')
-    foreach ($cmd in (Get-Command java.exe -All -ErrorAction SilentlyContinue)) {
-        if ($cmd.Source) { $cands += (Split-Path -Parent (Split-Path -Parent $cmd.Source)) }
+# 项目声明的 JDK 版本：根 pom 的 <java.version> 是唯一权威来源（本项目 21）
+function Get-ProjectJavaVersion {
+    $pom = Join-Path $RepoRoot 'pom.xml'
+    if (-not (Test-Path -LiteralPath $pom)) { Fail "找不到 $pom，无法读取项目声明的 JDK 版本" }
+    $xml = Get-Content -LiteralPath $pom -Raw
+    foreach ($key in @('java.version', 'maven.compiler.release', 'maven.compiler.target', 'maven.compiler.source')) {
+        $m = [regex]::Match($xml, '<' + [regex]::Escape($key) + '>\s*([0-9]+(?:\.[0-9]+)*)')
+        if (-not $m.Success) { continue }
+        $raw = $m.Groups[1].Value
+        $major = 0
+        if ($raw -match '^1\.([0-9]+)') { $major = [int]$Matches[1] }   # 1.8 这种老写法
+        else { $major = [int](($raw -split '\.')[0]) }
+        if ($major -gt 0) {
+            return [pscustomobject]@{ Major = $major; Raw = $raw; Source = "pom.xml <$key>" }
+        }
     }
-    foreach ($h in $cands) {
+    Fail 'pom.xml 里没有 java.version / maven.compiler.* 配置，无法确定需要的 JDK 版本'
+}
+
+function Read-JdkPinFile {
+    $pin = Join-Path $PSScriptRoot 'jdk.path'
+    if (-not (Test-Path -LiteralPath $pin)) { return '' }
+    $line = Get-Content -LiteralPath $pin -Encoding UTF8 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Trim() -and -not $_.Trim().StartsWith('#') } |
+            Select-Object -First 1
+    if ($line) { return $line.Trim() }
+    return ''
+}
+
+# 收集机器上所有可用的 JDK，按「越像用户指定的越靠前」排序；不写死任何路径
+function Get-JdkCandidates {
+    $pairs = New-Object System.Collections.ArrayList
+
+    if ($JdkHome) { [void]$pairs.Add(@($JdkHome, '参数 -JdkHome')) }
+    $pin = Read-JdkPinFile
+    if ($pin) { [void]$pairs.Add(@($pin, 'scripts\jdk.path')) }
+    if ($env:VEYTH_JAVA_HOME) { [void]$pairs.Add(@($env:VEYTH_JAVA_HOME, 'VEYTH_JAVA_HOME')) }
+    if ($env:JAVA_HOME) { [void]$pairs.Add(@($env:JAVA_HOME, 'JAVA_HOME')) }
+
+    # IDE 里配的 JDK（Trae / VS Code 的 Java 扩展）
+    $vscodeSettings = Join-Path $ProjectRoot '.vscode\settings.json'
+    if (Test-Path -LiteralPath $vscodeSettings) {
+        $sj = Get-Content -LiteralPath $vscodeSettings -Raw
+        foreach ($m in [regex]::Matches($sj, '"java\.jdt\.ls\.java\.home"\s*:\s*"([^"]+)"')) {
+            [void]$pairs.Add(@($m.Groups[1].Value, '.vscode\settings.json'))
+        }
+        foreach ($m in [regex]::Matches($sj, '"java\.configuration\.runtimes"[\s\S]*?\}')) {
+            foreach ($mm in [regex]::Matches($m.Value, '"path"\s*:\s*"([^"]+)"')) {
+                [void]$pairs.Add(@($mm.Groups[1].Value, '.vscode\settings.json runtimes'))
+            }
+        }
+    }
+    $ideaMisc = Join-Path $RepoRoot '.idea\misc.xml'
+    if (Test-Path -LiteralPath $ideaMisc) {
+        foreach ($m in [regex]::Matches((Get-Content -LiteralPath $ideaMisc -Raw), 'project-jdk-name="([^"]+)"')) {
+            $name = $m.Groups[1].Value
+            if ($name -match '^[A-Za-z]:\\' -or $name -match '^[A-Za-z]:/') { [void]$pairs.Add(@($name, '.idea\misc.xml')) }
+        }
+    }
+
+    # 安装时登记到注册表的 JDK
+    foreach ($key in @('HKLM:\SOFTWARE\JavaSoft\JDK',
+                       'HKLM:\SOFTWARE\JavaSoft\Java Development Kit',
+                       'HKLM:\SOFTWARE\WOW6432Node\JavaSoft\JDK',
+                       'HKLM:\SOFTWARE\WOW6432Node\JavaSoft\Java Development Kit')) {
+        if (-not (Test-Path -LiteralPath $key)) { continue }
+        Get-ChildItem -LiteralPath $key -ErrorAction SilentlyContinue | ForEach-Object {
+            $h = $_.GetValue('JavaHome')
+            if ($h) { [void]$pairs.Add(@($h, '注册表 JavaSoft')) }
+        }
+    }
+
+    # 常见安装目录 + IDE 自己下载的 JDK（.jdks / jbr）里扫
+    $roots = @(
+        'D:\Java', 'E:\Java', 'I:\Java', 'C:\Java',
+        'C:\Program Files\Java', 'C:\Program Files\Eclipse Adoptium',
+        'C:\Program Files\Microsoft', 'C:\Program Files\Zulu',
+        'C:\Program Files\Amazon Corretto', 'C:\Program Files\BellSoft',
+        'C:\Program Files\Semeru', 'C:\Program Files\JetBrains',
+        (Join-Path $env:USERPROFILE '.jdks'),
+        (Join-Path $env:USERPROFILE 'scoop\apps'),
+        (Join-Path $env:LOCALAPPDATA 'Programs'),
+        (Join-Path $env:LOCALAPPDATA 'JetBrains\Toolbox\apps')
+    )
+    foreach ($r in $roots) {
+        if (-not $r -or -not (Test-Path -LiteralPath $r)) { continue }
+        $dirs = Get-ChildItem -LiteralPath $r -Directory -Recurse -Depth 2 -ErrorAction SilentlyContinue
+        foreach ($d in $dirs) {
+            if (Test-Path -LiteralPath (Join-Path $d.FullName 'bin\java.exe')) {
+                [void]$pairs.Add(@($d.FullName, "扫描 $r"))
+            }
+        }
+    }
+
+    # PATH 上的 java 反推 home
+    foreach ($cmd in (Get-Command java.exe -All -ErrorAction SilentlyContinue)) {
+        if ($cmd.Source) { [void]$pairs.Add(@((Split-Path -Parent (Split-Path -Parent $cmd.Source)), 'PATH')) }
+    }
+
+    # 只保留真的含 bin\java.exe 的目录，同路径去重（先出现的来源优先）
+    $list = New-Object System.Collections.ArrayList
+    foreach ($p in $pairs) {
+        $path = $p[0]
+        if (-not $path) { continue }
+        $h = ([string]$path).Trim().Trim([char]'"')
         if (-not $h) { continue }
         $exe = Join-Path $h 'bin\java.exe'
+        # javac 也在才算 JDK（排除 jre1.8 这类纯运行时目录，mvn 编译要用 javac）
         if (-not (Test-Path -LiteralPath $exe)) { continue }
-        if ((Get-JavaMajor $exe) -ge 21) { return (Resolve-Path -LiteralPath $h).Path }
+        if (-not (Test-Path -LiteralPath (Join-Path $h 'bin\javac.exe'))) { continue }
+        $full = (Resolve-Path -LiteralPath $h).Path
+        $dup = $false
+        foreach ($x in $list) { if ($x.Home -ieq $full) { $dup = $true; break } }
+        if ($dup) { continue }
+        [void]$list.Add([pscustomobject]@{ Home = $full; From = [string]$p[1]; Major = (Get-JavaMajor $exe) })
     }
-    Fail '没有找到 JDK 21+（本项目 class 是 Java 21 编的）。装好后用 -JdkHome 指定，或设 VEYTH_JAVA_HOME'
+    return $list
+}
+
+function Format-JdkList($cands) {
+    $lines = @()
+    foreach ($c in $cands) {
+        if ($c.Major -gt 0) { $lines += ("    Java {0,-3} {1}   [{2}]" -f $c.Major, $c.Home, $c.From) }
+        else { $lines += ("    未知版本  {0}   [{1}]" -f $c.Home, $c.From) }
+    }
+    return ($lines -join [Environment]::NewLine)
+}
+
+# 按项目声明的版本挑 JDK：版本完全一致优先 → 否则最近的更高版本 → 都不够就报错
+function Resolve-Jdk([int]$RequiredMajor) {
+    $cands = Get-JdkCandidates
+    if ($cands.Count -eq 0) {
+        Fail "这台机器上一个 JDK 都没扫到（含 bin\javac.exe 的目录）。装一个 Java $RequiredMajor，或用 -JdkHome 指定，或在 scripts\jdk.path 里写目录。"
+    }
+
+    $exact = @($cands | Where-Object { $_.Major -eq $RequiredMajor })
+    if ($exact.Count -gt 0) { return $exact[0] }
+
+    $higher = @($cands | Where-Object { $_.Major -gt $RequiredMajor } | Sort-Object Major)
+    if ($higher.Count -gt 0) {
+        $pick = $higher[0]
+        Write-Note "没找到 Java $RequiredMajor 的 JDK，改用最近的更高版本 Java $($pick.Major)：$($pick.Home) [$($pick.From)]"
+        Write-Note 'maven 已按 <release> 编译，class 版本不会跑高；若后续换回低版本 JDK，记得 mvn clean 重编'
+        return $pick
+    }
+
+    Fail ("机器上的 JDK 都低于项目要求的 Java {0}：{1}{2}{1}装一个 Java {0}，或用 -JdkHome 指定，或在 scripts\jdk.path 里写目录。" -f `
+            $RequiredMajor, [Environment]::NewLine, (Format-JdkList $cands))
 }
 
 $JdkMajorMap = @{ 45 = 1; 46 = 2; 47 = 3; 48 = 4; 49 = 5; 50 = 6; 51 = 7; 52 = 8; 53 = 9 }
@@ -167,9 +318,11 @@ function Get-MvnPath {
     Fail '找不到 mvn.cmd，请设置环境变量 VEYTH_MVN'
 }
 
-function Get-JdkAndJava {
-    $jdk = Resolve-Jdk
+function Get-JdkAndJava([int]$RequiredMajor) {
+    $pick = Resolve-Jdk $RequiredMajor
+    $jdk = $pick.Home
     $java = Join-Path $jdk 'bin\java.exe'
+    Write-Step "JDK  = $jdk (Java $($pick.Major)，来源：$($pick.From))"
     if ($env:JAVA_HOME -ne $jdk) {
         $old = $env:JAVA_HOME
         $oldMajor = 0
@@ -288,8 +441,16 @@ if ($Target -eq 'stop') {
 $mvn = $null
 $java = $null
 if ($Target -eq 'all' -or $Target -eq 'backend') {
+    $declared = Get-ProjectJavaVersion
+    $requiredMajor = $declared.Major
+    if ($JavaVersion -gt 0) {
+        $requiredMajor = $JavaVersion
+        Write-Step "项目 JDK  = Java $requiredMajor（-JavaVersion 覆盖，忽略 $($declared.Source) 的 $($declared.Raw)）"
+    } else {
+        Write-Step "项目 JDK  = Java $requiredMajor（来自 $($declared.Source)）"
+    }
     $mvn = Get-MvnPath
-    $java = Get-JdkAndJava
+    $java = Get-JdkAndJava $requiredMajor
     Write-Step "mvn  = $mvn"
     Write-Step "java = $java (Java $(Get-JavaMajor $java))"
     Write-Step "JAVA_HOME = $env:JAVA_HOME"

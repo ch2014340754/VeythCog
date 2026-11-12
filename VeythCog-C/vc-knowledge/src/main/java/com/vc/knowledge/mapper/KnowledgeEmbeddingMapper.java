@@ -22,4 +22,14 @@ public interface KnowledgeEmbeddingMapper extends BaseMapper<KnowledgeEmbedding>
                                          @Param("embeddingModel") String embeddingModel,
                                          @Param("distanceThreshold") Double distanceThreshold,
                                          @Param("limit") int limit);
+
+    /**
+     * 全库已向量化文档的 L2 近邻检索（仅用于搜索页“优先知识库”）。
+     * <p>范围是 {@code knowledge_doc.deleted=false AND is_vectorized=true}，不接受单文档过滤；
+     * 距离阈值传 null 时只按距离取 topN。</p>
+     */
+    List<RetrieveChunk> retrieveAll(@Param("queryVector") float[] queryVector,
+                                    @Param("embeddingModel") String embeddingModel,
+                                    @Param("distanceThreshold") Double distanceThreshold,
+                                    @Param("limit") int limit);
 }

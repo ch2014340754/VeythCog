@@ -22,6 +22,8 @@ import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { NavBookmark } from '@/api/nav';
+import { syncIcons } from '@/api/nav';
+import { clearCachedIcon } from '@/utils/iconCache';
 
 /**
  * 右键菜单单项：文字在左，图标在右（参照 iTab）
@@ -95,6 +97,25 @@ const HomePage: React.FC = () => {
     loadCategories();
   }, [loadSetting, loadCategories]);
 
+  // 进页面后触发一次「缺失图标补齐」：后端只挑 icon_type=auto 且没有 icon_key 的书签，
+  // 已同步过 / 失败冷却中的会直接跳过，因此可以安全地每次进页面调用。延后 1.5s 不抢首屏。
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      syncIcons()
+        .then((result) => {
+          // 补齐成功后静默刷新当前分类，让新拿到的图标立刻生效
+          if (result?.success > 0) {
+            const { activeCategoryId: cid, loadBookmarks } = useNavStore.getState();
+            if (cid) loadBookmarks(cid);
+          }
+        })
+        .catch((err) => {
+          console.warn('[Home] 同步导航图标失败', err);
+        });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
   // 点击任意位置关闭右键菜单
   // 1) 不监听 contextmenu，否则右键打开新菜单会被同一次事件立刻关掉
   // 2) 延后一拍再挂 mousedown，避免打开菜单的那次右键/左键事件回头把菜单关掉
@@ -164,6 +185,7 @@ const HomePage: React.FC = () => {
     try {
       const { deleteBookmark } = await import('@/api/nav');
       await deleteBookmark(b.id);
+      clearCachedIcon(b.id);
       const { loadBookmarks, activeCategoryId: cid } = useNavStore.getState();
       if (cid) loadBookmarks(cid);
     } catch (err) {
@@ -212,6 +234,7 @@ const HomePage: React.FC = () => {
           style={{
             opacity: fading ? 0.3 : 1,
             transition: 'opacity 0.25s ease',
+            paddingTop: '80px',
           }}
         >
           <BookmarkGrid

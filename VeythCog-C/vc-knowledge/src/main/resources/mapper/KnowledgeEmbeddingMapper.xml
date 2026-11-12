@@ -23,4 +23,22 @@
         ORDER BY score ASC
         LIMIT #{limit}
     </select>
+
+    <select id="retrieveAll" resultType="com.vc.knowledge.dto.RetrieveChunk">
+        SELECT e.chunk_text AS chunkText,
+               e.doc_id AS docId,
+               d.title AS title,
+               e.chunk_index AS chunkIndex,
+               (e.embedding &lt;-&gt; #{queryVector,typeHandler=com.vc.knowledge.handler.VectorTypeHandler}) AS score
+        FROM knowledge_embedding e
+        JOIN knowledge_doc d ON d.id = e.doc_id
+        WHERE d.deleted = false
+          AND d.is_vectorized = true
+          AND e.embedding_model = #{embeddingModel}
+          <if test="distanceThreshold != null">
+              AND (e.embedding &lt;-&gt; #{queryVector,typeHandler=com.vc.knowledge.handler.VectorTypeHandler}) &lt;= #{distanceThreshold}
+          </if>
+        ORDER BY score ASC
+        LIMIT #{limit}
+    </select>
 </mapper>

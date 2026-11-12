@@ -56,6 +56,53 @@ export function apiUrl(path: string, query?: Record<string, string | number | un
   return buildUrl(path, query);
 }
 
+/**
+ * 统一解析后端响应：401 踢登录、HTML fallback 识别、{code,data,message} 解包。
+ */
+async function parseResponse<T>(resp: Response): Promise<T> {
+  // 401：token 失效，清掉并跳登录
+  if (resp.status === 401) {
+    // 本地绕过模式（dev-bypass-token）下后端未部署，任何 401 都是预期，不清登录态、不踢回登录页
+    const bypass = useModeStore.getState().bypassMode;
+    if (!(bypass && getToken() === MOCK_TOKEN)) {
+      useAuthStore.getState().logout();
+      // 纯函数模块不能用 react-router，直接整页跳登录
+      if (!location.pathname.startsWith('/login')) {
+        location.href = '/login';
+      }
+    }
+    throw new ApiError(401, '未登录或登录已过期');
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new ApiError(resp.status, `请求失败 (${resp.status})`, text);
+  }
+
+  // 204 / 空响应
+  if (resp.status === 204) return undefined as T;
+
+  const ct = resp.headers.get('content-type') ?? '';
+
+  // 后端未部署时，静态托管（如 EdgeOne）会把 /api/* 的请求 SPA fallback 成 index.html（200 text/html）。
+  // 这种情况绝不能把 HTML 字符串当业务数据返回，否则调用方 .map/.some 直接崩。
+  if (ct.includes('text/html')) {
+    throw new ApiError(502, '后端服务未部署或路由未配置（收到 HTML 响应）', await resp.text().catch(() => ''));
+  }
+
+  if (ct.includes('application/json')) {
+    const body = await resp.json();
+    // 后端统一 { code, data, message } 解包：code===0 返回 data，否则抛业务错误
+    if (body && typeof body === 'object' && typeof (body as { code?: unknown }).code === 'number') {
+      const b = body as { code: number; data: T; message: string };
+      if (b.code === 0) return b.data;
+      throw new ApiError(resp.status, b.message ?? '请求失败', b);
+    }
+    return body as T;
+  }
+  return (await resp.text()) as unknown as T;
+}
+
 export async function request<T = unknown>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { method = 'GET', query, body, headers = {}, timeout = 30000 } = opts;
 
@@ -73,48 +120,35 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
+    return await parseResponse<T>(resp);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    // 401：token 失效，清掉并跳登录
-    if (resp.status === 401) {
-      // 本地绕过模式（dev-bypass-token）下后端未部署，任何 401 都是预期，不清登录态、不踢回登录页
-      const bypass = useModeStore.getState().bypassMode;
-      if (!(bypass && getToken() === MOCK_TOKEN)) {
-        useAuthStore.getState().logout();
-        // 纯函数模块不能用 react-router，直接整页跳登录
-        if (!location.pathname.startsWith('/login')) {
-          location.href = '/login';
-        }
-      }
-      throw new ApiError(401, '未登录或登录已过期');
-    }
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => '');
-      throw new ApiError(resp.status, `请求失败 (${resp.status})`, text);
-    }
-
-    // 204 / 空响应
-    if (resp.status === 204) return undefined as T;
-
-    const ct = resp.headers.get('content-type') ?? '';
-
-    // 后端未部署时，静态托管（如 EdgeOne）会把 /api/* 的请求 SPA fallback 成 index.html（200 text/html）。
-    // 这种情况绝不能把 HTML 字符串当业务数据返回，否则调用方 .map/.some 直接崩。
-    if (ct.includes('text/html')) {
-      throw new ApiError(502, '后端服务未部署或路由未配置（收到 HTML 响应）', await resp.text().catch(() => ''));
-    }
-
-    if (ct.includes('application/json')) {
-      const body = await resp.json();
-      // 后端统一 { code, data, message } 解包：code===0 返回 data，否则抛业务错误
-      if (body && typeof body === 'object' && typeof (body as { code?: unknown }).code === 'number') {
-        const b = body as { code: number; data: T; message: string };
-        if (b.code === 0) return b.data;
-        throw new ApiError(resp.status, b.message ?? '请求失败', b);
-      }
-      return body as T;
-    }
-    return (await resp.text()) as unknown as T;
+/**
+ * multipart 上传（图标文件）。
+ * 注意：不要手写 Content-Type，交给浏览器带 boundary。
+ */
+export async function uploadFile<T = unknown>(
+  path: string,
+  file: File,
+  field = 'file',
+  timeout = 30000,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const form = new FormData();
+    form.append(field, file, file.name);
+    const token = getToken();
+    const resp = await fetch(buildUrl(path), {
+      method: 'POST',
+      signal: controller.signal,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    return await parseResponse<T>(resp);
   } finally {
     clearTimeout(timer);
   }

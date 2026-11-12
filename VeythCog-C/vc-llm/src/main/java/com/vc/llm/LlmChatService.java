@@ -36,4 +36,9 @@ public class LlmChatService {
     public Flux<String> stream(Long userId, String vendor, String modelCode, String conversationId, String message) {
         return router.stream(userId, vendor, modelCode, conversationId, message);
     }
+
+    /** 无记忆流式：搜索 AI 等一次性问答使用 */
+    public Flux<String> streamStateless(Long userId, String vendor, String modelCode, String message) {
+        return router.streamStateless(userId, vendor, modelCode, message);
+    }
 }

@@ -99,9 +99,18 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - `mapper/ChatMessageMapper` + `resources/mapper/ChatMessageMapper.xml`：`chat_message` 的全部 SQL（会话聚合、消息列表、批量写入、删除），供记忆仓库与 `ChatHistoryService` 共用；**本模块不含 Java 内联 SQL**。
 - `ChatHistoryService`：对外会话列表 / 历史回显（剥离 `userId:` 前缀、还原被 RAG prompt 包裹的用户问题），SQL 走上面的 mapper。
 
+**vc-nav**（`com.vc.nav`）—— 导航域（无 Controller，2026-11-12 补图标资产化）：
+- `entity/NavCategory` / `NavBookmark` / `NavSetting`：`nav_bookmark` 自 013 起含 `icon_type`（auto/upload/text）、`icon_key`（S3 key）、`icon_text`、`icon_color`、`icon_synced_at`；图标字段 `updateStrategy=ALWAYS`，保证切换图标类型时能写 NULL。
+- `service/NavBookmarkService`：分类/bookmarks CRUD、排序；列表下发 `BookmarkView`（含 `hasIcon` / `iconKey`，不下发直链）；新增/更新时校验图标字段（文字 1~3 字、颜色 `#RGB/#RRGGBB`、`iconKey` 必须在 `icons/` 前缀且对象存在）；auto 且无 key 的书签异步补同步。
+- `service/SiteIconFetcher`：解析 HTML `<link rel=icon>` + 同源 `/favicon.ico` / apple-touch 回退，最多 6 候选；只允许 http/https，DNS 解析后拒绝回环/私网/link-local/组播（重定向后再复核）；6s / 512KB 上限；文件头魔数识别 png/jpeg/gif/webp/bmp/ico，**拒绝 SVG**；候选图标请求带站点 `Referer`（绕过部分 CDN 防盗链）。
+- `service/NavIconService`：站点抓取/自定义上传 → `public-icons`；`resolve()` 进程内缓存 10 分钟（签名=图标字段+updatedAt）→ DB → `S3PresignService.publicUrl`；`syncMissing()` 只补 `icon_type=auto` 且无 `icon_key`、失败冷却 1 天的书签；2 线程守护池异步执行。上传对 `application/octet-stream` 只信魔数，显式拒绝无魔数文件。
+- `service/NavIconStartupSync`：`ApplicationReadyEvent` 投递后台补同步（`nav.icon.sync-on-startup=false` 可关，单次上限 200）。
+- `scripts/import_itab_backup.py`（在 `VeythCog-C/scripts`）：iTab `navConfig` 容错解析 → 按 URL 归一化去重 → SVG/ICO 用 Chrome 渲染 256px PNG（2 倍窗口截图 + alpha 包围盒裁剪，避免高 DPI 半图）→ `POST /nav/icons/upload` → `POST /nav/bookmarks` / `PUT /nav/bookmarks/{id}`；`state.json` 断点续跑，失败降级文字图标；支持 `--token` / `--chrome` / `--work-dir` / `--dry-run`，线上同步说明见 `scripts/README-nav-import.md`。2026-11-12 导入 249 条、更新 8 条已有图标、245 个唯一 S3 对象被引用。
+- `NavWallpaperService`：壁纸列表/随机/锁定 + 私有桶缩略图代理。
+
 **vc-app**（`com.vc.app`）—— 唯一可运行，装配全部：
 - `auth/*`：JWT 鉴权（`JwtUtil` / `JwtAuthFilter` / `AuthServiceImpl` / `PasswordUtil` / `User`）。
-- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE + `/chat/conversations` 三件套）、`LlmModelController`、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`GlobalExceptionHandler`、`ApiAccessLogFilter`（全接口访问日志：rid/user/ip/方法/URI/Controller#方法/状态/耗时/query/body，敏感字段脱敏）。
+- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE + `/chat/conversations` 三件套）、`LlmModelController`、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`NavBookmarkController` / `NavCategoryController` / `NavWallpaperController` / `NavSettingController`（导航 + `GET /nav/bookmarks/{id}/icon`）、`NavIconController`（`POST /nav/icons/fetch|upload|sync`）、`GlobalExceptionHandler`、`ApiAccessLogFilter`（全接口访问日志：rid/user/ip/方法/URI/Controller#方法/状态/耗时/query/body，敏感字段脱敏）。
 - `config/*`：`SecurityConfig`（无状态，放行 `/auth/**`、`/health/**`、接口文档、ASYNC 分发）、`CorsConfig`、`DataInitializer`（幂等种子：模型目录 + admin 用户 + 默认绑定 qwen-plus）。
 - `admin/*`：系统管理后端**已实现**（`AdminController` / `RoleController` / `AdminUserServiceImpl`，用户-角色多对多，`/admin/**` 需 `ADMIN` 角色）。
 - `orchestration/*`：`RagChatOrchestrator`（检索 → 拼带编号引用的上下文 → 交 vc-chat 作答；同步/流式共用，召回落空或失败降级为普通对话）。
@@ -147,6 +156,11 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | `chat_message` | 对话记忆（Spring AI JDBC 落库） | unique(conversation_id, seq)；conversation_id=`userId:conversationId` |
 | `knowledge_doc` | 知识库文档 | 无 `lib_type`（历史列已由 `011` 删除）；block_data JSONB 权威源；markdown_text 派生缓存；tags text[]；deleted 软删除；summary ≤500。新库按 `009→010→011` 执行 |
 | `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ `embedding_model` 标识（禁止不同模型向量混查）；doc_id 外键（软删除时显式清理，不依赖级联）。⚠️ `embedding_model` 由 `010` 补充，服务器库已执行 |
+| `nav_category` | 导航分类（iTab 右侧竖栏） | 按 user_id 隔离；sort_order 排序 |
+| `nav_bookmark` | 导航书签 | `icon_type`（auto/upload/text，CHECK 约束）、`icon_key`（`public-icons` 对象 key）、`icon_text`、`icon_color`、`icon_synced_at`；`013_nav_bookmark_icon.sql` 幂等增量 |
+| `nav_setting` | 导航首页配置（一人一行） | `current_wallpaper_key` NULL = 每次随机；activeCategoryId / 搜索引擎 |
+
+> 导航数据入库：`014_nav_itab_data.sql` 内置 7 分类 + 267 书签（含图标字段），首次按 `(user_id,name)` / `(category_id,url)` 插入，已有同 URL 书签同步图标字段；默认目标用户 `admin`，线上执行前先备份三表，详见 `docs/sql/README-014-nav-data.md`。
 
 > `llm_vendor` 表已**下线**（`005_drop_llm_vendor.sql`），改后端枚举。脚本含 MySQL/PG 双语差异注释。
 
@@ -178,6 +192,16 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | POST | `/knowledge/doc/{docId}/metadata/regenerate` | - | 是（辅助模型显式覆盖摘要/标签，只改元数据不动正文） |
 | POST | `/knowledge/doc/{docId}/unvectorize` | - | 是 |
 | POST | `/knowledge/rag/retrieve` | {docIds, query, topN?} | 是（限定 docIds + embedding_model + L2 阈值 1.2；阈值无命中自动回退 topN；禁止全库向量搜索） |
+| GET | `/nav/bookmarks` | query: categoryId | 是（返回 `BookmarkView`，含图标字段 + `hasIcon`） |
+| POST/PUT/DELETE | `/nav/bookmarks`、`/nav/bookmarks/{id}` | {categoryId?, title, url, iconType?, iconKey?, iconText?, iconColor?} | 是（图标字段服务端校验；auto 无 key 异步补同步） |
+| PUT | `/nav/bookmarks/reorder` | {categoryId, items:[{id,sortOrder}]} | 是 |
+| GET | `/nav/bookmarks/{id}/icon` | - | 是（进程缓存 → DB → S3 公开直链；`url=null` 表示无图） |
+| POST | `/nav/icons/fetch` | {url} | 是（SSRF 防护 + 抓取 + 上传 public-icons） |
+| POST | `/nav/icons/upload` | multipart: file（≤512KB） | 是（png/jpg/jpeg/webp/gif/ico，按魔数识别） |
+| POST | `/nav/icons/sync` | - | 是（补齐当前用户缺失 auto 图标，返回 {total,success,failed}） |
+| GET/POST/PUT/DELETE | `/nav/categories`、`/nav/categories/{id}` | 分类 CRUD | 是 |
+| GET | `/nav/wallpaper/random`、`/list`、`/current`，`PUT /nav/wallpaper/lock` | - | 是（缩略图 `/nav/wallpaper/thumb` permitAll） |
+| GET/PUT | `/nav/setting` | {searchEngine?, activeCategoryId?} | 是 |
 | GET | `/health` | - | 否 |
 
 统一返回 `BaseResponse<T>`：`{ code, data, message }`，`code===0` 成功；未登录 401（`ErrorCode.NOT_LOGIN_ERROR`）。
@@ -196,7 +220,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 ```
 
 ### 7.2 核心封装
-- `api/client.ts`：`http`（fetch 封装：baseURL / 自动带 token / 401 跳登录 / 超时 / 统一错误）。
+- `api/client.ts`：`http`（fetch 封装：baseURL / 自动带 token / 401 跳登录 / 超时 / 统一错误）+ `uploadFile()`（multipart，浏览器自带 boundary，不手写 Content-Type）。
+- `utils/iconCache.ts`：书签图标描述缓存（localStorage，key `veythcog:nav-icons:v1`）；按图标字段签名失效 + 30 天 TTL + 300 条上限；只缓存地址不缓存图片字节。
 - `api/sse.ts`：通用 `streamChat()`（OpenAI 兼容 /chat/completions，原生 EventSource 不能带 header 故用 fetch 手动解析）。
 - `api/chat.ts`：`sendMessage()` 同步 + `streamChatMessage()` 流式（`/chat/stream`，携带 `docIds`、解析 `event: references` → `onReferences`、支持 AbortController 中断）；会话列表 / 历史消息 / 删除均走后端（`getConversations` / `getConversationMessages` / `deleteConversation`），**已无 mock 会话数据**。
 - `api/auth.ts` / `llm.ts` / `knowledge.ts`：已接真后端；`admin.ts`：仍 mock。
@@ -219,6 +244,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 新建会话可选模型并写入 `Conversation.vendor/modelCode/modelName`；进入已有会话后**下拉禁用**（会话内禁切）。无绑定→空态引导去模型配置页。
 
 ### 7.5 其他已落地
+- 导航首页（`/home`，对标 iTab）：分类竖栏 + 书签网格 + 壁纸；`BookmarkModal` 按 iTab「自定义图标」重做，支持「获取图标 / 上传图片 / 文字图标 + 12 色板 / 保存并继续」；`BookmarkIcon` 先查 localStorage 图标缓存，未命中再 `GET /nav/bookmarks/{id}/icon`，不再实时拼对方站点 favicon；进入首页延后 1.5s 触发一次 `POST /nav/icons/sync`（后端幂等 + 失败冷却）。
 - 主题系统：6 预设 × 亮暗 + **全局毛玻璃开关**（CSS 变量 + inline style 双轨）。
 - 浮动音乐播放器（`FloatingMusicPlayer`，真 `<audio>`，mock 歌单）。
 - 可折叠侧栏（`CollapsibleSidebar`，物理裁剪把手，persist）。
@@ -232,15 +258,17 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 ### 8.1 后端
 - 配置文件：`vc-app/src/main/resources/application.yml`（通用）+ `application-local.yml`（**本地环境，已被 .gitignore 忽略，不入库**）。
 - **当前 active：PostgreSQL（个人服务器 docker 容器，连接串在 application-local.yml）**；`docs/architecture.md` 记的"MySQL 先行"已过时。
+- 导航图标同步：`nav.icon.sync-on-startup`（默认 `true`）控制启动时后台补同步，离线演示可设 `false`；单次上限 200 条，2 线程守护池，失败按 1 天冷却。
 - **安全红线**：`application-local.yml` 含**真实 DashScope AK 与数据库密码，严禁写入任何文档/提交 Git**；密钥一律环境变量注入（`DASHSCOPE_API_KEY` / `DEEPSEEK_API_KEY` / `JWT_SECRET` / DB 密码）。
 - AK 未配置时：可绑定但对话报「该模型未配置密钥」（`ErrorCode.SYSTEM_ERROR`）。
 - **启动（唯一推荐方式，后端+前端一条命令）**：`pwsh VeythCog-C/scripts/dev.ps1`，或双击 `VeythCog-C/scripts/dev.cmd`，或在 Trae 里跑任务 `dev: 后端+前端`（`tasks.json` 已内置，Ctrl+Shift+P → Tasks: Run Task）。
   脚本固定流程：① **先释放端口**（8123 / 3000 上有旧进程就先 Stop-Process，确认端口真空了才继续）→ ② mvn 打包（默认离线，`-Online` 联网）→ ③ 打包失败立即中止，绝不启动旧 class → ④ 后端 `java -jar` 起在后台（日志 `vc-app/target/dev-logs/backend.log`）→ ⑤ 前端 Vite 前台跑在 3000。
   子命令：`dev.ps1 backend`（只后端，前台）、`dev.ps1 frontend`（只前端）、`dev.ps1 stop`（只释放 8123/3000）。
   常用参数：`-SkipBuild`（纯重启，秒级）、`-BackendPort 8124 -FrontendPort 3001`（另起一份做冒烟，不占主端口）、`-JdkHome`（强制指定 JDK）。
-- **本机 JDK 现状（2026-11-11 清理，11-12 重启后收尾完成）**：只剩 `I:\Java\jdk-21`（21.0.12）。`I:\Java\jdk-11`、`I:\Java\jdk-17`、`D:\Java\jdk1.8.0_121`、`I:\Java\jdk-11.0.28_windows-x64_bin.exe` 已全部删除（jdk-17 曾有 12 个 dll 被 JVM 映射锁住，重启后才删干净）。`JAVA_HOME` 用户级与机器级都指向 jdk-21，用户 PATH 首位是 `I:\Java\jdk-21\bin`；已验证新开壳里 `java` 解析到 `I:\Java\jdk-21\bin\java.exe`（21.0.12）。改环境前的备份在 `C:\Users\dsf\java-env-backup-20261111.txt`。
-  ⚠️ 仅剩一处收尾：机器 PATH 里还留着 `C:\Program Files\Common Files\Oracle\Java\javapath`（Oracle 装的 Java 17 启动器垫片，指向已删除的 jdk-17，现已失效）和一条重复的 `I:\Java\jdk-21\bin`；删这两项要管理员权限，已被用户级 jdk-21 压住、不影响使用。
-- **JDK 必须 21（坑在这里）**：class 是 Java 21 编的（class major=65），拿 JDK 17（61）跑就报 `UnsupportedClassVersionError`。脚本会自己挑可用 JDK：`-JdkHome` → `VEYTH_JAVA_HOME` → `JAVA_HOME`（**版本 ≥21 才用**，不够就警告并切到 jdk-21）→ 常见安装路径 → PATH，然后**回写 `$env:JAVA_HOME`**，保证 mvn 编译与 java 运行是同一个 JDK；启动前还会读 `VcAppApplication.class` 的 major 版本与运行 JDK 比对，不一致直接中止并提示 `mvn clean` 重编。想看当前用哪套，脚本启动时会打印 `java = ... (Java 21)` 与 `JAVA_HOME = ...`。
+- **本机 JDK 现状（2026-11-12 复核）**：`I:\` 盘当前不存在（旧记录里的 `I:\Java\jdk-21` 读不到），`JAVA_HOME` = `D:\Java\jdk1.8.0_202`（Java 8，**不能用于本项目**）；机器上唯一的 JDK 21 是 IDE 下载的 `C:\Users\ext.chenjie155\.jdks\ms-21.0.12.1`（21.0.12.1）。脚本已改成自动发现，这种「版本对但路径不在老列表里」的情况不会再漏。
+- **JDK 版本以项目配置为准（不再写死路径）**：所需版本取自 `VeythCog-C/pom.xml` 的 `<java.version>`（当前 21；缺省才退回 `maven.compiler.release/source/target`），可用 `-JavaVersion` 临时覆盖。JDK 目录按来源优先级自动找：`-JdkHome` → `scripts\jdk.path`（可选，一行目录，换机器/换盘时不用改脚本）→ `VEYTH_JAVA_HOME` → `.vscode\settings.json` 的 `java.jdt.ls.java.home` / `java.configuration.runtimes` → `.idea\misc.xml` → `JAVA_HOME` → 注册表 `JavaSoft` → 常见安装目录扫描（`D:/E:/I:/C:\Java`、`C:\Program Files\Java|Eclipse Adoptium|Microsoft|Zulu|Amazon Corretto|BellSoft|JetBrains`、`%USERPROFILE%\.jdks`、`%LOCALAPPDATA%\Programs`、`scoop`、Toolbox）→ PATH 上的 `java`。
+  挑选规则：**版本完全一致优先**；没有就用最近的更高版本并黄字提示；只有更低版本时直接中止并列出扫到的 JDK（含来源）。候选必须是真 JDK（同时有 `bin\java.exe` 与 `bin\javac.exe`，`jre1.x` 会被排除）。选定后**回写 `$env:JAVA_HOME`**，保证 mvn 与 java 同一套；`1.8.0_202` 这类老版本号会归一成 `8`。启动前仍会比对 `VcAppApplication.class` 的 major 与运行 JDK，不一致直接中止并提示 `mvn clean` 重编。
+- **JDK 必须 21（坑在这里）**：class 是 Java 21 编的（class major=65），拿 JDK 17（61）跑就报 `UnsupportedClassVersionError`；脚本启动时会打印 `项目 JDK = Java 21（来自 pom.xml <java.version>）`、`JDK = <路径> (Java 21，来源：…)`、`JAVA_HOME = …`，想核对当前用哪套看这三行。
 - **为什么不再直接在 IDE 里 Run（血泪教训，同类问题已复发 3 次）**：Trae / VS Code 的 Java 扩展跑 `com.vc.app.VcAppApplication` 时，classpath 直接指向各模块 `target/classes`；增量编译没跑成或编译失败时，进程照样启动并加载**上一版旧 class**（`java.debug.settings.onBuildFailureProceed` 为 true 时更隐蔽）。症状是「代码明明改了却不生效」：新增接口 404、`/nav/wallpaper/thumb` 已 permitAll 仍 401、返回值还是旧的，而 IDE 控制台一声不响。
   判断是否踩坑：比对源码 mtime 与 `vc-app/target/classes/**/*.class` 的 mtime（脚本每次启动会打印 jar 与最新源码时间，jar 早于源码会黄字告警）。
   仓库根 `.vscode/settings.json` 已开 `java.autobuild.enabled`、关 `java.debug.settings.onBuildFailureProceed`（`.vscode/settings.json` 与 `tasks.json` 已从 .gitignore 放行，随仓库生效）。
@@ -270,11 +298,13 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 ## 10. 当前状态快照与待办
 
-**已打通（可演示）**：真 JWT 登录（账号密码；微信扫码登录已移除）→ 模型绑定管理 → 同步对话 + **SSE 流式对话**（带 JDBC 会话记忆、可中断）；RAG 知识库 P0（文档 CRUD/导入导出/向量化/RAG 召回/**后端注入 prompt + 引用下发** + `DocEditor`（基于 BlockNote）文档编辑器 + 对话侧引用卡片）；已去除「私有库/演示库」概念（`lib_type` 列已删）。
+**已打通（可演示）**：真 JWT 登录（账号密码；微信扫码登录已移除）→ 模型绑定管理 → 同步对话 + **SSE 流式对话**（带 JDBC 会话记忆、可中断）；RAG 知识库 P0（文档 CRUD/导入导出/向量化/RAG 召回/**后端注入 prompt + 引用下发** + `DocEditor`（基于 BlockNote）文档编辑器 + 对话侧引用卡片）；已去除「私有库/演示库」概念（`lib_type` 列已删）；导航首页 P2 图标资产化 + iTab 备份导入（2026-11-12：`nav_bookmark` 共 267 条，238 条 upload、18 条 text、11 条 auto；S3 `public-icons` 245 个唯一图标对象被引用、247 条书签引用，直链 HEAD 全部 200；70 个 SVG 半图已用“2 倍窗口截图 + 透明包围盒裁剪”重刷修复）。
 
 **已知阻塞**：
 - DashScope 免费额度曾耗尽（403 FreeTierOnly），需充值或换有效 AK 才能拿真实回复；DeepSeek AK 待填。
 - ~~旧库需补跑 010/011~~ ✅ 个人服务器库已执行（2026-11-09 确认），写入链路打通。
+- 导航图标剩 2 条无图：`baomidou.com`（MyBatis-Plus，仅 SVG，按安全策略拒绝）、`translate.google.com`（Google 翻译，当前网络不可达），前端文字兜底。iTab 导入中的 Stack Overflow / VeythCog / 技术文章摘抄 / 激战2中文维基已补齐 S3 图标；莫娜占卜铺站点连接被重置，保留文字图标。
+- SVG 图标半图问题已修复：根因是 Windows 高 DPI 下 Chrome 无头截图 CSS 视口只有窗口一半；转换器已改为 2 倍窗口 + alpha 包围盒裁剪 + `--headless=new` 超时回退旧 `--headless`。70 个 SVG 项已全部重刷，S3 直链复查 247/247 200。
 
 **待办/演进**（源自架构文档 + 现状）：
 1. 会话元数据持久化（现仅记忆层落库，会话列表在前端内存，`chatStore` 未接入）。

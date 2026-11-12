@@ -17,4 +17,13 @@ public interface VectorizeService {
 
     /** RAG 召回：docIds 必须同库，返回 topN 个片段 */
     List<RetrieveChunk> retrieve(Long userId, List<Long> docIds, String query, int topN);
+
+    /**
+     * 全库 RAG 召回：只搜当前账号可见、且已向量化的文档。
+     * <p>用于搜索页“优先知识库”，不要求用户选择文档集合。</p>
+     */
+    List<RetrieveChunk> retrieveAll(Long userId, String query, int topN);
+
+    /** 当前账号是否存在已向量化文档（搜索页知识库开关的置灰依据） */
+    boolean hasVectorizedDocs(Long userId);
 }

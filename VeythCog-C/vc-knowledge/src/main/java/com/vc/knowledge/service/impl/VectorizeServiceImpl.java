@@ -140,6 +140,34 @@ public class VectorizeServiceImpl implements VectorizeService {
         return fallback;
     }
 
+    @Override
+    public List<RetrieveChunk> retrieveAll(Long userId, String query, int topN) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        int limit = Math.max(1, Math.min(topN <= 0 ? properties.getRetrieve().getTopN() : topN, MAX_TOP_N));
+        float[] queryVector = embeddingProvider.embed(query);
+        String modelId = embeddingProvider.modelId();
+        double threshold = properties.getRetrieve().getDistanceThreshold();
+
+        List<RetrieveChunk> chunks = embeddingMapper.retrieveAll(queryVector, modelId, threshold, limit);
+        if (!chunks.isEmpty()) {
+            return chunks;
+        }
+        List<RetrieveChunk> fallback = embeddingMapper.retrieveAll(queryVector, modelId, null, limit);
+        if (!fallback.isEmpty()) {
+            log.warn("全库 RAG 阈值无命中，已回退 topN（未过滤距离）: 阈值={}, 回退条数={}, 最近距离={}",
+                    threshold, fallback.size(), fallback.get(0).getScore());
+        }
+        return fallback;
+    }
+
+    @Override
+    public boolean hasVectorizedDocs(Long userId) {
+        return docMapper.selectCount(new LambdaQueryWrapper<KnowledgeDoc>()
+                .eq(KnowledgeDoc::getIsVectorized, true)) > 0;
+    }
+
     // ---------------- 私有辅助 ----------------
 
     private KnowledgeDoc requireDoc(Long docId) {

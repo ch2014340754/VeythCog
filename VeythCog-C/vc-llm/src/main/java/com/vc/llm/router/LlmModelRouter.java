@@ -34,6 +34,8 @@ public class LlmModelRouter {
     private final LlmVendorProps vendorProps;
     private final ChatMemory chatMemory;
     private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
+    /** 无记忆 ChatClient：搜索 AI 等一次性问答使用，避免写入对话记忆 */
+    private final Map<String, ChatClient> statelessCache = new ConcurrentHashMap<>();
 
     public LlmModelRouter(UserLlmBindingRepository bindingRepository,
                           LlmModelRepository modelRepository,
@@ -77,6 +79,19 @@ public class LlmModelRouter {
                 .onErrorMap(e -> wrap(e));
     }
 
+    /**
+     * 无记忆流式调用：搜索 AI 等一次性问答使用。
+     * <p>不挂 {@link MessageChatMemoryAdvisor}，因此不会读写任何 conversationId 的历史。</p>
+     */
+    public Flux<String> streamStateless(Long userId, String vendor, String modelCode, String message) {
+        ChatClient chatClient = resolveStatelessChatClient(userId, vendor, modelCode);
+        return chatClient.prompt()
+                .user(message)
+                .stream()
+                .content()
+                .onErrorMap(e -> wrap(e));
+    }
+
     /** 校验绑定/模型/密钥，并返回（缓存）对应的 ChatClient */
     private ChatClient resolveChatClient(Long userId, String vendor, String modelCode) {
         UserLlmBinding binding = bindingRepository
@@ -105,6 +120,35 @@ public class LlmModelRouter {
             return ChatClient.builder(rawModel)
                     .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                     .build();
+        });
+    }
+
+    /** 无记忆客户端：与对话客户端使用同一套绑定/模型校验，但不挂记忆顾问。 */
+    private ChatClient resolveStatelessChatClient(Long userId, String vendor, String modelCode) {
+        UserLlmBinding binding = bindingRepository
+                .findByUserIdAndVendorCodeAndModelCode(userId, vendor, modelCode)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAMS_ERROR, "模型不可用"));
+        if (!Boolean.TRUE.equals(binding.getEnabled())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型不可用");
+        }
+        LlmModel model = modelRepository.findByVendorCodeAndModelCode(vendor, modelCode)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAMS_ERROR, "模型不可用"));
+        if (!Boolean.TRUE.equals(model.getEnabled())) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型不可用");
+        }
+
+        String apiKey = vendorProps.apiKey(vendor);
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "该模型未配置密钥");
+        }
+
+        return statelessCache.computeIfAbsent("stateless:" + vendor + ":" + modelCode, k -> {
+            LlmVendorFactory factory = factories.stream()
+                    .filter(f -> f.supports(vendor))
+                    .findFirst()
+                    .orElseThrow(() -> new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的厂商"));
+            ChatModel rawModel = factory.create(model, apiKey, vendorProps.baseUrl(vendor));
+            return ChatClient.builder(rawModel).build();
         });
     }
 

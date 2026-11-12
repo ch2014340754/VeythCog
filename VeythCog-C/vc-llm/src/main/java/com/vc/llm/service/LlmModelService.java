@@ -54,6 +54,15 @@ public class LlmModelService {
         return items;
     }
 
+    /** 当前用户默认模型；没有显式默认时回退到第一个已绑定模型。 */
+    public LlmModelItem getDefaultModel(Long userId) {
+        List<LlmModelItem> models = getModels(userId);
+        return models.stream()
+                .filter(m -> Boolean.TRUE.equals(m.getIsDefault()))
+                .findFirst()
+                .orElse(models.isEmpty() ? null : models.get(0));
+    }
+
     /** 供应商枚举 + 模型目录（含当前用户绑定/默认标记） */
     public List<CatalogVendorItem> getCatalog(Long userId) {
         List<LlmVendor> vendors = Arrays.stream(LlmVendor.values()).toList();
