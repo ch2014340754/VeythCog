@@ -1,9 +1,9 @@
-import React from 'react';
-import { useNavStore } from '@/stores/navStore';
-import { useWallpaperStore } from '@/stores/wallpaperStore';
-import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useNavStore } from '@/stores/navStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { glassBlur, whiteGlass } from '@/styles/homeSurface';
+import React from 'react';
 
 interface Props {
   onAddCategory?: () => void;
@@ -93,8 +93,8 @@ const CategorySidebar: React.FC<Props> = ({ onAddCategory }) => {
               onClick={() => setActiveCategory(c.id)}
               style={{
                 width: 48,
-                height: 48,
-                borderRadius: 12,
+                height: 60,
+                borderRadius: 10,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -105,8 +105,8 @@ const CategorySidebar: React.FC<Props> = ({ onAddCategory }) => {
                 transition: 'background 0.2s',
               }}
             >
-              <span style={{ fontSize: 18 }}>{c.icon || '📁'}</span>
-              <span style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{c.name}</span>
+              <span style={{ fontSize: 22 }}>{c.icon || '📁'}</span>
+              <span style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{c.name}</span>
             </div>
           );
         })}

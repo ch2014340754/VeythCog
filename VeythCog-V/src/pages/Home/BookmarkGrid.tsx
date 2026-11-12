@@ -11,14 +11,27 @@ interface Props {
   onContextMenu?: (b: NavBookmark, e: React.MouseEvent) => void;
 }
 
+/** 书签网格最多展示 4 行，超出后容器内滚动 */
+const ROW_HEIGHT = 100;
+const ROW_GAP = 12;
+const MAX_VISIBLE_ROWS = 4;
+const GRID_MAX_HEIGHT = ROW_HEIGHT * MAX_VISIBLE_ROWS + ROW_GAP * (MAX_VISIBLE_ROWS - 1);
+
 /**
  * 书签网格：滚轮切分类由 Home 页面统一接管。
  */
 const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContextMenu }) => {
   const bookmarks = useNavStore((s) => s.bookmarks);
+  const activeCategoryId = useNavStore((s) => s.activeCategoryId);
   const wallpaper = useWallpaperStore((s) => s.active);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const isWallpaperMode = !!wallpaper?.url;
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // 切分类后回到顶部，避免把上一分类的滚动位置带过来
+  React.useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [activeCategoryId]);
 
   // 「添加图标」占位卡：无壁纸时跟随主题 token，有壁纸时用白色变体
   const addHoverBg = isWallpaperMode ? 'rgba(255,255,255,0.1)' : colors.primary10;
@@ -48,11 +61,19 @@ const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContex
       }}
     >
       <div
+        ref={scrollRef}
+        className={`nav-bookmark-scroll ${isDark ? 'is-dark' : 'is-light'}`}
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
-          gap: 12,
+          gridAutoRows: ROW_HEIGHT,
+          gap: ROW_GAP,
           justifyContent: 'center',
+          alignContent: 'start',
+          maxHeight: GRID_MAX_HEIGHT,
+          overflowY: 'auto',
+          paddingRight: 6,
+          boxSizing: 'border-box',
         }}
       >
         {bookmarks.map((b) => (
@@ -71,10 +92,13 @@ const BookmarkGrid: React.FC<Props> = ({ onAddBookmark, onEditBookmark, onContex
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 8,
             cursor: 'pointer',
             padding: 8,
             borderRadius: 12,
+            height: '100%',
+            boxSizing: 'border-box',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.background = addHoverBg)}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}

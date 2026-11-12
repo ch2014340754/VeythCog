@@ -599,3 +599,57 @@ body.dark .ant-select-focused .ant-select-selector {
   opacity: 1;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
+
+/* 搜索联想 / AI 面板中的加载图标 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================
+   导航书签网格滚动条
+   最多 4 行，超出后在网格内滚动；滚动条跟随深浅主题
+   ======================================== */
+.nav-bookmark-scroll {
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.nav-bookmark-scroll.is-dark {
+  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.06);
+}
+.nav-bookmark-scroll.is-light {
+  scrollbar-color: rgba(31, 35, 64, 0.26) rgba(31, 35, 64, 0.06);
+}
+.nav-bookmark-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.nav-bookmark-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+}
+.nav-bookmark-scroll.is-dark::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+}
+.nav-bookmark-scroll.is-light::-webkit-scrollbar-track {
+  background: rgba(31, 35, 64, 0.06);
+}
+.nav-bookmark-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.nav-bookmark-scroll.is-dark::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+.nav-bookmark-scroll.is-dark::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.46);
+}
+.nav-bookmark-scroll.is-light::-webkit-scrollbar-thumb {
+  background-color: rgba(31, 35, 64, 0.26);
+}
+.nav-bookmark-scroll.is-light::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(31, 35, 64, 0.4);
+}
+

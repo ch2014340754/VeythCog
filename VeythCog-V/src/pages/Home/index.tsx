@@ -1,29 +1,29 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { message } from 'antd';
-import { Icon } from '@iconify/react';
-import externalLinkIcon from '@iconify-icons/lucide/external-link';
-import pencilIcon from '@iconify-icons/lucide/pencil';
-import trashIcon from '@iconify-icons/lucide/trash-2';
-import plusIcon from '@iconify-icons/lucide/plus';
-import refreshIcon from '@iconify-icons/lucide/refresh-cw';
-import imageIcon from '@iconify-icons/lucide/image';
-import Clock from './Clock';
-import SearchBar from './SearchBar';
-import BookmarkGrid from './BookmarkGrid';
-import CategorySidebar from './CategorySidebar';
-import HomeSidebar from './HomeSidebar';
-import BookmarkModal from './BookmarkModal';
-import CategoryManageModal from './CategoryManageModal';
-import QuoteBar from './QuoteBar';
-import WallpaperManagerModal from '@/components/WallpaperManagerModal';
-import { useNavStore } from '@/stores/navStore';
-import { useWallpaperStore } from '@/stores/wallpaperStore';
-import { useAuthStore } from '@/stores/authStore';
-import { useTheme } from '@/contexts/ThemeContext';
 import type { NavBookmark } from '@/api/nav';
 import { syncIcons } from '@/api/nav';
+import WallpaperManagerModal from '@/components/WallpaperManagerModal';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useAuthStore } from '@/stores/authStore';
+import { useNavStore } from '@/stores/navStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { clearCachedIcon } from '@/utils/iconCache';
+import externalLinkIcon from '@iconify-icons/lucide/external-link';
+import imageIcon from '@iconify-icons/lucide/image';
+import pencilIcon from '@iconify-icons/lucide/pencil';
+import plusIcon from '@iconify-icons/lucide/plus';
+import refreshIcon from '@iconify-icons/lucide/refresh-cw';
+import trashIcon from '@iconify-icons/lucide/trash-2';
+import { Icon } from '@iconify/react';
+import { message } from 'antd';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import BookmarkGrid from './BookmarkGrid';
+import BookmarkModal from './BookmarkModal';
+import CategoryManageModal from './CategoryManageModal';
+import CategorySidebar from './CategorySidebar';
+import Clock from './Clock';
+import HomeSidebar from './HomeSidebar';
+import QuoteBar from './QuoteBar';
+import SearchBar from './SearchBar';
 
 /**
  * 右键菜单单项：文字在左，图标在右（参照 iTab）
@@ -137,8 +137,17 @@ const HomePage: React.FC = () => {
     };
   }, [menu]);
 
-  // 全页面滚轮切分类（循环）
+  // 全页面滚轮切分类（循环）；书签网格可滚动时优先滚网格
   const handleWheel = (e: React.WheelEvent) => {
+    const target = e.target as HTMLElement | null;
+    const scroller = target?.closest?.('.nav-bookmark-scroll') as HTMLElement | null;
+    if (scroller && e.deltaY !== 0 && scroller.scrollHeight > scroller.clientHeight + 2) {
+      const canScrollDown =
+        e.deltaY > 0 && scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 2;
+      const canScrollUp = e.deltaY < 0 && scroller.scrollTop > 2;
+      if (canScrollDown || canScrollUp) return;
+    }
+
     if (debounceRef.current) return;
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
@@ -234,7 +243,7 @@ const HomePage: React.FC = () => {
           style={{
             opacity: fading ? 0.3 : 1,
             transition: 'opacity 0.25s ease',
-            paddingTop: '80px',
+            paddingTop: '40px',
           }}
         >
           <BookmarkGrid

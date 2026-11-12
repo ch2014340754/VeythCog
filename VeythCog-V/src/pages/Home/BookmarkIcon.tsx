@@ -1,11 +1,11 @@
-import React from 'react';
 import type { NavBookmark, NavIcon } from '@/api/nav';
 import { getBookmarkIcon } from '@/api/nav';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { glassBlur, whiteGlass } from '@/styles/homeSurface';
 import { getCachedIcon, iconSignature, setCachedIcon } from '@/utils/iconCache';
+import React from 'react';
 
 interface Props {
   bookmark: NavBookmark;
@@ -87,8 +87,8 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
         <span
           style={{
             color: readableTextColor(icon.color),
-            fontSize: Math.round(size * 0.4),
-            fontWeight: 600,
+            fontSize: Math.round(size * 0.2),
+            fontWeight: 400,
             lineHeight: 1,
             userSelect: 'none',
           }}
@@ -193,12 +193,15 @@ const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMe
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 8,
         cursor: 'pointer',
         padding: 8,
         borderRadius: 12,
         transition: 'background 0.2s',
         position: 'relative',
+        height: '100%',
+        boxSizing: 'border-box',
       }}
       onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}

@@ -66,6 +66,15 @@ const ChatPage: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<TextAreaRef>(null);
 
+  // 从导航搜索 AI 的「继续追问」进入时，把问题带进输入框
+  useEffect(() => {
+    const prefill = new URLSearchParams(window.location.search).get('prefill');
+    if (!prefill) return;
+    setInputValue(prefill);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 80);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // 知识库抽屉状态
   const [kbDrawerOpen, setKbDrawerOpen] = useState(false);
   const [kbDocs, setKbDocs] = useState<DocListItem[]>([]);

@@ -113,6 +113,10 @@ export const setDefaultCategory = (id: number) =>
 export const getBookmarks = (categoryId: number) =>
   http.get<NavBookmark[]>('/nav/bookmarks', { categoryId });
 
+/** 全量书签：搜索框本地联想一次拉取 */
+export const getAllBookmarks = () =>
+  http.get<NavBookmark[]>('/nav/bookmarks/all');
+
 /** 解析单个书签图标：前端缓存未命中时调用 */
 export const getBookmarkIcon = (id: number) =>
   http.get<NavIcon>(`/nav/bookmarks/${id}/icon`);

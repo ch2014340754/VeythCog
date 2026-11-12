@@ -2,8 +2,9 @@
 
 > 文档路径：`openspec/nav-search-prd.md`
 > 需求名：导航页搜索增强（输入联想 + 首行翻译 + 可选 AI 回答）
-> 版本：v0.2（2026-11-12，需求已确认，待开发）
-> 状态：需求基线已确认，未进入开发
+> 版本：v0.3.1（2026-11-12，乱码 / 翻译交互 / 面板主题修复）
+> 状态：已开发；运行态接口与界面联调待验证
+
 > 关联模块：导航首页、AI 对话、知识库 RAG
 > 关联文档：`openspec/knowledge-prd.md`、`openspec/changes/p2-nav-icons/proposal.md`
 
@@ -13,6 +14,8 @@
 |---|---|
 | v0.1 | 初版：基于现有 `SearchBar.tsx`、`/chat/stream`、`RagChatOrchestrator` 梳理输入联想、首行翻译、AI 回答与知识库优先 |
 | v0.2 | 确认四项基线：① 首行翻译=翻译输入内容；② Enter=网页搜索，`Ctrl/Cmd+Enter`=AI 回答；③ 知识库优先=全库检索，不选文档；④ 输入联想纳入本期 |
+| v0.3 | 按确认基线直接开发：新增 `/search/suggest`、`/search/translate`、`/search/status`、`/search/ai/stream` 与 `/nav/bookmarks/all`；`SearchBar` 改造为本地书签/历史 + 远端联想、首行翻译、无记忆 AI 面板与知识库开关 |
+| v0.3.1 | 修复百度联想 GBK 解码乱码（显式 `ie/oe=utf-8`，并按响应头 charset 兜底）；翻译行点击改为复制译文；联想 / AI 面板背景跟随站点深浅主题 |
 
 ---
 
@@ -56,7 +59,7 @@
 ### 2.1 目标
 
 1. 用户输入 2 个字符后，300ms 内看到可点击的联想建议；
-2. 联想面板首行展示查询翻译，支持一键用译文搜索；
+2. 联想面板首行展示查询翻译，支持一键复制译文；
 3. 用户可主动触发 AI 回答，回答流式输出，并可选择“优先知识库”；
 4. 原有“回车跳转搜索引擎”的行为保持不变，新增能力不打断旧习惯；
 5. 所有新增能力失败时静默降级，搜索框始终可用。
@@ -197,10 +200,9 @@
 
 #### 5.2.2 交互
 
-- 首行结构：`译` 标签 + 译文 + 语言方向 + `复制` + `用译文搜索`；
+- 首行结构：`译` 标签 + 译文 + 语言方向 + `复制` 图标；
 - 翻译结果最多展示 2 行，超出省略；悬停可查看全文；
-- 点击「复制」复制译文，toast 轻提示；
-- 点击「用译文搜索」：把译文写入输入框，并按当前搜索引擎执行搜索；
+- 点击译文整行即复制译文，toast 轻提示；不把译文填入搜索框；
 - 翻译加载中展示细 shimmer，不改变面板高度；
 - 翻译失败 / 超时：整行隐藏，不展示错误。
 
@@ -501,8 +503,8 @@ data: [DONE]
 
 1. 输入中文“自动配置原理”，首行展示英文译文；
 2. 输入英文“spring boot auto configuration”，首行展示中文译文；
-3. 点击「用译文搜索」，输入框变为译文并执行当前引擎搜索；
-4. 点击「复制」复制译文，出现轻提示；
+3. 点击译文整行复制译文，输入框保持原内容；
+4. 复制后出现轻提示；
 5. 翻译接口超时 / 失败时整行隐藏，联想与搜索不受影响；
 6. URL、邮箱、纯代码输入不出现翻译行；
 7. 相同文本第二次输入命中缓存，1.5s 内返回。
@@ -594,3 +596,46 @@ data: [DONE]
 - 复用 `RagChatOrchestrator` 的 rerank / 阈值回退 / 引用格式；
 - 不修改现有知识库对话的 `docIds` 语义，避免影响 AI 对话页；
 - 搜索历史与“优先知识库”开关先落本地，不新增数据库迁移。
+
+---
+
+## 15. 开发落地与验证（v0.3）
+
+### 15.1 后端
+
+| 能力 | 落点 |
+|---|---|
+| 搜索接口 | `vc-app/.../web/SearchController.java` |
+| 搜索编排 / 状态 / Prompt | `vc-app/.../search/SearchService.java` |
+| 远端联想代理（350ms 超时、5 分钟缓存、失败空数组） | `vc-app/.../search/SearchSuggestService.java` |
+| 首行翻译（辅助模型、24h 缓存） | `vc-app/.../search/SearchTranslateService.java` |
+| 全库 RAG 检索 | `RagChatOrchestrator#retrieveAllSafely` + `VectorizeService#retrieveAll` |
+| 无记忆 AI 流式 | `LlmModelRouter#streamStateless` → `LlmChatService#streamStateless` → `ChatService#streamChatStateless` |
+| 默认模型 | `LlmModelService#getDefaultModel`（`isDefault` 优先，否则第一个已绑定模型） |
+| 全量书签 | `GET /nav/bookmarks/all` |
+
+接口：
+
+- `GET /search/suggest?q=&engine=` → `BaseResponse<List<String>>`
+- `POST /search/translate` body `{text,targetLang?}` → `BaseResponse<TranslateResult>`
+- `GET /search/status` → `BaseResponse<SearchStatus>`
+- `POST /search/ai/stream` body `{query,knowledgeFirst}` → SSE `meta → references → data(token) → [DONE]`，异常 `event:error`
+
+### 15.2 前端
+
+- `src/api/search.ts`：联想 / 翻译 / 状态 / 无记忆 SSE / 最近搜索 / 知识库开关本地持久化；
+- `src/pages/Home/SearchBar.tsx`：本地书签 + 历史先返回，远端联想增量合并；首行翻译；AI 面板与知识库开关；
+- `src/api/nav.ts`：新增 `getAllBookmarks()`，搜索框只拉一次全量书签；
+- `src/pages/Chat/index.tsx`：支持 `/chat?prefill=...`，承接搜索 AI 的“继续追问”。
+
+### 15.3 已验证
+
+- 后端 `mvn -q -pl vc-app -am compile -DskipTests`：exit 0；
+- 前端 `npm run build`（`tsc && vite build`）：exit 0。
+
+### 15.4 未验证 / 运行前置
+
+- 未做真实 HTTP / SSE 运行态验证：本机 PostgreSQL 服务 `postgresql-x64-15` 处于停止状态且启动失败，现有 `:8123` 后端仍是旧构建（`/api/search/status` 返回 404）；
+- 远端 suggest 对 Google / Bing 的可达性、辅助翻译模型密钥、默认对话模型密钥，需在运行环境联调时确认；
+- 全库检索沿用当前“账号共享知识库”模型，不按 `owner` 过滤。
+
