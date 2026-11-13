@@ -77,7 +77,7 @@ const SettingsModal: React.FC<Props> = ({ open, onClose, defaultTab = 'account' 
           <div
             style={{
               fontSize: 13,
-              fontWeight: 700,
+              fontWeight: 900,
               color: colors.text,
               padding: '0 12px 12px',
               letterSpacing: 0.5,
@@ -100,6 +100,7 @@ const SettingsModal: React.FC<Props> = ({ open, onClose, defaultTab = 'account' 
                   cursor: 'pointer',
                   marginBottom: 2,
                   fontSize: 14,
+                  fontWeight: 700,
                   color: active ? colors.primary : colors.textSecondary,
                   background: active ? colors.primary10 : 'transparent',
                   transition: `all 0.2s var(--spring)`,

@@ -153,6 +153,13 @@ const HomePage: React.FC = () => {
   // 全页面滚轮切分类（循环）；书签网格可滚动时优先滚网格
   const handleWheel = (e: React.WheelEvent) => {
     const target = e.target as HTMLElement | null;
+
+    // AntD Modal 走 portal 渲染，DOM 不在首页下，但 React 事件仍会沿组件树冒泡到这里。
+    // 弹窗内滚动时必须直接忽略，否则会同时触发首页分类切换，看起来像“弹窗下的页面跟着滚”。
+    if (target?.closest('.ant-modal-root, .ant-drawer-root, .ant-image-preview-root, [data-nav-wheel-ignore]')) {
+      return;
+    }
+
     const scroller = target?.closest?.('.nav-bookmark-scroll') as HTMLElement | null;
     if (scroller && e.deltaY !== 0 && scroller.scrollHeight > scroller.clientHeight + 2) {
       const canScrollDown =
