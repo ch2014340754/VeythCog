@@ -23,17 +23,32 @@ public class JwtUtil {
         this.expireMillis = props.getExpireHours() * 3_600_000L;
     }
 
-    /** 签发 token，subject 为 userId，附带 username + roles 声明 */
-    public String generate(Long userId, String username, java.util.Set<String> roles) {
+    /** 签发 token，subject 为 userId，附带 username + roles + sid（服务端会话 id）声明 */
+    public String generate(Long userId, String username, java.util.Set<String> roles, String sid) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
                 .claim("roles", roles == null ? java.util.List.of() : roles)
+                .claim("sid", sid)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expireMillis))
                 .signWith(key)
                 .compact();
+    }
+
+    /** 解析 token 返回会话 id（强制下线依赖它定位会话） */
+    public String parseSessionId(String token) {
+        Object sid = parseClaims(token).get("sid");
+        return sid == null ? null : String.valueOf(sid);
+    }
+
+    private Claims parseClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     /** 解析 token 返回 userId；无效/过期抛异常 */

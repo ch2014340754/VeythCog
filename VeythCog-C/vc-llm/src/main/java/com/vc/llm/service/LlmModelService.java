@@ -2,6 +2,7 @@ package com.vc.llm.service;
 
 import com.vc.common.exception.BusinessException;
 import com.vc.common.exception.ErrorCode;
+import com.vc.llm.config.DashScopeEndpoint;
 import com.vc.llm.config.LlmVendorProps;
 import com.vc.llm.crypto.ApiKeyCryptoService;
 import com.vc.llm.dto.BatchBindResult;
@@ -11,9 +12,13 @@ import com.vc.llm.dto.LlmModelItem;
 import com.vc.llm.dto.VendorKeyStatus;
 import com.vc.llm.entity.LlmModel;
 import com.vc.llm.entity.UserLlmBinding;
+import com.vc.llm.entity.UserLlmModelVerify;
 import com.vc.llm.enums.LlmVendor;
+import com.vc.llm.model.ModelModalities;
+import com.vc.llm.model.ModelType;
 import com.vc.llm.repository.LlmModelRepository;
 import com.vc.llm.repository.UserLlmBindingRepository;
+import com.vc.llm.repository.UserLlmModelVerifyRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -21,8 +26,10 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -38,31 +45,50 @@ public class LlmModelService {
 
     private final LlmModelRepository modelRepository;
     private final LlmVendorProps vendorProps;
+    private final LlmEndpointService endpointService;
     private final UserLlmBindingRepository bindingRepository;
+    private final UserLlmModelVerifyRepository verifyRepository;
     private final ApiKeyCryptoService apiKeyCryptoService;
 
     public LlmModelService(LlmModelRepository modelRepository,
                            LlmVendorProps vendorProps,
+                           LlmEndpointService endpointService,
                            UserLlmBindingRepository bindingRepository,
+                           UserLlmModelVerifyRepository verifyRepository,
                            ApiKeyCryptoService apiKeyCryptoService) {
         this.modelRepository = modelRepository;
         this.vendorProps = vendorProps;
+        this.endpointService = endpointService;
         this.bindingRepository = bindingRepository;
+        this.verifyRepository = verifyRepository;
         this.apiKeyCryptoService = apiKeyCryptoService;
     }
 
-    /** 当前用户绑定的启用模型（对话页下拉，按绑定创建时间升序） */
+    /** 当前用户绑定的、启用且已通过连通校验的对话模型（对话页下拉，按绑定创建时间升序） */
     public List<LlmModelItem> getModels(Long userId) {
         List<LlmModelItem> items = new ArrayList<>();
+        Map<String, String> fingerprints = vendorFingerprints(userId);
         for (UserLlmBinding b : bindingRepository.findByUserIdOrderByCreateTimeAscIdAsc(userId)) {
             if (!Boolean.TRUE.equals(b.getEnabled())) {
                 continue;
             }
-            modelRepository.findByVendorCodeAndModelCode(b.getVendorCode(), b.getModelCode())
+            LlmModel model = modelRepository.findByVendorCodeAndModelCode(b.getVendorCode(), b.getModelCode())
                     .filter(m -> Boolean.TRUE.equals(m.getEnabled()))
-                    .ifPresent(m -> items.add(new LlmModelItem(
-                            m.getVendorCode(), m.getModelCode(), m.getModelName(),
-                            true, Boolean.TRUE.equals(b.getIsDefault()))));
+                    .orElse(null);
+            if (model == null) {
+                continue;
+            }
+            ModelType type = ModelType.fromCode(model.getModelType());
+            if (!type.isChatCapable()) {
+                continue;
+            }
+            if (!verified(userId, b.getVendorCode(), b.getModelCode(),
+                    fingerprints.get(b.getVendorCode()))) {
+                continue;
+            }
+            items.add(new LlmModelItem(b.getVendorCode(), b.getModelCode(), model.getModelName(),
+                    type.getCode(), ModelModalities.decode(model.getModalities(), model.getModelType()),
+                    true, Boolean.TRUE.equals(b.getIsDefault())));
         }
         return items;
     }
@@ -76,7 +102,7 @@ public class LlmModelService {
                 .orElse(models.isEmpty() ? null : models.get(0));
     }
 
-    /** 供应商枚举 + 模型目录（含绑定/默认标记 + 用户 Key 状态） */
+    /** 供应商枚举 + 模型目录（含绑定/默认标记 + 校验结论 + 用户 Key 状态） */
     public List<CatalogVendorItem> getCatalog(Long userId) {
         List<LlmVendor> vendors = Arrays.stream(LlmVendor.values()).toList();
 
@@ -90,23 +116,95 @@ public class LlmModelService {
                 }
             }
         }
+        Map<String, UserLlmModelVerify> verifies = new HashMap<>();
+        for (UserLlmModelVerify v : verifyRepository.findByUserId(userId)) {
+            verifies.put(key(v.getVendorCode(), v.getModelCode()), v);
+        }
+        Map<String, String> fingerprints = vendorFingerprints(userId);
 
         List<CatalogVendorItem> result = new ArrayList<>();
         for (LlmVendor v : vendors) {
             String vCode = v.getCode();
+            String vendorFingerprint = fingerprints.get(vCode);
             List<CatalogModelItem> models = modelRepository.findByVendorCodeAndEnabledTrue(vCode)
                     .stream()
-                    .map(m -> new CatalogModelItem(
-                            m.getModelCode(), m.getModelName(),
-                            boundKeys.contains(key(vCode, m.getModelCode())),
-                            defaultKeys.contains(key(vCode, m.getModelCode())),
-                            true))
+                    .map(m -> {
+                        UserLlmModelVerify verify = verifies.get(key(vCode, m.getModelCode()));
+                        boolean valid = verify != null
+                                && Boolean.TRUE.equals(verify.getIsValid())
+                                && vendorFingerprint != null
+                                && vendorFingerprint.equals(verify.getKeyFingerprint());
+                        return new CatalogModelItem(
+                                m.getModelCode(), m.getModelName(),
+                                ModelType.fromCode(m.getModelType()).getCode(),
+                                ModelModalities.decode(m.getModalities(), m.getModelType()),
+                                boundKeys.contains(key(vCode, m.getModelCode())),
+                                defaultKeys.contains(key(vCode, m.getModelCode())),
+                                true,
+                                valid,
+                                verify == null || valid ? null : verify.getVerifyError());
+                    })
                     .toList();
             VendorKeyStatus keyStatus = vendorKeyStatus(userId, vCode);
-            result.add(new CatalogVendorItem(vCode, v.getName(), vendorProps.baseUrl(vCode), models,
-                    keyStatus.getHasApiKey(), keyStatus.getApiKeyMasked(), keyStatus.getHasFallbackKey()));
+            LlmEndpointService.EffectiveEndpoint endpoint = endpointService.resolveSaved(userId, vCode);
+            String savedWorkspace = null;
+            String savedRegion = null;
+            for (UserLlmBinding b : bindingRepository.findByUserIdAndVendorCode(userId, vCode)) {
+                if (savedWorkspace == null && StringUtils.hasText(b.getWorkspaceId())) {
+                    savedWorkspace = b.getWorkspaceId();
+                }
+                if (savedRegion == null && StringUtils.hasText(b.getRegion())) {
+                    savedRegion = b.getRegion();
+                }
+            }
+            result.add(new CatalogVendorItem(vCode, v.getName(), endpoint.baseUrl(), models,
+                    keyStatus.getHasApiKey(), keyStatus.getApiKeyMasked(), keyStatus.getHasFallbackKey(),
+                    savedWorkspace, savedRegion,
+                    endpoint.workspaceId(), endpoint.region(),
+                    StringUtils.hasText(vendorProps.workspaceId(vCode)),
+                    endpoint.baseUrl()));
         }
         return result;
+    }
+
+    /** 每个供应商当前有效 Key 的指纹：已保存 AK 优先，其次配置兜底；解密失败视为无 Key */
+    private Map<String, String> vendorFingerprints(Long userId) {
+        Map<String, String> result = new HashMap<>();
+        for (LlmVendor v : LlmVendor.values()) {
+            String vendor = v.getCode();
+            String plain = null;
+            Optional<UserLlmBinding> latest = bindingRepository.findByUserIdAndVendorCode(userId, vendor)
+                    .stream()
+                    .filter(b -> StringUtils.hasText(b.getApiKeyCipher()))
+                    .max((a, b) -> {
+                        LocalDateTime ta = a.getApiKeyUpdatedAt() == null ? LocalDateTime.MIN : a.getApiKeyUpdatedAt();
+                        LocalDateTime tb = b.getApiKeyUpdatedAt() == null ? LocalDateTime.MIN : b.getApiKeyUpdatedAt();
+                        return ta.compareTo(tb);
+                    });
+            if (latest.isPresent()) {
+                try {
+                    plain = apiKeyCryptoService.decrypt(latest.get().getApiKeyCipher());
+                } catch (BusinessException ignored) {
+                    plain = null;
+                }
+            }
+            if (!StringUtils.hasText(plain)) {
+                plain = vendorProps.apiKey(vendor);
+            }
+            if (StringUtils.hasText(plain)) {
+                LlmEndpointService.EffectiveEndpoint endpoint = endpointService.resolveSaved(userId, vendor);
+                result.put(vendor, endpointService.targetFingerprint(plain, endpoint));
+            }
+        }
+        return result;
+    }
+
+    private boolean verified(Long userId, String vendor, String modelCode, String fingerprint) {
+        return verifyRepository.findByUserIdAndVendorCodeAndModelCode(userId, vendor, modelCode)
+                .map(v -> Boolean.TRUE.equals(v.getIsValid())
+                        && fingerprint != null
+                        && fingerprint.equals(v.getKeyFingerprint()))
+                .orElse(false);
     }
 
     /** 绑定模型（兼容旧接口）；重复绑定幂等；isDefault=true 时清其他默认 */
@@ -126,6 +224,14 @@ public class LlmModelService {
                         nb.setApiKeyCipher(c.getApiKeyCipher());
                         nb.setApiKeyUpdatedAt(c.getApiKeyUpdatedAt());
                     });
+                    // 业务空间 / 地域同样是「用户 + 供应商」级，新绑定继承已有值
+                    siblings.stream()
+                            .filter(s -> StringUtils.hasText(s.getWorkspaceId()) || StringUtils.hasText(s.getRegion()))
+                            .findFirst()
+                            .ifPresent(s -> {
+                                nb.setWorkspaceId(s.getWorkspaceId());
+                                nb.setRegion(s.getRegion());
+                            });
                     return nb;
                 });
         if (Boolean.TRUE.equals(isDefault)) {
@@ -149,14 +255,24 @@ public class LlmModelService {
      */
     @Transactional
     public BatchBindResult batchBind(Long userId, String vendor, List<String> modelCodes,
-                                     String apiKey, String defaultModelCode) {
+                                     String apiKey, String defaultModelCode,
+                                     String workspaceId, String region) {
         String vendorCode = requireVendor(vendor);
         List<String> codes = normalizeCodes(modelCodes);
         for (String code : codes) {
             requireModel(vendorCode, code);
         }
 
+        // 业务空间 / 地域与 AK 同级：null=不修改，空串=清除用户设置并回落系统配置
+        String workspaceToUse = workspaceId == null
+                ? null : DashScopeEndpoint.normalizeWorkspace(workspaceId);
+        String regionToUse = region == null ? null : DashScopeEndpoint.normalizeRegion(region);
+
         List<UserLlmBinding> existing = bindingRepository.findByUserIdAndVendorCode(userId, vendorCode);
+        UserLlmBinding workspaceSeed = existing.stream()
+                .filter(b -> StringUtils.hasText(b.getWorkspaceId()) || StringUtils.hasText(b.getRegion()))
+                .findFirst()
+                .orElse(null);
         if (codes.isEmpty() && StringUtils.hasText(apiKey)) {
             // AK 是按绑定行存储的（用户 + 供应商级），没有模型就无处落库，直接拒绝而不是假装成功
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "请至少选择一个模型后再保存 API Key");
@@ -193,9 +309,21 @@ public class LlmModelService {
                 nb.setUserId(userId);
                 nb.setVendorCode(vendorCode);
                 nb.setModelCode(code);
+                if (workspaceId == null && workspaceSeed != null) {
+                    nb.setWorkspaceId(workspaceSeed.getWorkspaceId());
+                }
+                if (region == null && workspaceSeed != null) {
+                    nb.setRegion(workspaceSeed.getRegion());
+                }
                 return nb;
             });
             binding.setEnabled(true);
+            if (workspaceId != null) {
+                binding.setWorkspaceId(workspaceToUse);
+            }
+            if (region != null) {
+                binding.setRegion(regionToUse);
+            }
             if (cipherToUse != null && !Objects.equals(binding.getApiKeyCipher(), cipherToUse)) {
                 binding.setApiKeyCipher(cipherToUse);
                 binding.setApiKeyUpdatedAt(updatedAt);

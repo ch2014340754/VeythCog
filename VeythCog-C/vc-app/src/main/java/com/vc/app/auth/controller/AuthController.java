@@ -7,11 +7,14 @@ import com.vc.app.auth.dto.RegisterRequest;
 import com.vc.app.auth.dto.UserProfileResponse;
 import com.vc.app.auth.service.AuthService;
 import com.vc.app.auth.service.AvatarService;
+import com.vc.app.auth.jwt.JwtUtil;
+import com.vc.admin.monitor.service.SessionService;
 import com.vc.common.BaseResponse;
 import com.vc.common.ResultUtils;
 import com.vc.common.exception.BusinessException;
 import com.vc.common.exception.ErrorCode;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,9 +39,31 @@ public class AuthController {
     @Resource
     private AvatarService avatarService;
 
+    @Resource
+    private JwtUtil jwtUtil;
+
+    @Resource
+    private SessionService sessionService;
+
     @PostMapping("/login")
-    public BaseResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResultUtils.success(authService.login(request));
+    public BaseResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
+                                             HttpServletRequest servletRequest) {
+        return ResultUtils.success(authService.login(request,
+                clientIp(servletRequest), servletRequest.getHeader("User-Agent")));
+    }
+
+    /** 退出登录：把当前会话置 logout，JWT 立即失效 */
+    @PostMapping("/logout")
+    public BaseResponse<Boolean> logout(HttpServletRequest servletRequest) {
+        String auth = servletRequest.getHeader("Authorization");
+        if (auth != null && auth.startsWith("Bearer ")) {
+            try {
+                sessionService.logout(jwtUtil.parseSessionId(auth.substring(7)));
+            } catch (Exception ignored) {
+                // token 已失效，登出无需报错
+            }
+        }
+        return ResultUtils.success(true);
     }
 
     @PostMapping("/register")
@@ -79,5 +104,19 @@ public class AuthController {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "未登录");
         }
         return userId;
+    }
+
+    /** 与 ApiAccessLogFilter 相同的取 IP 规则，保证会话列表里的 IP 与调用日志一致 */
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        String remote = request.getRemoteAddr();
+        return "0:0:0:0:0:0:0:1".equals(remote) ? "127.0.0.1" : remote;
     }
 }

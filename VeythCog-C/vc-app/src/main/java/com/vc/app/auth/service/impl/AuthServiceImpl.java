@@ -12,6 +12,7 @@ import com.vc.app.auth.repository.UserRepository;
 import com.vc.app.auth.service.AuthService;
 import com.vc.app.auth.service.AvatarService;
 import com.vc.app.auth.util.PasswordUtil;
+import com.vc.admin.monitor.service.SessionService;
 import com.vc.common.exception.BusinessException;
 import com.vc.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
@@ -33,17 +34,20 @@ public class AuthServiceImpl implements AuthService {
     private final RoleRepository roleRepository;
     private final JwtUtil jwtUtil;
     private final AvatarService avatarService;
+    private final SessionService sessionService;
 
     public AuthServiceImpl(UserRepository userRepository, RoleRepository roleRepository,
-                           JwtUtil jwtUtil, AvatarService avatarService) {
+                           JwtUtil jwtUtil, AvatarService avatarService,
+                           SessionService sessionService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.jwtUtil = jwtUtil;
         this.avatarService = avatarService;
+        this.sessionService = sessionService;
     }
 
     @Override
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, String ip, String userAgent) {
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new BusinessException(ErrorCode.PARAMS_ERROR, "用户名或密码错误"));
         if (!PasswordUtil.matches(request.getPassword(), user.getPassword())) {
@@ -56,13 +60,16 @@ public class AuthServiceImpl implements AuthService {
                 : user.getRoles().stream().map(Role::getCode).collect(Collectors.toSet());
         String primaryRole = primaryRole(roleCodes);
 
+        // 先建服务端会话，sid 进 JWT：支持在线会话展示与管理员强制下线
+        String sid = sessionService.create(user.getId(), user.getUsername(), ip, userAgent);
+
         LoginResponse resp = new LoginResponse();
-        resp.setToken(jwtUtil.generate(user.getId(), user.getUsername(), roleCodes));
+        resp.setToken(jwtUtil.generate(user.getId(), user.getUsername(), roleCodes, sid));
         resp.setUsername(user.getUsername());
         resp.setNickname(user.getNickname());
         resp.setAvatarUrl(avatarService.avatarUrl(user.getAvatarKey()));
         resp.setRole(primaryRole);
-        log.info("登录成功，用户名：{}，角色：{}", user.getUsername(), roleCodes);
+        log.info("登录成功，用户名：{}，角色：{}，sid：{}", user.getUsername(), roleCodes, sid);
         return resp;
     }
 

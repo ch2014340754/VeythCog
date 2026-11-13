@@ -55,7 +55,7 @@ const AuditLogPage: React.FC = () => {
           onChange={(e) => setFilter(e.target.value)}
         />
       </div>
-      <Table rowKey="id" columns={columns} dataSource={filtered} loading={loading} pagination={{ pageSize: 20 }} size="middle" />
+      <Table className="admin-table" rowKey="id" columns={columns} dataSource={filtered} loading={loading} pagination={{ pageSize: 20 }} size="middle" />
     </div>
   );
 };

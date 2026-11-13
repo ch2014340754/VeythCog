@@ -1,17 +1,21 @@
 /**
  * 系统管理 API
- * - 用户管理：已对接真实后端（GET/POST/PUT/DELETE /admin/users）
- * - 模型目录 / 监控 / 审计 / 系统配置 / 定时任务：仍为 mock（后端未实现）
+ * - 用户管理 / 模型目录 / 系统监控：已对接真实后端
+ * - 审计 / 系统配置 / 定时任务：仍为 mock（后端未实现）
  */
 import type {
   AdminUser,
   AdminVendor,
-  CallStatDay,
-  OnlineSession,
-  ErrorLog,
   AuditLogEntry,
   SystemConfig,
   ScheduledTask,
+  MonitorOverview,
+  MonitorPoint,
+  MonitorEndpoint,
+  MonitorError,
+  MonitorLlmSummary,
+  MonitorSession,
+  MonitorResource,
 } from '@/types';
 import { http } from '@/api/client';
 import { useModeStore } from '@/stores/modeStore';
@@ -54,48 +58,86 @@ let mockVendors: AdminVendor[] = [
   },
 ];
 
-// 生成最近 7 天调用量
-function genCallStats(): CallStatDay[] {
-  const days: CallStatDay[] = [];
-  const now = new Date();
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    days.push({
-      date: `${d.getMonth() + 1}/${d.getDate()}`,
-      calls: Math.floor(80 + Math.random() * 120),
-      tokens: Math.floor(20000 + Math.random() * 50000),
-    });
-  }
-  return days;
+// ---------- 本地绕过模式的监控假数据（后端联调时走真实接口） ----------
+
+function mockOverview(): MonitorOverview {
+  return {
+    calls: 186, errors: 7, errorRate: 0.0376, p95Ms: 412, avgCostMs: 137,
+    llmCalls: 42, promptTokens: 58200, completionTokens: 41200, totalTokens: 99400,
+    estimatedCalls: 0, activeUsers: 3, onlineSessions: 2, callsLastMinute: 4,
+  };
 }
-let mockCallStats = genCallStats();
 
-let mockOnlineSessions: OnlineSession[] = [
+function mockPoints(hours: number): MonitorPoint[] {
+  const count = hours <= 24 ? 24 : Math.min(7, hours);
+  return Array.from({ length: count }, (_, i) => ({
+    time: hours <= 24
+      ? `${String(i).padStart(2, '0')}:00`
+      : `第 ${i + 1} 天`,
+    calls: 40 + ((i * 37) % 90),
+    errors: (i % 6) + 1,
+    avgCostMs: 90 + ((i * 13) % 60),
+    p95Ms: 300 + ((i * 29) % 260),
+    tokens: 8000 + ((i * 1700) % 20000),
+  }));
+}
+
+function mockEndpoints(): MonitorEndpoint[] {
+  return [
+    { route: '/chat/message', method: 'POST', calls: 68, errors: 3, errorRate: 0.044, avgCostMs: 620, p95Ms: 1320, maxCostMs: 2210 },
+    { route: '/chat/conversations', method: 'GET', calls: 45, errors: 0, errorRate: 0, avgCostMs: 42, p95Ms: 88, maxCostMs: 140 },
+    { route: '/knowledge/doc', method: 'GET', calls: 32, errors: 1, errorRate: 0.031, avgCostMs: 61, p95Ms: 120, maxCostMs: 210 },
+    { route: '/nav/bookmark', method: 'GET', calls: 21, errors: 0, errorRate: 0, avgCostMs: 18, p95Ms: 36, maxCostMs: 70 },
+  ];
+}
+
+function mockErrors(): MonitorError[] {
+  const now = Date.now();
+  return [
+    { id: 1, time: new Date(now - 600_000).toLocaleString('zh-CN'), route: '/chat/message', method: 'POST', bizCode: 50000, status: 200, userId: 1, rid: 'a1b2c3', message: '模型调用失败：403 Free quota exhausted' },
+    { id: 2, time: new Date(now - 5_400_000).toLocaleString('zh-CN'), route: '/knowledge/doc', method: 'GET', bizCode: 40400, status: 200, userId: 2, rid: 'd4e5f6', message: '文档不存在' },
+  ];
+}
+
+function mockLlm(): MonitorLlmSummary {
+  return {
+    rows: [
+      { vendor: 'dashscope', modelCode: 'qwen-plus', calls: 30, errors: 4, promptTokens: 41000, completionTokens: 30000, totalTokens: 71000, avgLatencyMs: 980, maxLatencyMs: 2400 },
+      { vendor: 'deepseek', modelCode: 'deepseek-chat', calls: 12, errors: 1, promptTokens: 17200, completionTokens: 11200, totalTokens: 28400, avgLatencyMs: 640, maxLatencyMs: 1500 },
+    ],
+    calls: 42,
+    totalTokens: 99400,
+    errors: 5,
+  };
+}
+
+let mockSessions: MonitorSession[] = [
   {
-    sessionId: 'sess-001',
-    username: 'admin',
-    name: '管理员',
-    ip: '192.168.1.10',
-    loginAt: Date.now() - 3600_000,
-    lastActiveAt: Date.now() - 120_000,
+    sid: 'sess-001', userId: 1, username: 'admin', nickname: '管理员', ip: '192.168.1.10',
+    userAgent: 'Chrome / Windows', loginAt: '2026-11-13 09:12:00', lastActiveAt: '2026-11-13 10:01:00',
+    online: true, status: 'active',
   },
   {
-    sessionId: 'sess-002',
-    username: 'chenjie',
-    name: '陈杰',
-    ip: '192.168.1.25',
-    loginAt: Date.now() - 7200_000,
-    lastActiveAt: Date.now() - 600_000,
+    sid: 'sess-002', userId: 2, username: 'chenjie', nickname: '陈杰', ip: '192.168.1.25',
+    userAgent: 'Edge / Windows', loginAt: '2026-11-13 08:40:00', lastActiveAt: '2026-11-13 09:55:00',
+    online: true, status: 'active',
   },
 ];
 
-let mockErrorLogs: ErrorLog[] = [
-  { id: 'e-1', time: Date.now() - 1800_000, level: 'error', source: 'LLM Router', message: 'DeepSeek 调用超时（10s），已重试' },
-  { id: 'e-2', time: Date.now() - 7200_000, level: 'warn', source: 'Knowledge', message: '文档 segment 数超过阈值 500，已截断' },
-  { id: 'e-3', time: Date.now() - 86400_000 * 1.5, level: 'error', source: 'LLM Router', message: 'DashScope API Key 余额不足，请求被拒' },
-  { id: 'e-4', time: Date.now() - 86400_000 * 2, level: 'warn', source: 'Auth', message: '用户 liming 连续 5 次密码错误' },
-];
+function mockResource(): MonitorResource {
+  return {
+    osName: 'Windows 11', osVersion: '10.0', cpuCores: 16,
+    systemCpuLoad: 0.32, processCpuLoad: 0.06, systemLoadAverage: -1,
+    memoryTotal: 16 * 1024 ** 3, memoryUsed: 9 * 1024 ** 3,
+    swapTotal: 0, swapUsed: 0,
+    heapUsed: 512 * 1024 ** 2, heapMax: 4 * 1024 ** 3, heapCommitted: 700 * 1024 ** 2,
+    nonHeapUsed: 180 * 1024 ** 2, liveThreads: 46, jvmUptimeMs: 3 * 3600_000,
+    jvmStartTime: '2026-11-13 07:00:00',
+    diskPath: 'D:\\veyth-cog', diskTotal: 500 * 1024 ** 3,
+    diskUsable: 420 * 1024 ** 3, diskUsed: 80 * 1024 ** 3,
+    sampledAt: '2026-11-13 10:02:00',
+  };
+}
 
 let mockAuditLogs: AuditLogEntry[] = [
   { id: 'a-1', time: Date.now() - 3600_000, username: 'admin', action: '登录', detail: '管理员登录系统', ip: '192.168.1.10' },
@@ -327,26 +369,76 @@ export async function setDefaultModel(vendor: string, modelCode: string): Promis
   }));
 }
 
-// ---------- 监控 ----------
+// ---------- 系统监控（真实数据） ----------
 
-export async function getCallStats(): Promise<CallStatDay[]> {
-  await delay(200);
-  return [...mockCallStats];
+export async function getMonitorOverview(hours = 24): Promise<MonitorOverview> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return mockOverview();
+  }
+  return http.get<MonitorOverview>('/admin/monitor/overview', { hours });
 }
 
-export async function getOnlineSessions(): Promise<OnlineSession[]> {
-  await delay(200);
-  return [...mockOnlineSessions];
+export async function getMonitorTimeseries(hours = 24): Promise<MonitorPoint[]> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return mockPoints(hours);
+  }
+  return http.get<MonitorPoint[]>('/admin/monitor/timeseries', { hours });
 }
 
-export async function kickSession(sessionId: string): Promise<void> {
-  await delay();
-  mockOnlineSessions = mockOnlineSessions.filter((s) => s.sessionId !== sessionId);
+export async function getMonitorEndpoints(
+  hours = 24,
+  sort: 'calls' | 'errors' | 'p95' = 'calls',
+  limit = 20,
+): Promise<MonitorEndpoint[]> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return mockEndpoints();
+  }
+  return http.get<MonitorEndpoint[]>('/admin/monitor/endpoints', { hours, sort, limit });
 }
 
-export async function getErrorLogs(): Promise<ErrorLog[]> {
-  await delay(200);
-  return [...mockErrorLogs];
+export async function getMonitorErrors(hours = 24, limit = 50): Promise<MonitorError[]> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return mockErrors();
+  }
+  return http.get<MonitorError[]>('/admin/monitor/errors', { hours, limit });
+}
+
+export async function getMonitorLlm(hours = 24): Promise<MonitorLlmSummary> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return mockLlm();
+  }
+  return http.get<MonitorLlmSummary>('/admin/monitor/llm', { hours });
+}
+
+export async function getMonitorSessions(): Promise<MonitorSession[]> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return [...mockSessions];
+  }
+  return http.get<MonitorSession[]>('/admin/monitor/sessions');
+}
+
+/** 强制下线：后端把会话置 kicked，该 token 下一次请求即 401 */
+export async function kickSession(sid: string): Promise<void> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    mockSessions = mockSessions.filter((s) => s.sid !== sid);
+    return;
+  }
+  await http.post<boolean>(`/admin/monitor/sessions/${encodeURIComponent(sid)}/kick`);
+}
+
+export async function getMonitorResources(): Promise<MonitorResource> {
+  if (useModeStore.getState().bypassMode) {
+    await delay();
+    return mockResource();
+  }
+  return http.get<MonitorResource>('/admin/monitor/resources');
 }
 
 // ---------- 审计日志 ----------

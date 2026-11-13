@@ -11,9 +11,12 @@ import com.vc.app.auth.dto.UserProfileResponse;
 public interface AuthService {
 
     /**
-     * 登录
+     * 登录：创建服务端会话（sid 写进 JWT），用于在线会话与强制下线
+     *
+     * @param ip        客户端 IP
+     * @param userAgent 客户端 UA
      */
-    LoginResponse login(LoginRequest request);
+    LoginResponse login(LoginRequest request, String ip, String userAgent);
 
     /**
      * 注册，返回用户 id

@@ -73,3 +73,84 @@
 > 验证记录（2026-11-13）：新增/编辑/下架/删除均 200；重复编码 40000；删除有绑定模型 40000、改其编码 40000；DeepSeek 无 AK 同步 40000；百炼同步 `total=108 / added=107 / skipped=1`，新增行未上架；清理后目录恢复 2 行、qwen-plus 仍为默认。
 
 
+
+## 7. 系统监控 / vc-admin（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| MON-01 | MainAgent | 建 `vc-admin` 模块 + 4 张监控表迁移并执行 | 已完成 | `VeythCog-C/vc-admin/pom.xml`、`docs/sql/016_observability.sql` | 用户拍板③双写/②会话表/①usage 优先 |
+| MON-02 | MainAgent | 接口采集 + 分钟桶聚合 + LLM usage + 业务码 Advice | 已完成 | `vc-admin/monitor/{MetricsCollector,LlmCallRecorderImpl}`、`vc-app/web/{ApiAccessLogFilter,BizCodeAdvice}.java`、`vc-llm/router/LlmModelRouter.java` | MON-01 |
+| MON-03 | MainAgent | 会话表 + JWT sid + 登录/登出/踢人 | 已完成 | `vc-admin/monitor/{entity,repository,service}`、`vc-app/auth/**` | MON-01 |
+| MON-04 | MainAgent | 查询接口 + 资源监控 + 清理任务 | 已完成 | `vc-admin/monitor/{MonitorQueryService,ResourceMonitor,MonitorRetentionJob,web/AdminMonitorController}` | MON-02/03 |
+| MON-05 | MainAgent | 前端监控页接真实数据 + 类型/API | 已完成（`npm run build` 通过） | `VeythCog-V/src/{types/index.ts,api/admin.ts,pages/Admin/Monitoring.tsx}` | MON-04 |
+| MON-06 | MainAgent | 编译/bootstrap 与接口验证（8125，验证后停服） | 已完成 | `vc-app/target/run-8125-monitor.log` | MON-04/05 |
+| MON-07 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | MON-06 |
+
+> 验证记录（2026-11-13）：`mvn -o -q -pl vc-admin,vc-app -am -DskipTests compile` EXIT=0；overview `/auth/login` calls=1/p95=479；errors 捕获 `chat/message` 上游 403（bizCode=50000、HTTP 200、message 原文、rid）；llm 1 次失败、promptTokens 估算 1、latency 723ms；按 JWT sid 踢人后 token2=40100、token1=0；logout 后原 token=40100；resources 返回真实 CPU/内存/JVM/磁盘。
+## 8. P0 收口三项（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| P0C-01 | MainAgent | 迁移 017：绑定校验列 + `chat_session` | 已完成（`OK executed=12`） | `VeythCog-C/docs/sql/017_p0_verify_and_session.sql` | 用户拍板 1/2/3 都做 |
+| P0C-02 | MainAgent | 连通校验服务 + 接口 + 对话门控 + AK 变更失效 | 已完成 | `vc-llm/{service/LlmBindingVerifier,router/LlmModelRouter,service/LlmModelService,dto/VerifyResult}`、`vc-app/web/LlmModelController` | P0C-01 |
+| P0C-03 | MainAgent | `chat_session` 实体/仓库/服务 + 会话配置接口 + 列表合并 | 已完成 | `vc-chat/{entity/ChatSession,repository,ChatSessionService,dto/ChatSessionVO}`、`vc-app/web/{ChatController,ChatSessionRequest}` | P0C-01 |
+| P0C-04 | MainAgent | 上下文压缩器 + 配置 + 同步/流式接入 + 失败降级 | 已完成（降级路径已验证） | `vc-chat/compress/*`、`vc-chat/ChatService`、`vc-app/orchestration/RagChatOrchestrator` | P0C-03 |
+| P0C-05 | MainAgent | SSE 已建流后的错误事件修正 + 前端非 SSE 错误解析 | 已完成 | `vc-app/web/ChatController`、`VeythCog-V/src/api/chat.ts` | P0C-04 |
+| P0C-06 | MainAgent | 前端配置页校验状态/按钮；对话页会话持久化 + 压缩开关 | 已完成（`npm run build` EXIT=0） | `VeythCog-V/src/{api/llm.ts,api/chat.ts,types/index.ts,pages/Settings/Providers.tsx,pages/Chat/index.tsx}` | P0C-02/03 |
+| P0C-07 | MainAgent | 编译 + 8125 接口验证（验证后停服） | 已完成 | `vc-app/target/run-8125-p0.log` | P0C-02~06 |
+| P0C-08 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | P0C-07 |
+
+> 验证记录（2026-11-13）：`mvn -o -q -pl vc-chat,vc-llm,vc-app -am -DskipTests compile` EXIT=0；verify 对 qwen-plus 返回 valid=false（403 额度不足，latency 653ms）；catalog `valid=false`、`/llm/models` 0 条；会话 CRUD 与 `/chat/conversations` 合并通过（messageCount=0 的新会话可见、docIds/compress 更新生效）；未校验模型 `/chat/message` 返回 40000；压缩测试 8 条历史 + 超阈值 → 摘要失败 → 保留最近 6 条并完成压缩重写。受额度限制，摘要成功路径未回归。
+
+## 9. 单模型校验 / 多模态校验 / 模型类型（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| MTV-01 | MainAgent | 迁移 018：`llm_model.model_type` + `user_llm_model_verify` | 已完成（`OK executed=7`） | `VeythCog-C/docs/sql/018_model_type_and_verify.sql` | 用户三点反馈 |
+| MTV-02 | MainAgent | 校验与绑定解耦：单模型校验接口、草稿 AK、Key 指纹门控 | 已完成 | `vc-llm/{service/LlmBindingVerifier,router/LlmModelRouter,entity/UserLlmModelVerify,repository/UserLlmModelVerifyRepository}`、`vc-app/web/{LlmModelController,VerifyRequest}` | MTV-01 |
+| MTV-03 | MainAgent | 模型类型枚举 + 多模态探测 URL + 同步保存类型 + 目录/绑定 DTO | 已完成 | `vc-llm/{model/ModelType,service/LlmCatalogAdminService,dto,CatalogModelItem,LlmModelItem,AdminModelItem}`、`vc-app/web/{AdminLlmModelController,AdminModelSaveRequest}` | MTV-01 |
+| MTV-04 | MainAgent | 前端：逐行单模型校验 + 类型图标 + 目录类型列/表单 + 对话下拉图标 | 已完成（`npm run build` EXIT=0） | `VeythCog-V/src/{components/ModelTypeTag.tsx,pages/Settings/Providers.tsx,pages/Admin/Models.tsx,pages/Chat/index.tsx,types/index.ts,api/llm.ts,api/adminModels.ts}` | MTV-02/03 |
+| MTV-05 | MainAgent | 编译、迁移、8125 接口验证（验证后停服） | 已完成 | `vc-app/target/run-8125-type.log` | MTV-02~04 |
+| MTV-06 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | MTV-05 |
+
+> 验证记录（2026-11-13）：`mvn -o -q -pl vc-chat,vc-llm,vc-app -am -DskipTests compile` EXIT=0；`npm run build` EXIT=0。未绑定模型 `qwen-plus` + 草稿假 AK → `valid=false`（401 翻译），证明校验不依赖绑定；不传 AK 且无绑定 → 走系统兜底并返回 403 额度提示；新建 `vision` 模型后校验走原生多模态 URL，假 AK 返回 401；目录/管理接口 `modelType` 贯通；已绑定并校验的 `qwen3.8-flash` 对话返回「模型未通过连通校验，请先在模型配置页校验」（40000）。测试模型与校验记录已清理。
+
+## 10. 百炼地域 / 业务空间（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| WS-01 | MainAgent | 迁移 019：`user_llm_binding.workspace_id/region` + 索引 | 已完成（`OK executed=5`） | `VeythCog-C/docs/sql/019_llm_workspace_region.sql` | 用户提供华北2业务空间 |
+| WS-02 | MainAgent | 地址拼装 + 生效端点解析 + 复合指纹 | 已完成 | `vc-llm/{config/DashScopeEndpoint,service/LlmEndpointService,config/LlmVendorProps,entity/UserLlmBinding}` | WS-01 |
+| WS-03 | MainAgent | 校验 / 路由 / 批量保存 / 同步接入 workspace | 已完成 | `vc-llm/{service/LlmBindingVerifier,router/LlmModelRouter,service/LlmModelService,service/LlmCatalogAdminService,dto/CatalogVendorItem}`、`vc-app/web/{VerifyRequest,BatchBindRequest,LlmModelController}` | WS-02 |
+| WS-04 | MainAgent | 前端业务空间/地域输入框、生效地址展示、API 参数 | 已完成（`npm run build` EXIT=0） | `VeythCog-V/src/{pages/Settings/Providers.tsx,types/index.ts,api/llm.ts}` | WS-03 |
+| WS-05 | MainAgent | 编译、迁移、8125 接口验证（验证后停服） | 已完成 | `vc-app/target/run-8125-ws.log` | WS-01~04 |
+| WS-06 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | WS-05 |
+
+> 验证记录（2026-11-13）：`qwen3-vl-plus` 在 `llm-j09pwqdqv4no16ww.cn-beijing` 与标准域名双通（valid=true，约 1s）；`batchBind` 保存 workspace 后 catalog 生效地址正确，`qwen-max` 真实对话返回「你好」；不传 workspace 的批量保存保留旧值；非法 workspace 返回 40000；空间 `/api/v1/models` 可读 373 条。测试数据已清理，8125 已停止。视觉模型走原生文本生成路径返回 `url error` 的缺口已于 10.1 修复。
+
+## 10.1 百炼兼容接口修复（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| COMPAT-01 | MainAgent | 定位 `qwen3.8-27b` 原生 `text-generation` 400 `url error`，对比标准/业务空间兼容接口 | 已完成 | 实测：兼容接口双通 200「你好」 | WS-01 |
+| COMPAT-02 | MainAgent | `DashScopeVendorFactory` 改 `OpenAiChatModel` + `/compatible-mode/v1`，显式 `completionsPath=/chat/completions` | 已完成（`mvn compile` EXIT=0） | `vc-llm/{factory/DashScopeVendorFactory,config/DashScopeEndpoint}` | COMPAT-01 |
+| COMPAT-03 | MainAgent | 多模态校验改同源兼容 `/chat/completions`（图片输入），生成类超时 20s→60s | 已完成 | `vc-llm/service/LlmBindingVerifier` | COMPAT-02 |
+| COMPAT-04 | MainAgent | 校验通过后回写草稿 workspace/region 到该供应商绑定行，保证校验/对话同端点 | 已完成 | `vc-llm/service/LlmBindingVerifier#persistDraftEndpoint` | COMPAT-02 |
+| COMPAT-05 | MainAgent | 8125 端到端验收：业务空间校验 + 真实对话 + 指纹/绑定落库 | 已完成（校验约 4s，对话 `code=0`「你好」1.7s） | 绑定表 `qwen3.8-27b → llm-j09pwqdqv4no16ww / cn-beijing` | COMPAT-01~04 |
+| COMPAT-06 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | COMPAT-05 |
+| COMPAT-07 | MainAgent | 同类隐患：`OpenAiCompatVendorFactory`（DeepSeek）baseUrl 带 `/v1` 时避免 `/v1/v1` | 已完成（编译 EXIT=0） | `vc-llm/factory/OpenAiCompatVendorFactory` | COMPAT-02 |
+
+> 说明：Spring AI `OpenAiApi` 默认 completionsPath 为 `/v1/chat/completions`，baseUrl 已含 `/v1` 时必须显式覆盖，否则会 404。`qwen3.8-27b` 类型仍为 `vision`（TG+VU 并存），文本对话已走兼容接口可用。
+
+## 11. 模型目录全模态 + 同步覆盖已有数据（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| MOD-01 | MainAgent | 迁移 020：`llm_model.modalities` + 按主类型回填 | 已完成（`OK executed=3`，373 行无空值） | `VeythCog-C/docs/sql/020_llm_model_modalities.sql` | 用户多模态反馈 |
+| MOD-02 | MainAgent | 能力全量映射 + 主类型决策 + 逗号串编解码 | 已完成 | `vc-llm/model/{ModelType,ModelModalities}.java` | MOD-01 |
+| MOD-03 | MainAgent | 同步更新已有模型（类型/模态/占位名称），保留运营配置；结果增 updated | 已完成 | `vc-llm/service/LlmCatalogAdminService.java`、`dto/ModelSyncResult.java`、`vc-app/web/{AdminLlmModelController,AdminModelSaveRequest}.java` | MOD-02 |
+| MOD-04 | MainAgent | 前端多模态标签/图标、目录筛选、管理表单多选、配置页/对话下拉 | 已完成（`npm run build` EXIT=0） | `VeythCog-V/src/{components/ModelTypeTag.tsx,pages/Admin/Models.tsx,pages/Settings/Providers.tsx,pages/Chat/index.tsx,types/index.ts,api/adminModels.ts}` | MOD-03 |
+| MOD-05 | MainAgent | 编译、8125 同步/接口/对话验证（验证后停服） | 已完成 | `vc-app/target/run-8125-modalities.log` | MOD-01~04 |
+| MOD-06 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | MOD-05 |
+
+> 验证记录（2026-11-13）：`mvn -o -q -pl vc-llm,vc-app -am -DskipTests compile` EXIT=0；`npm run build` EXIT=0。百炼同步 `total=373 / updated=84 / unchanged=289`，`qwen3.8-27b → reasoning + text,reasoning,vision`；二次同步 `updated=0 / unchanged=373`。用户模型接口与目录接口均下发 `modalities`；`qwen3.8-27b` 对话 `code=0` 约 1.54s；临时模型新增/编辑多模态验证后已删除，测试会话已删除，8125 已停止。

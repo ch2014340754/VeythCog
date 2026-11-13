@@ -1,7 +1,8 @@
-import { createConversation, deleteConversation, getConversationMessages, getConversations, streamChatMessage } from '@/api/chat';
+import { createConversation, deleteConversation, getConversationMessages, getConversations, streamChatMessage, updateConversation } from '@/api/chat';
 import { listDocs } from '@/api/knowledge';
 import CollapsibleSidebar from '@/components/CollapsibleSidebar';
 import MessageBubble from '@/components/MessageBubble';
+import { ModelModalityIcons } from '@/components/ModelTypeTag';
 import { useTheme } from '@/contexts/ThemeContext';
 import { modelId, useSettingsStore } from '@/stores/settingsStore';
 import type { Conversation, DocListItem, Message } from '@/types';
@@ -32,6 +33,7 @@ import {
     Popconfirm,
     Select,
     Spin,
+    Switch,
     Tag,
     Tooltip,
 } from 'antd';
@@ -40,6 +42,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** 侧栏宽度（与 Knowledge 页保持一致） */
 const SIDEBAR_WIDTH = 280;
+
+/** 对话输入框可拖拽高度范围 */
+const MIN_COMPOSER_HEIGHT = 44;
+const MAX_COMPOSER_HEIGHT = 440;
 
 /** 新对话空状态的推荐问题 */
 const SUGGESTED_PROMPTS = [
@@ -65,6 +71,12 @@ const ChatPage: React.FC = () => {
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<TextAreaRef>(null);
+  const [composerHeight, setComposerHeight] = useState(MIN_COMPOSER_HEIGHT);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => resizeCleanupRef.current?.();
+  }, []);
 
   // 从导航搜索 AI 的「继续追问」进入时，把问题带进输入框
   useEffect(() => {
@@ -161,12 +173,34 @@ const ChatPage: React.FC = () => {
     }
   };
 
-  // 更新当前会话选中的知识库文档
+  // 更新当前会话选中的知识库文档（立即写回 chat_session，刷新后仍生效）
   const setSelectedDocIds = (ids: number[]) => {
     if (!activeConvId) return;
+    const prevIds = activeConv?.knowledgeDocIds ?? [];
     setConversations((prev) =>
       prev.map((c) => (c.id === activeConvId ? { ...c, knowledgeDocIds: ids } : c))
     );
+    void updateConversation(activeConvId, { docIds: ids }).catch((e) => {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === activeConvId ? { ...c, knowledgeDocIds: prevIds } : c))
+      );
+      message.error(e instanceof Error ? e.message : '知识库范围保存失败');
+    });
+  };
+
+  /** 会话级上下文压缩开关（写回后端，失败回滚） */
+  const toggleCompress = (enabled: boolean) => {
+    if (!activeConvId) return;
+    const prevValue = activeConv?.compressEnabled !== false;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === activeConvId ? { ...c, compressEnabled: enabled } : c))
+    );
+    void updateConversation(activeConvId, { compressEnabled: enabled }).catch((e) => {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === activeConvId ? { ...c, compressEnabled: prevValue } : c))
+      );
+      message.error(e instanceof Error ? e.message : '压缩开关保存失败');
+    });
   };
 
   // 滚动到底部
@@ -181,12 +215,22 @@ const ChatPage: React.FC = () => {
       c.lastMessage.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  // 新建会话
+  // 新建会话（同时落 chat_session，未发消息也会出现在列表里）
   const handleCreate = async () => {
-    const newConv = await createConversation('新对话');
-    setConversations((prev) => [newConv, ...prev]);
-    setActiveConvId(newConv.id);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    try {
+      const model = currentModelId
+        ? (() => {
+            const [v, c] = currentModelId.split(':');
+            return { vendor: v, modelCode: c, modelName: models.find((m) => m.vendor === v && m.modelCode === c)?.modelName };
+          })()
+        : undefined;
+      const newConv = await createConversation('新对话', model);
+      setConversations((prev) => [newConv, ...prev]);
+      setActiveConvId(newConv.id);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '新建对话失败');
+    }
   };
 
   // 删除会话（用 prev 避免 stale closure）
@@ -201,10 +245,19 @@ const ChatPage: React.FC = () => {
     });
   };
 
-  // 重命名会话
+  // 重命名会话（写回 chat_session）
   const handleRename = (id: string) => {
     const conv = conversations.find((c) => c.id === id);
     if (!conv) return;
+    const applyRename = (value: string) => {
+      const v = value.trim();
+      if (!v || v === conv.title) return;
+      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: v } : c)));
+      void updateConversation(id, { title: v }).catch((e) => {
+        setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: conv.title } : c)));
+        message.error(e instanceof Error ? e.message : '重命名失败');
+      });
+    };
     Modal.confirm({
       title: '重命名对话',
       content: (
@@ -212,19 +265,15 @@ const ChatPage: React.FC = () => {
           defaultValue={conv.title}
           id="rename-input"
           onPressEnter={(e) => {
-            const v = (e.target as HTMLInputElement).value.trim();
-            if (v) {
-              setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: v } : c)));
-              message.success('已重命名');
-            }
+            applyRename((e.target as HTMLInputElement).value);
+            message.success('已重命名');
           }}
         />
       ),
       onOk: () => {
-        const v = (document.getElementById('rename-input') as HTMLInputElement)?.value.trim();
-        if (v) {
-          setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: v } : c)));
-        }
+        const v = (document.getElementById('rename-input') as HTMLInputElement)?.value ?? '';
+        applyRename(v);
+        message.success('已重命名');
       },
       okText: '保存',
       cancelText: '取消',
@@ -245,7 +294,8 @@ const ChatPage: React.FC = () => {
       modelCode: string,
       conversationId: string,
       assistantId: string,
-      docIds?: number[]
+      docIds?: number[],
+      compressEnabled = true
     ) => {
       abortRef.current?.abort();
       abortRef.current = streamChatMessage({
@@ -254,6 +304,7 @@ const ChatPage: React.FC = () => {
         modelCode,
         conversationId,
         docIds,
+        compressEnabled,
         onReferences: (refs) => {
           const id = streamingMsgIdRef.current;
           if (!id || refs.length === 0) return;
@@ -358,7 +409,7 @@ const ChatPage: React.FC = () => {
       )
     );
 
-    streamReply(content, activeModel.vendor, activeModel.modelCode, activeConvId, aiId, docIds);
+    streamReply(content, activeModel.vendor, activeModel.modelCode, activeConvId, aiId, docIds, activeConv?.compressEnabled !== false);
   }, [inputValue, activeConvId, sending, activeModel, activeConv]);
 
   // 重新生成：找到该会话最后一条 user 消息内容，再流式重发
@@ -395,7 +446,8 @@ const ChatPage: React.FC = () => {
       activeConv.modelCode,
       activeConv.id,
       aiId,
-      activeConv.knowledgeDocIds ?? []
+      activeConv.knowledgeDocIds ?? [],
+      activeConv.compressEnabled !== false
     );
   }, [activeConv, sending]);
 
@@ -405,6 +457,52 @@ const ChatPage: React.FC = () => {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const composerMaxHeight = Math.max(
+    180,
+    Math.min(MAX_COMPOSER_HEIGHT, window.innerHeight * 0.55),
+  );
+
+  const clampComposerHeight = (height: number) =>
+    Math.min(composerMaxHeight, Math.max(MIN_COMPOSER_HEIGHT, height));
+
+  /** 从输入框顶部把手向上拖拽，增加输入框高度 */
+  const handleComposerResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+
+    const startY = e.clientY;
+    const startHeight = composerHeight;
+    const prevUserSelect = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ns-resize';
+
+    const onMove = (ev: PointerEvent) => {
+      setComposerHeight(clampComposerHeight(startHeight + startY - ev.clientY));
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.cursor = prevCursor;
+      resizeCleanupRef.current = null;
+    };
+
+    resizeCleanupRef.current?.();
+    resizeCleanupRef.current = cleanup;
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+  const handleComposerResizeKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    setComposerHeight((h) => clampComposerHeight(h + (e.key === 'ArrowUp' ? 24 : -24)));
   };
 
   // 判断某条消息是否该显示头像（连续 assistant 只显示首条）
@@ -804,66 +902,64 @@ const ChatPage: React.FC = () => {
             <div
               style={{
                 padding: '12px 24px 16px',
-                borderTop: `1px solid ${colors.divider}`,
               }}
             >
-              {/* 模型选择行 */}
+              {/* 没有可用模型时给出配置入口；正常情况模型下拉放在输入工具栏内 */}
+              {models.length === 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 8,
+                    fontSize: 12,
+                    color: colors.textSecondary,
+                    background: colors.primary10,
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-md)',
+                  }}
+                >
+                  没有通过连通校验的模型，请先
+                  <a
+                    href="/settings/providers"
+                    style={{ color: colors.primary, fontWeight: 600 }}
+                  >
+                    去模型配置页校验
+                  </a>
+                </div>
+              )}
               <div
+                className="composer-resize-handle"
+                role="slider"
+                aria-label="拖动调整输入框高度"
+                aria-orientation="vertical"
+                aria-valuemin={MIN_COMPOSER_HEIGHT}
+                aria-valuemax={composerMaxHeight}
+                aria-valuenow={composerHeight}
+                tabIndex={0}
+                title="向上拖动可扩大输入框"
+                onPointerDown={handleComposerResizeStart}
+                onKeyDown={handleComposerResizeKeyDown}
                 style={{
+                  height: 12,
+                  marginBottom: 4,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 8,
-                  minHeight: 32,
+                  justifyContent: 'center',
+                  cursor: 'ns-resize',
+                  touchAction: 'none',
                 }}
               >
-                {models.length === 0 ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      fontSize: 12,
-                      color: colors.textSecondary,
-                      background: colors.primary10,
-                      padding: '6px 12px',
-                      borderRadius: 'var(--radius-md)',
-                    }}
-                  >
-                    尚未绑定任何模型，请先
-                    <a
-                      href="/settings/providers"
-                      style={{ color: colors.primary, fontWeight: 600 }}
-                    >
-                      去配置模型
-                    </a>
-                  </div>
-                ) : (
-                  <>
-                    <Select
-                      size="small"
-                      style={{ width: 220 }}
-                      value={
-                        activeConv?.vendor
-                          ? modelId(activeConv.vendor, activeConv.modelCode!)
-                          : currentModelId ?? undefined
-                      }
-                      placeholder="选择模型"
-                      options={models.map((m) => ({
-                        value: modelId(m.vendor, m.modelCode),
-                        label: `${m.modelName}（${m.vendor}）`,
-                      }))}
-                      onChange={(id) => setCurrentModel(id)}
-                      disabled={!!activeConv?.vendor || loadingModels}
-                      popupMatchSelectWidth={false}
-                    />
-                    {activeConv?.vendor && (
-                      <span style={{ fontSize: 11, color: colors.textTertiary }}>
-                        会话已绑定模型，创建新对话可切换
-                      </span>
-                    )}
-                  </>
-                )}
+                <div
+                  className="composer-resize-grip"
+                  style={{
+                    width: 44,
+                    height: 4,
+                    borderRadius: 2,
+                    background: composerHeight > MIN_COMPOSER_HEIGHT ? colors.primary : colors.border,
+                    opacity: 0.75,
+                  }}
+                />
               </div>
               <div
                 className="composer-glow"
@@ -910,26 +1006,58 @@ const ChatPage: React.FC = () => {
                     </span>
                   </div>
                 )}
-                <Input.TextArea
-                  ref={inputRef}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-                  autoSize={{ minRows: 1, maxRows: 4 }}
-                  bordered={false}
-                  style={{ background: 'transparent', resize: 'none' }}
-                />
-                {/* 工具行 + 发送 */}
+                <div style={{ position: 'relative' }}>
+                  <Input.TextArea
+                    ref={inputRef}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+                    rows={1}
+                    bordered={false}
+                    style={{
+                      height: composerHeight,
+                      minHeight: MIN_COMPOSER_HEIGHT,
+                      background: 'transparent',
+                      resize: 'none',
+                      paddingRight: 56,
+                      overflowY: 'auto',
+                    }}
+                  />
+                  {/* 发送按钮内嵌在输入框右侧并垂直居中 */}
+                  <Button
+                    type="text"
+                    icon={<Icon icon={sendIcon} width={20} />}
+                    onClick={() => handleSend()}
+                    loading={sending}
+                    disabled={!inputValue.trim()}
+                    style={{
+                      position: 'absolute',
+                      right: 4,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 40,
+                      height: 40,
+                      minWidth: 40,
+                      padding: 0,
+                      border: 'none',
+                      background: 'transparent',
+                      boxShadow: 'none',
+                      color: colors.primary,
+                    }}
+                  />
+                </div>
+                {/* 工具行 */}
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
+                    justifyContent: 'flex-start',
+                    flexWrap: 'wrap',
                     marginTop: 4,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', rowGap: 4 }}>
                     <Tooltip title="知识库（RAG）">
                       <button
                         onClick={openKbDrawer}
@@ -948,6 +1076,24 @@ const ChatPage: React.FC = () => {
                       >
                         <Icon icon={databaseIcon} width={16} />
                       </button>
+                    </Tooltip>
+                    <Tooltip title="上下文自动压缩：历史超过阈值时摘要最早对话，摘要失败则丢弃最早历史">
+                      <span
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '0 6px',
+                          color: activeConv?.compressEnabled !== false ? colors.primary : colors.textSecondary,
+                        }}
+                      >
+                        <Switch
+                          size="small"
+                          checked={activeConv?.compressEnabled !== false}
+                          onChange={toggleCompress}
+                        />
+                        <span style={{ fontSize: 12 }}>压缩</span>
+                      </span>
                     </Tooltip>
                     <Tooltip title="附件（demo）">
                       <button
@@ -994,15 +1140,38 @@ const ChatPage: React.FC = () => {
                         <Icon icon={micIcon} width={16} />
                       </button>
                     </Tooltip>
+                    {models.length > 0 && (
+                      <Select
+                        size="small"
+                        variant="borderless"
+                        className="composer-model-select"
+                        style={{ width: 200, marginLeft: 4 }}
+                        value={
+                          activeConv?.vendor
+                            ? modelId(activeConv.vendor, activeConv.modelCode!)
+                            : currentModelId ?? undefined
+                        }
+                        placeholder="选择模型"
+                        options={models.map((m) => ({
+                          value: modelId(m.vendor, m.modelCode),
+                          label: (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <ModelModalityIcons types={m.modalities} fallback={m.modelType} size={13} />
+                              {m.modelName}（{m.vendor}）
+                            </span>
+                          ),
+                        }))}
+                        onChange={(id) => setCurrentModel(id)}
+                        disabled={!!activeConv?.vendor || loadingModels}
+                        popupMatchSelectWidth={false}
+                      />
+                    )}
+                    {activeConv?.vendor && (
+                      <span style={{ fontSize: 11, color: colors.textTertiary, whiteSpace: 'nowrap' }}>
+                        已绑定模型
+                      </span>
+                    )}
                   </div>
-                  <Button
-                    type="primary"
-                    icon={<Icon icon={sendIcon} width={14} />}
-                    onClick={() => handleSend()}
-                    loading={sending}
-                    disabled={!inputValue.trim()}
-                    shape="circle"
-                  />
                 </div>
               </div>
             </div>

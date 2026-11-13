@@ -29,4 +29,7 @@ public class ChatRequest implements Serializable {
      * <p>非空时后端负责检索、拼上下文并随 SSE 下发引用；为空则按普通对话处理。</p>
      */
     private List<Long> docIds;
+
+    /** 是否开启上下文自动压缩；为空时按会话配置（默认开启） */
+    private Boolean compressEnabled;
 }

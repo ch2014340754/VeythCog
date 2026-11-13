@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 唯一可运行应用（装配层）。
@@ -16,6 +17,7 @@ import org.mybatis.spring.annotation.MapperScan;
 @EnableJpaRepositories(basePackages = "com.vc")
 @EntityScan(basePackages = "com.vc")
 @MapperScan({"com.vc.knowledge.mapper", "com.vc.chat.mapper", "com.vc.nav.mapper"})
+@EnableScheduling
 public class VcAppApplication {
 
     public static void main(String[] args) {

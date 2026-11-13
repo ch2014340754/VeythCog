@@ -1,5 +1,6 @@
 package com.vc.chat;
 
+import com.vc.chat.compress.ContextCompressor;
 import com.vc.llm.LlmChatService;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -13,18 +14,38 @@ import reactor.core.publisher.Flux;
 public class ChatService {
 
     private final LlmChatService llmChatService;
+    private final ContextCompressor contextCompressor;
 
-    public ChatService(LlmChatService llmChatService) {
+    public ChatService(LlmChatService llmChatService, ContextCompressor contextCompressor) {
         this.llmChatService = llmChatService;
+        this.contextCompressor = contextCompressor;
     }
 
     /** 单次对话（同步）：携带会话 id，供记忆顾问做会话隔离 */
     public String chat(Long userId, String vendor, String modelCode, String conversationId, String message) {
+        return chat(userId, vendor, modelCode, conversationId, message, true);
+    }
+
+    /** 单次对话（同步），compress=false 时跳过上下文压缩 */
+    public String chat(Long userId, String vendor, String modelCode, String conversationId,
+                       String message, boolean compress) {
+        if (compress) {
+            contextCompressor.maybeCompress(userId, vendor, modelCode, conversationId, message, true);
+        }
         return llmChatService.chat(userId, vendor, modelCode, conversationId, message);
     }
 
     /** 对话（流式）：返回逐 token 增量，用于 SSE 逐字下发降低首响应时延 */
     public Flux<String> streamChat(Long userId, String vendor, String modelCode, String conversationId, String message) {
+        return streamChat(userId, vendor, modelCode, conversationId, message, true);
+    }
+
+    /** 对话（流式），compress=false 时跳过上下文压缩 */
+    public Flux<String> streamChat(Long userId, String vendor, String modelCode, String conversationId,
+                                   String message, boolean compress) {
+        if (compress) {
+            contextCompressor.maybeCompress(userId, vendor, modelCode, conversationId, message, true);
+        }
         return llmChatService.stream(userId, vendor, modelCode, conversationId, message);
     }
 

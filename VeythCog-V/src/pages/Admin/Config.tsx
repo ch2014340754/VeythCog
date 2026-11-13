@@ -57,10 +57,8 @@ const ConfigPage: React.FC = () => {
       </div>
 
       <section
+        className="admin-panel"
         style={{
-          background: colors.surface,
-          borderRadius: 'var(--radius-lg)',
-          border: `1px solid ${colors.border}`,
           padding: '8px 24px 16px',
         }}
       >

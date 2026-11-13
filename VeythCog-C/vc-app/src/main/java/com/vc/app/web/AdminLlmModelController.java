@@ -53,7 +53,8 @@ public class AdminLlmModelController {
     @PostMapping
     public BaseResponse<AdminModelItem> create(@Valid @RequestBody AdminModelSaveRequest request) {
         return ResultUtils.success(catalogAdminService.create(
-                request.getVendor(), request.getModelCode(), request.getModelName(),
+                request.getVendor(), request.getModelCode(), request.getModelName(), request.getModelType(),
+                request.getModalities(),
                 request.getMaxContextTokens(), request.getTemperature(), request.getEnabled()));
     }
 
@@ -62,7 +63,8 @@ public class AdminLlmModelController {
     public BaseResponse<AdminModelItem> update(@PathVariable Long id,
                                               @Valid @RequestBody AdminModelSaveRequest request) {
         return ResultUtils.success(catalogAdminService.update(
-                id, request.getVendor(), request.getModelCode(), request.getModelName(),
+                id, request.getVendor(), request.getModelCode(), request.getModelName(), request.getModelType(),
+                request.getModalities(),
                 request.getMaxContextTokens(), request.getTemperature(), request.getEnabled()));
     }
 
@@ -79,7 +81,7 @@ public class AdminLlmModelController {
         return ResultUtils.success(catalogAdminService.setEnabled(id, request.getEnabled()));
     }
 
-    /** 从供应商同步模型（只增不删；新增默认不上架） */
+    /** 从供应商同步模型（补齐缺失 + 刷新已有类型/模态；新增默认不上架） */
     @PostMapping("/sync")
     public BaseResponse<ModelSyncResult> sync(@Valid @RequestBody AdminModelSyncRequest request) {
         boolean enableNew = Boolean.TRUE.equals(request.getEnableNew());

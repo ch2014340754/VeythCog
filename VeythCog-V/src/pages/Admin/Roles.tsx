@@ -39,6 +39,7 @@ const RolesPage: React.FC = () => {
     <div>
       <h2 style={{ color: colors.text, marginBottom: 20 }}>角色管理</h2>
       <Table
+        className="admin-table"
         rowKey="id"
         columns={columns}
         dataSource={roles}

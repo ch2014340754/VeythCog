@@ -26,4 +26,16 @@ public class BatchBindRequest implements Serializable {
 
     /** 默认模型（可选，必须来自 modelCodes） */
     private String defaultModelCode;
+
+    /**
+     * 百炼业务空间 ID（可选）。
+     * <p>null = 不修改；空字符串 = 清除用户设置、回落系统配置。</p>
+     */
+    private String workspaceId;
+
+    /**
+     * 百炼地域代码（可选），如 cn-beijing。
+     * <p>null = 不修改；空字符串 = 清除用户设置、回落系统配置。</p>
+     */
+    private String region;
 }

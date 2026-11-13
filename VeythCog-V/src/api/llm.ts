@@ -45,6 +45,10 @@ export interface BatchBindPayload {
   apiKey?: string;
   /** 默认模型，必须来自 modelCodes */
   defaultModelCode?: string;
+  /** 业务空间 ID；空串表示清除用户设置、回落系统配置；不传表示不修改 */
+  workspaceId?: string;
+  /** 地域代码；空串表示清除用户设置、回落系统配置；不传表示不修改 */
+  region?: string;
 }
 
 /** 批量绑定结果 */
@@ -76,3 +80,39 @@ export async function updateVendorKey(vendor: string, apiKey: string): Promise<V
 export async function clearVendorKey(vendor: string): Promise<VendorKeyStatus> {
   return http.del<VendorKeyStatus>(`/llm/vendors/${vendor}/api-key`);
 }
+
+/** 模型连通校验结果 */
+export interface VerifyResult {
+  /** 是否通过；通过后才会出现在对话模型下拉 */
+  valid: boolean;
+  message: string;
+  latencyMs: number;
+  verifiedAt: number;
+}
+
+/** 单模型连通校验（不要求已绑定；apiKey / workspaceId / region 均为草稿值，可不传） */
+export async function verifyModel(
+  vendor: string,
+  modelCode: string,
+  apiKey?: string,
+  workspaceId?: string,
+  region?: string
+): Promise<VerifyResult> {
+  const body: Record<string, string> = {};
+  if (apiKey) {
+    body.apiKey = apiKey;
+  }
+  if (workspaceId) {
+    body.workspaceId = workspaceId;
+  }
+  if (region) {
+    body.region = region;
+  }
+  return http.post<VerifyResult>(
+    `/llm/models/${encodeURIComponent(vendor)}/${encodeURIComponent(modelCode)}/verify`,
+    body
+  );
+}
+
+/** 兼容旧命名 */
+export const verifyBinding = verifyModel;

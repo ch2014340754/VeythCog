@@ -11,6 +11,8 @@ import com.vc.llm.dto.ModelSyncResult;
 import com.vc.llm.entity.LlmModel;
 import com.vc.llm.entity.UserLlmBinding;
 import com.vc.llm.enums.LlmVendor;
+import com.vc.llm.model.ModelModalities;
+import com.vc.llm.model.ModelType;
 import com.vc.llm.repository.LlmModelRepository;
 import com.vc.llm.repository.UserLlmBindingRepository;
 import org.springframework.stereotype.Service;
@@ -36,8 +38,11 @@ import java.util.Set;
  * 管理端模型目录维护：增删改查 + 上下架 + 从供应商同步。
  *
  * <p>设计取舍：{@code llm_model} 仍是目录真源（绑定校验、默认模型、上下架都依赖它），
- * 不把用户页目录换成每次实时打供应商接口。同步只做「补齐缺失」：只增不删、不覆盖已有配置，
- * 新增行默认不上架（{@code enableNew=false}），由管理员按需开放。</p>
+ * 不把用户页目录换成每次实时打供应商接口。同步会补齐缺失项，并刷新已有行的类型与全部模态
+ * （修正历史错误数据），但不删除模型；新增行默认不上架（{@code enableNew=false}）。</p>
+ *
+ * <p>同步会保存模型主类型与全部模态（百炼按 capabilities 映射，OpenAI 兼容供应商按编码推断），
+ * 不再过滤非文本模型；用户侧是否能用于对话由 {@link ModelType#isChatCapable()} 决定。</p>
  *
  * <p>同步所用 AK：优先服务端兜底配置；未配置时回退到当前管理员的用户自持 AK（解密）。</p>
  */
@@ -48,27 +53,28 @@ public class LlmCatalogAdminService {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    private static final String DASHSCOPE_MODELS_URL = "https://dashscope.aliyuncs.com/api/v1/models";
+    private static final String DASHSCOPE_MODELS_PATH = "/api/v1/models";
     private static final String DEEPSEEK_DEFAULT_BASE = "https://api.deepseek.com/v1";
     private static final int PAGE_SIZE = 100;
     private static final int MAX_PAGES = 10;
-    /** 百炼 capabilities 中「TG」= Text Generation，仅同步可对话模型 */
-    private static final String CAP_TEXT_GENERATION = "TG";
 
     private final LlmModelRepository modelRepository;
     private final UserLlmBindingRepository bindingRepository;
     private final LlmVendorProps vendorProps;
+    private final LlmEndpointService endpointService;
     private final ApiKeyCryptoService apiKeyCryptoService;
     private final ObjectMapper objectMapper;
 
     public LlmCatalogAdminService(LlmModelRepository modelRepository,
                                   UserLlmBindingRepository bindingRepository,
                                   LlmVendorProps vendorProps,
+                                  LlmEndpointService endpointService,
                                   ApiKeyCryptoService apiKeyCryptoService,
                                   ObjectMapper objectMapper) {
         this.modelRepository = modelRepository;
         this.bindingRepository = bindingRepository;
         this.vendorProps = vendorProps;
+        this.endpointService = endpointService;
         this.apiKeyCryptoService = apiKeyCryptoService;
         this.objectMapper = objectMapper;
     }
@@ -85,7 +91,8 @@ public class LlmCatalogAdminService {
 
     /** 新增模型（默认上架；同名同供应商拒绝） */
     @Transactional
-    public AdminModelItem create(String vendor, String modelCode, String modelName,
+    public AdminModelItem create(String vendor, String modelCode, String modelName, String modelType,
+                                 List<String> modalities,
                                  Integer maxContextTokens, BigDecimal temperature, Boolean enabled) {
         String v = requireVendor(vendor);
         String code = requireCode(modelCode);
@@ -96,6 +103,9 @@ public class LlmCatalogAdminService {
         m.setVendorCode(v);
         m.setModelCode(code);
         m.setModelName(requireName(modelName, code));
+        String primary = requireModelType(modelType);
+        m.setModelType(primary);
+        m.setModalities(String.join(",", ModelModalities.normalize(modalities, primary)));
         m.setMaxContextTokens(validContextTokens(maxContextTokens));
         m.setTemperature(validTemperature(temperature));
         m.setEnabled(enabled == null || enabled);
@@ -104,7 +114,8 @@ public class LlmCatalogAdminService {
 
     /** 编辑模型：已有用户绑定则不允许改供应商/编码，其余字段可改 */
     @Transactional
-    public AdminModelItem update(Long id, String vendor, String modelCode, String modelName,
+    public AdminModelItem update(Long id, String vendor, String modelCode, String modelName, String modelType,
+                                 List<String> modalities,
                                  Integer maxContextTokens, BigDecimal temperature, Boolean enabled) {
         LlmModel m = requireModel(id);
         String v = requireVendor(vendor);
@@ -125,6 +136,9 @@ public class LlmCatalogAdminService {
         if (StringUtils.hasText(modelName)) {
             m.setModelName(modelName.trim());
         }
+        String primary = requireModelType(modelType);
+        m.setModelType(primary);
+        m.setModalities(String.join(",", ModelModalities.normalize(modalities, primary)));
         m.setMaxContextTokens(validContextTokens(maxContextTokens));
         m.setTemperature(validTemperature(temperature));
         if (enabled != null) {
@@ -156,7 +170,10 @@ public class LlmCatalogAdminService {
     }
 
     /**
-     * 从供应商拉取模型列表并补齐缺失项。
+     * 从供应商拉取模型列表：补齐缺失项，并刷新已有项的主类型与全部模态。
+     *
+     * <p>已有项只刷新供应商侧权威字段（名称缺失时、主类型、全部模态）；管理员手工设置的
+     * 上下架、温度和上下文窗口保留不动，避免同步覆盖运营配置。不删除供应商已下线的模型。</p>
      *
      * @param enableNew 新增项是否直接上架（默认 false，先由管理员挑选）
      */
@@ -164,24 +181,49 @@ public class LlmCatalogAdminService {
     public ModelSyncResult sync(String vendor, Long adminUserId, boolean enableNew) {
         String v = requireVendor(vendor);
         String apiKey = resolveSyncKey(v, adminUserId);
-        List<RemoteModel> remote = fetchRemoteModels(v, apiKey);
+        LlmEndpointService.EffectiveEndpoint endpoint = endpointService.resolveSaved(adminUserId, v);
+        List<RemoteModel> remote = fetchRemoteModels(v, apiKey, endpoint.baseUrl());
 
-        Set<String> existing = new HashSet<>();
+        Map<String, LlmModel> existing = new HashMap<>();
         for (LlmModel m : modelRepository.findByVendorCode(v)) {
-            existing.add(m.getModelCode());
+            existing.put(m.getModelCode(), m);
         }
 
         List<String> addedCodes = new ArrayList<>();
-        int skipped = 0;
+        List<String> updatedCodes = new ArrayList<>();
+        int unchanged = 0;
         for (RemoteModel r : remote) {
-            if (existing.contains(r.code())) {
-                skipped++;
+            String primary = r.type().getCode();
+            String modalities = ModelModalities.encode(r.modalities());
+            LlmModel current = existing.get(r.code());
+            if (current != null) {
+                boolean changed = false;
+                if (!primary.equals(current.getModelType())) {
+                    current.setModelType(primary);
+                    changed = true;
+                }
+                if (!modalities.equals(current.getModalities())) {
+                    current.setModalities(modalities);
+                    changed = true;
+                }
+                if (shouldRefreshName(current, r.name())) {
+                    current.setModelName(r.name());
+                    changed = true;
+                }
+                if (changed) {
+                    modelRepository.save(current);
+                    updatedCodes.add(r.code());
+                } else {
+                    unchanged++;
+                }
                 continue;
             }
             LlmModel m = new LlmModel();
             m.setVendorCode(v);
             m.setModelCode(r.code());
             m.setModelName(r.name());
+            m.setModelType(primary);
+            m.setModalities(modalities);
             m.setMaxContextTokens(32768);
             m.setTemperature(new BigDecimal("0.70"));
             m.setEnabled(enableNew);
@@ -189,25 +231,37 @@ public class LlmCatalogAdminService {
             addedCodes.add(r.code());
         }
         String vendorName = LlmVendor.fromCode(v).getName();
-        String message = addedCodes.isEmpty()
-                ? "供应商共 " + remote.size() + " 个可对话模型，目录已是最新"
-                : "供应商共 " + remote.size() + " 个可对话模型，新增 " + addedCodes.size()
-                + " 个（" + (enableNew ? "已上架" : "未上架") + "），已存在跳过 " + skipped + " 个";
-        return new ModelSyncResult(v, vendorName, remote.size(), addedCodes.size(), skipped, addedCodes, message);
+        String message = "供应商共 " + remote.size() + " 个模型，新增 " + addedCodes.size()
+                + " 个（" + (enableNew ? "已上架" : "未上架") + "），更新 " + updatedCodes.size()
+                + " 个，未变化 " + unchanged + " 个";
+        return new ModelSyncResult(v, vendorName, remote.size(), addedCodes.size(), updatedCodes.size(),
+                unchanged, unchanged, addedCodes, updatedCodes, message);
+    }
+
+    /** 只在当前名称为空或与编码相同时，才用供应商名称覆盖，避免冲掉管理员自定义展示名 */
+    private boolean shouldRefreshName(LlmModel model, String remoteName) {
+        String current = model.getModelName();
+        if (!StringUtils.hasText(current)) {
+            return true;
+        }
+        return current.equals(model.getModelCode()) && !current.equals(remoteName);
     }
 
     // ---------------- 供应商接口 ----------------
 
-    /** 拉取供应商模型：百炼走原生 /api/v1/models（带 capabilities，可过滤非对话模型）；其余走 OpenAI 兼容 /models */
-    private List<RemoteModel> fetchRemoteModels(String vendor, String apiKey) {
-        return "dashscope".equals(vendor) ? fetchDashScope(apiKey) : fetchOpenAiCompatible(vendor, apiKey);
+    /** 拉取供应商模型：百炼走原生 /api/v1/models（带 capabilities，映射模型类型）；其余走 OpenAI 兼容 /models */
+    private List<RemoteModel> fetchRemoteModels(String vendor, String apiKey, String baseUrl) {
+        return "dashscope".equals(vendor)
+                ? fetchDashScope(apiKey, baseUrl)
+                : fetchOpenAiCompatible(vendor, apiKey, baseUrl);
     }
 
-    private List<RemoteModel> fetchDashScope(String apiKey) {
+    private List<RemoteModel> fetchDashScope(String apiKey, String baseUrl) {
         List<RemoteModel> result = new ArrayList<>();
         int total = -1;
         for (int page = 1; page <= MAX_PAGES; page++) {
-            String url = DASHSCOPE_MODELS_URL + "?page_no=" + page + "&page_size=" + PAGE_SIZE;
+            String url = baseUrl + DASHSCOPE_MODELS_PATH
+                    + "?page_no=" + page + "&page_size=" + PAGE_SIZE;
             JsonNode root = getJson(url, apiKey, "阿里百炼");
             JsonNode out = root.path("output");
             if (total < 0) {
@@ -218,15 +272,15 @@ public class LlmCatalogAdminService {
                 break;
             }
             for (JsonNode node : models) {
-                if (!isTextGeneration(node.path("capabilities"))) {
-                    continue;
-                }
                 String code = node.path("model").asText("");
                 if (!StringUtils.hasText(code)) {
                     continue;
                 }
                 String name = node.path("name").asText(code);
-                result.add(new RemoteModel(code, truncate(name)));
+                List<String> caps = capabilities(node.path("capabilities"));
+                List<ModelType> modalities = ModelType.allFromCapabilities(caps);
+                ModelType type = ModelType.primaryFrom(modalities);
+                result.add(new RemoteModel(code, truncate(name), type, modalities));
             }
             if (models.size() < PAGE_SIZE || (total > 0 && page * PAGE_SIZE >= total)) {
                 break;
@@ -235,8 +289,8 @@ public class LlmCatalogAdminService {
         return result;
     }
 
-    private List<RemoteModel> fetchOpenAiCompatible(String vendor, String apiKey) {
-        String base = vendorProps.baseUrl(vendor);
+    private List<RemoteModel> fetchOpenAiCompatible(String vendor, String apiKey, String baseUrl) {
+        String base = baseUrl;
         if (!StringUtils.hasText(base)) {
             base = "deepseek".equals(vendor) ? DEEPSEEK_DEFAULT_BASE : "";
         }
@@ -254,28 +308,32 @@ public class LlmCatalogAdminService {
                     continue;
                 }
                 String name = node.path("name").asText("");
-                result.add(new RemoteModel(code, truncate(StringUtils.hasText(name) ? name : code)));
+                ModelType type = ModelType.inferFromCode(code);
+                result.add(new RemoteModel(code, truncate(StringUtils.hasText(name) ? name : code),
+                        type, List.of(type)));
             }
         }
         return result;
     }
 
-    /** 是否文本生成能力：capabilities 可能是单个字符串或数组 */
-    private boolean isTextGeneration(JsonNode caps) {
-        if (caps == null || caps.isMissingNode()) {
-            return true;
+    /** capabilities 可能是单个字符串或数组 */
+    private List<String> capabilities(JsonNode caps) {
+        List<String> result = new ArrayList<>();
+        if (caps == null || caps.isMissingNode() || caps.isNull()) {
+            return result;
         }
         if (caps.isTextual()) {
-            return CAP_TEXT_GENERATION.equalsIgnoreCase(caps.asText());
+            result.add(caps.asText());
+            return result;
         }
         if (caps.isArray()) {
-            for (JsonNode n : caps) {
-                if (CAP_TEXT_GENERATION.equalsIgnoreCase(n.asText())) {
-                    return true;
+            for (JsonNode node : caps) {
+                if (node.isTextual()) {
+                    result.add(node.asText());
                 }
             }
         }
-        return false;
+        return result;
     }
 
     private JsonNode getJson(String url, String apiKey, String vendorName) {
@@ -353,8 +411,10 @@ public class LlmCatalogAdminService {
         LlmVendor v = LlmVendor.fromCode(m.getVendorCode());
         return new AdminModelItem(m.getId(), m.getVendorCode(),
                 v == null ? m.getVendorCode() : v.getName(),
-                m.getModelCode(), m.getModelName(), m.getMaxContextTokens(),
-                m.getTemperature(), Boolean.TRUE.equals(m.getEnabled()), bindingCount);
+                m.getModelCode(), m.getModelName(),
+                ModelType.fromCode(m.getModelType()).getCode(),
+                ModelModalities.decode(m.getModalities(), m.getModelType()),
+                m.getMaxContextTokens(), m.getTemperature(), Boolean.TRUE.equals(m.getEnabled()), bindingCount);
     }
 
     private LlmModel requireModel(Long id) {
@@ -382,6 +442,17 @@ public class LlmCatalogAdminService {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "模型编码不能超过 64 个字符");
         }
         return code;
+    }
+
+    private String requireModelType(String modelType) {
+        if (!StringUtils.hasText(modelType)) {
+            return ModelType.TEXT.getCode();
+        }
+        try {
+            return ModelType.requireCode(modelType).getCode();
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, e.getMessage());
+        }
     }
 
     private String requireName(String modelName, String fallback) {
@@ -428,7 +499,7 @@ public class LlmCatalogAdminService {
         return flat.length() > 200 ? flat.substring(0, 200) + "…" : flat;
     }
 
-    /** 供应商返回的模型（已归一化） */
-    private record RemoteModel(String code, String name) {
+    /** 供应商返回的模型（已归一化，含主类型与全部模态） */
+    private record RemoteModel(String code, String name, ModelType type, List<ModelType> modalities) {
     }
 }

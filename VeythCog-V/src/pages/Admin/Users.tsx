@@ -211,6 +211,7 @@ const UsersPage: React.FC = () => {
       </div>
 
       <Table
+        className="admin-table"
         rowKey="id"
         columns={columns}
         dataSource={users}

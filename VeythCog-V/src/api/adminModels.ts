@@ -2,7 +2,7 @@
  * 系统管理 · 模型目录 API（真实接口，走 /admin/llm-models）
  * - 列出全部模型（含未上架）
  * - 新增 / 编辑 / 删除 / 上下架
- * - 从供应商同步（只增不删，新增默认不上架）
+ * - 从供应商同步（补齐缺失 + 刷新已有类型/模态，不删除）
  */
 import { http } from '@/api/client';
 
@@ -12,6 +12,9 @@ export interface AdminLlmModel {
   vendorName: string;
   modelCode: string;
   modelName: string;
+  modelType: string;
+  /** 支持的全部模态（含主类型） */
+  modalities: string[];
   maxContextTokens: number;
   temperature: number;
   enabled: boolean;
@@ -27,6 +30,8 @@ export interface AdminModelPayload {
   vendor: string;
   modelCode: string;
   modelName?: string;
+  modelType?: string;
+  modalities?: string[];
   maxContextTokens?: number;
   temperature?: number;
   enabled?: boolean;
@@ -37,8 +42,14 @@ export interface ModelSyncResult {
   vendorName: string;
   total: number;
   added: number;
+  /** 已有模型被修正类型/模态的条数 */
+  updated: number;
+  /** 已存在且无需变更的条数 */
+  unchanged: number;
+  /** 兼容旧字段，等于 unchanged */
   skipped: number;
   addedCodes: string[];
+  updatedCodes: string[];
   message: string;
 }
 

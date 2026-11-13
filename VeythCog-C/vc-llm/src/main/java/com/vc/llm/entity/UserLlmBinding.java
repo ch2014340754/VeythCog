@@ -54,4 +54,27 @@ public class UserLlmBinding implements Serializable {
     /** 最近一次写入用户 AK 的时间 */
     @Column(name = "api_key_updated_at")
     private LocalDateTime apiKeyUpdatedAt;
+
+    /**
+     * 百炼业务空间 ID（如 llm-xxxx）。语义同 AK：同一 user + vendor 下所有绑定行共享；
+     * 为 NULL 时回落到 llm.vendors.dashscope.workspace-id。
+     */
+    @Column(name = "workspace_id", length = 64)
+    private String workspaceId;
+
+    /** 百炼地域代码（如 cn-beijing）；为空回落配置或默认 cn-beijing */
+    @Column(name = "region", length = 32)
+    private String region;
+
+    /** 是否通过连通校验；只有 true 的绑定可出现在对话模型下拉 */
+    @Column(name = "is_valid", nullable = false)
+    private Boolean isValid = false;
+
+    /** 最近一次连通校验时间 */
+    @Column(name = "last_verify_at")
+    private LocalDateTime lastVerifyAt;
+
+    /** 最近一次校验失败原因（成功为 null） */
+    @Column(name = "verify_error", length = 300)
+    private String verifyError;
 }

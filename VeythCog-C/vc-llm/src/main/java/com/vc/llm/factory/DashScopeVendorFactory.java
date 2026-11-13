@@ -1,20 +1,21 @@
 package com.vc.llm.factory;
 
-import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.vc.llm.config.DashScopeEndpoint;
 import com.vc.llm.entity.LlmModel;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * 阿里百炼（DashScope）工厂：按传入的 AK 动态构建 ChatModel。
+ * 阿里百炼（DashScope）工厂：按传入的 AK / 业务空间动态构建 ChatModel。
  *
- * <p>不再复用 starter 自动装配的全局单例 —— 那个实例固定使用
- * {@code spring.ai.dashscope.api-key}，用户自持 Key 会完全不生效。
- * 这里每次按「用户解析出的 Key + 模型 code + temperature」新建实例，
- * 由路由层按 Key 指纹缓存，避免重复构建。</p>
+ * <p>对话统一走百炼的 OpenAI 兼容协议（{@code /compatible-mode/v1}），
+ * 不再使用 {@code DashScopeChatModel} 的原生 {@code text-generation} 路径：
+ * 后者只覆盖老模型，Qwen3.8-27B 等新模型会直接返回 {@code url error}，
+ * 而兼容接口在标准域名和业务空间域名下均可用。</p>
  */
 @Component
 public class DashScopeVendorFactory implements LlmVendorFactory {
@@ -26,20 +27,21 @@ public class DashScopeVendorFactory implements LlmVendorFactory {
 
     @Override
     public ChatModel create(LlmModel model, String apiKey, String baseUrl) {
-        DashScopeApi.Builder apiBuilder = DashScopeApi.builder().apiKey(apiKey);
-        if (StringUtils.hasText(baseUrl)) {
-            apiBuilder.baseUrl(baseUrl.trim());
-        }
-        DashScopeApi api = apiBuilder.build();
-
-        DashScopeChatOptions options = DashScopeChatOptions.builder()
-                .withModel(model.getModelCode())
-                .withTemperature(model.getTemperature() == null ? 0.7d : model.getTemperature().doubleValue())
+        String compatibleBase = DashScopeEndpoint.compatibleModeBaseUrl(
+                StringUtils.hasText(baseUrl) ? baseUrl : null);
+        OpenAiApi api = OpenAiApi.builder()
+                .apiKey(apiKey)
+                .baseUrl(compatibleBase)
+                // Spring AI 默认会拼 /v1/chat/completions，这里 base 已含 /compatible-mode/v1，
+                // 必须显式覆盖，否则会变成 /compatible-mode/v1/v1/chat/completions → 404
+                .completionsPath("/chat/completions")
                 .build();
-
-        return DashScopeChatModel.builder()
-                .dashScopeApi(api)
-                .defaultOptions(options)
+        return OpenAiChatModel.builder()
+                .openAiApi(api)
+                .defaultOptions(OpenAiChatOptions.builder()
+                        .model(model.getModelCode())
+                        .temperature(model.getTemperature() == null ? 0.7d : model.getTemperature().doubleValue())
+                        .build())
                 .build();
     }
 }

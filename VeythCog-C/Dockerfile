@@ -38,6 +38,7 @@ COPY vc-llm         vc-llm
 COPY vc-chat        vc-chat
 COPY vc-knowledge   vc-knowledge
 COPY vc-nav         vc-nav
+COPY vc-admin       vc-admin
 COPY vc-app         vc-app
 
 # 3) 按依赖拓扑逐个构建并安装到本地仓库，最后打包 vc-app：
@@ -59,6 +60,7 @@ RUN --mount=type=cache,target=/root/.m2 \
  && mvn -B -ntp -U -f vc-knowledge/pom.xml install -DskipTests \
  && mvn -B -ntp -U -f vc-chat/pom.xml      install -DskipTests \
  && mvn -B -ntp -U -f vc-nav/pom.xml       install -DskipTests \
+ && mvn -B -ntp -U -f vc-admin/pom.xml     install -DskipTests \
  && mvn -B -ntp -U -f vc-app/pom.xml       package -DskipTests
 
 # ---------- 阶段 2：精简运行镜像 ----------

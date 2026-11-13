@@ -6,6 +6,8 @@ import com.vc.llm.dto.BatchBindResult;
 import com.vc.llm.dto.CatalogVendorItem;
 import com.vc.llm.dto.LlmModelItem;
 import com.vc.llm.dto.VendorKeyStatus;
+import com.vc.llm.dto.VerifyResult;
+import com.vc.llm.service.LlmBindingVerifier;
 import com.vc.llm.service.LlmModelService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -29,9 +31,12 @@ import java.util.List;
 public class LlmModelController {
 
     private final LlmModelService llmModelService;
+    private final LlmBindingVerifier llmBindingVerifier;
 
-    public LlmModelController(LlmModelService llmModelService) {
+    public LlmModelController(LlmModelService llmModelService,
+                              LlmBindingVerifier llmBindingVerifier) {
         this.llmModelService = llmModelService;
+        this.llmBindingVerifier = llmBindingVerifier;
     }
 
     /** 我的绑定模型（对话页下拉） */
@@ -58,7 +63,8 @@ public class LlmModelController {
     public BaseResponse<BatchBindResult> batchBind(@Valid @RequestBody BatchBindRequest request) {
         return ResultUtils.success(llmModelService.batchBind(
                 currentUserId(), request.getVendor(), request.getModelCodes(),
-                request.getApiKey(), request.getDefaultModelCode()));
+                request.getApiKey(), request.getDefaultModelCode(),
+                request.getWorkspaceId(), request.getRegion()));
     }
 
     /** 单独编辑某供应商的用户 AK */
@@ -72,6 +78,18 @@ public class LlmModelController {
     @DeleteMapping("/vendors/{vendor}/api-key")
     public BaseResponse<VendorKeyStatus> clearVendorKey(@PathVariable String vendor) {
         return ResultUtils.success(llmModelService.clearVendorKey(currentUserId(), vendor));
+    }
+
+    /** 单模型连通校验：不要求先绑定；可携带草稿 AK，通过后再自由选择是否绑定 */
+    @PostMapping({"/models/{vendor}/{modelCode}/verify", "/bindings/{vendor}/{modelCode}/verify"})
+    public BaseResponse<VerifyResult> verify(@PathVariable String vendor,
+                                             @PathVariable String modelCode,
+                                             @RequestBody(required = false) VerifyRequest request) {
+        String apiKey = request == null ? null : request.getApiKey();
+        String workspaceId = request == null ? null : request.getWorkspaceId();
+        String region = request == null ? null : request.getRegion();
+        return ResultUtils.success(llmBindingVerifier.verify(
+                currentUserId(), vendor, modelCode, apiKey, workspaceId, region));
     }
 
     /** 解绑模型 */

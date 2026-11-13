@@ -25,4 +25,22 @@ public class CatalogVendorItem {
 
     /** 配置文件是否配置了兜底 AK */
     private Boolean hasFallbackKey;
+
+    /** 用户保存的业务空间 ID（未保存为 null） */
+    private String workspaceId;
+
+    /** 用户保存的地域代码（未保存为 null） */
+    private String region;
+
+    /** 当前生效的业务空间 ID（用户保存 → 配置兜底） */
+    private String effectiveWorkspaceId;
+
+    /** 当前生效的地域代码 */
+    private String effectiveRegion;
+
+    /** 配置文件是否配置了兜底业务空间 */
+    private Boolean hasFallbackWorkspace;
+
+    /** 当前生效的调用根地址（含业务空间时为其专属域名） */
+    private String effectiveBaseUrl;
 }

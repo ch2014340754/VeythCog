@@ -41,4 +41,9 @@ public class LlmChatService {
     public Flux<String> streamStateless(Long userId, String vendor, String modelCode, String message) {
         return router.streamStateless(userId, vendor, modelCode, message);
     }
+
+    /** 无记忆同步：上下文压缩摘要等内部场景使用 */
+    public String chatStateless(Long userId, String vendor, String modelCode, String message) {
+        return router.chatStateless(userId, vendor, modelCode, message);
+    }
 }

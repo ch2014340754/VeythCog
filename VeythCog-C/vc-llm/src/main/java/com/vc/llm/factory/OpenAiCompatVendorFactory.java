@@ -20,9 +20,17 @@ public class OpenAiCompatVendorFactory implements LlmVendorFactory {
 
     @Override
     public ChatModel create(LlmModel model, String apiKey, String baseUrl) {
+        String base = baseUrl == null ? "" : baseUrl.trim();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        // Spring AI 默认 completionsPath 是 /v1/chat/completions；
+        // 配置里的 baseUrl 若已带 /v1（DeepSeek 默认如此），必须去掉重复版本段
+        String completionsPath = base.endsWith("/v1") ? "/chat/completions" : "/v1/chat/completions";
         OpenAiApi api = OpenAiApi.builder()
                 .apiKey(apiKey)
-                .baseUrl(baseUrl)
+                .baseUrl(base)
+                .completionsPath(completionsPath)
                 .build();
         return OpenAiChatModel.builder()
                 .openAiApi(api)

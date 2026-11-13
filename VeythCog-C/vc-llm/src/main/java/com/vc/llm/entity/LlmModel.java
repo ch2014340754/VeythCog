@@ -35,6 +35,14 @@ public class LlmModel implements Serializable {
     @Column(name = "model_name", nullable = false, length = 64)
     private String modelName;
 
+    /** 模型主类型（text / reasoning / vision / omni / image / video / audio / embedding / other） */
+    @Column(name = "model_type", nullable = false, length = 32)
+    private String modelType = "text";
+
+    /** 模型支持的全部模态，逗号分隔的 ModelType code；modelType 只是其中的主类型 */
+    @Column(name = "modalities", length = 255)
+    private String modalities = "text";
+
     @Column(name = "max_context_tokens")
     private Integer maxContextTokens = 32768;
 

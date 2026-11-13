@@ -144,9 +144,15 @@ public class RagChatOrchestrator {
     /** 同步对话（/chat/message）：检索 → 拼上下文 → 作答 */
     public String answer(Long userId, List<Long> docIds, String question,
                          String vendor, String modelCode, String conversationId) {
+        return answer(userId, docIds, question, vendor, modelCode, conversationId, true);
+    }
+
+    /** 同步对话，compress 控制是否允许上下文压缩 */
+    public String answer(Long userId, List<Long> docIds, String question,
+                         String vendor, String modelCode, String conversationId, boolean compress) {
         List<RetrieveChunk> chunks = retrieveSafely(userId, docIds, question);
         return chatService.chat(userId, vendor, modelCode, conversationId,
-                buildAugmentedMessage(question, chunks));
+                buildAugmentedMessage(question, chunks), compress);
     }
 
     private String nullToEmpty(String value) {

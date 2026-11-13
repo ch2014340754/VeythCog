@@ -4,11 +4,18 @@ import com.vc.chat.dto.ChatConversationRow;
 import com.vc.chat.dto.ChatConversationVO;
 import com.vc.chat.dto.ChatMessageRow;
 import com.vc.chat.dto.ChatMessageVO;
+import com.vc.chat.entity.ChatSession;
 import com.vc.chat.mapper.ChatMessageMapper;
+import com.vc.chat.repository.ChatSessionRepository;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 会话历史查询服务：把 Spring AI 的对话记忆表 {@code chat_message} 反查成"会话列表 + 消息列表"。
@@ -30,27 +37,55 @@ public class ChatHistoryService {
     private static final String RAG_QUESTION_MARK = "用户问题：";
 
     private final ChatMessageMapper chatMessageMapper;
+    private final ChatSessionRepository chatSessionRepository;
 
-    public ChatHistoryService(ChatMessageMapper chatMessageMapper) {
+    public ChatHistoryService(ChatMessageMapper chatMessageMapper,
+                              ChatSessionRepository chatSessionRepository) {
         this.chatMessageMapper = chatMessageMapper;
+        this.chatSessionRepository = chatSessionRepository;
     }
 
-    /** 当前账号的会话列表（按最近活动倒序） */
+    /** 当前账号的会话列表（按最近活动倒序；含尚未产生消息的新会话） */
     public List<ChatConversationVO> listConversations(Long userId) {
         String prefix = userId + ":";
         List<ChatConversationRow> rows = chatMessageMapper.selectConversations(prefix + "%");
-        return rows.stream().map(row -> {
+
+        Map<String, ChatSession> sessions = new LinkedHashMap<>();
+        for (ChatSession s : chatSessionRepository.findByUserIdAndDeletedFalseOrderByUpdateTimeDesc(userId)) {
+            sessions.put(s.getConversationId(), s);
+        }
+
+        List<ChatConversationVO> result = new ArrayList<>();
+        for (ChatConversationRow row : rows) {
             ChatConversationVO vo = new ChatConversationVO();
             String fullId = row.getConversationId();
-            vo.setId(fullId != null && fullId.startsWith(prefix)
-                    ? fullId.substring(prefix.length()) : fullId);
+            String id = fullId != null && fullId.startsWith(prefix)
+                    ? fullId.substring(prefix.length()) : fullId;
+            vo.setId(id);
             vo.setTitle(displayText(row.getFirstUser(), TITLE_MAX, "新对话"));
             vo.setLastMessage(displayText(row.getLastContent(), LAST_MAX, ""));
             vo.setMessageCount(row.getMessageCount());
             vo.setCreatedAt(toMillis(row.getCreatedAt()));
             vo.setUpdatedAt(toMillis(row.getUpdatedAt()));
-            return vo;
-        }).toList();
+            applySession(vo, sessions.remove(id));
+            result.add(vo);
+        }
+        // 新建但还没发消息的会话：标题/模型/文档范围来自 chat_session
+        for (ChatSession s : sessions.values()) {
+            ChatConversationVO vo = new ChatConversationVO();
+            vo.setId(s.getConversationId());
+            vo.setTitle(displayText(s.getTitle(), TITLE_MAX, "新对话"));
+            vo.setLastMessage("");
+            vo.setMessageCount(0);
+            vo.setCreatedAt(toMillis(s.getCreateTime()));
+            vo.setUpdatedAt(toMillis(s.getUpdateTime()));
+            applySession(vo, s);
+            result.add(vo);
+        }
+        result.sort((a, b) -> Long.compare(
+                b.getUpdatedAt() == null ? 0 : b.getUpdatedAt(),
+                a.getUpdatedAt() == null ? 0 : a.getUpdatedAt()));
+        return result;
     }
 
     /** 某会话的消息列表（按 seq 升序，system 消息不下发） */
@@ -70,10 +105,35 @@ public class ChatHistoryService {
                 .toList();
     }
 
-    /** 删除会话（物理删除该会话的记忆行；会话不存在时为无害空操作） */
+    /** 删除会话（物理删除该会话的记忆行 + 软删除会话配置；会话不存在时为无害空操作） */
     public boolean deleteConversation(Long userId, String conversationId) {
         chatMessageMapper.deleteByConversationId(userId + ":" + conversationId);
+        chatSessionRepository.findByUserIdAndConversationIdAndDeletedFalse(userId, conversationId)
+                .ifPresent(s -> {
+                    s.setDeleted(true);
+                    chatSessionRepository.save(s);
+                });
         return true;
+    }
+
+    /** 把会话配置合并到列表项 */
+    private static void applySession(ChatConversationVO vo, ChatSession session) {
+        if (session == null) {
+            return;
+        }
+        // 用户显式重命名过的标题优先；默认占位标题不覆盖首条消息生成的标题
+        if (session.getTitle() != null && !session.getTitle().isBlank()
+                && !"新对话".equals(session.getTitle())) {
+            vo.setTitle(displayText(session.getTitle(), TITLE_MAX, vo.getTitle()));
+        }
+        vo.setVendor(session.getVendorCode());
+        vo.setModelCode(session.getModelCode());
+        vo.setKnowledgeDocIds(com.vc.chat.service.ChatSessionService.parseDocIds(session.getRagDocIds()));
+        vo.setCompressEnabled(Boolean.TRUE.equals(session.getCompressEnabled()));
+    }
+
+    private static Long toMillis(LocalDateTime time) {
+        return time == null ? null : time.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 
     private static Long toMillis(Timestamp ts) {

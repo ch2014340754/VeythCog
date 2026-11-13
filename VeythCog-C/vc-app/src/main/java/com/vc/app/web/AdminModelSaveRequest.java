@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 管理端新增 / 编辑模型目录请求。
@@ -21,6 +22,12 @@ public class AdminModelSaveRequest {
 
     @Size(max = 64, message = "模型名称不能超过 64 个字符")
     private String modelName;
+
+    /** 主类型：text / reasoning / vision / omni / image / video / audio / embedding / other */
+    private String modelType;
+
+    /** 支持的全部模态；留空时只保存主类型 */
+    private List<String> modalities;
 
     /** 上下文窗口，缺省 32768 */
     private Integer maxContextTokens;

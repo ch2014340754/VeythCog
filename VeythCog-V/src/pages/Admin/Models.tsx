@@ -22,6 +22,7 @@ import refreshIcon from '@iconify-icons/lucide/refresh-cw';
 import editIcon from '@iconify-icons/lucide/pencil';
 import trashIcon from '@iconify-icons/lucide/trash-2';
 import databaseIcon from '@iconify-icons/lucide/database';
+import searchIcon from '@iconify-icons/lucide/search';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   createAdminModel,
@@ -33,6 +34,7 @@ import {
   updateAdminModel,
 } from '@/api/adminModels';
 import type { AdminLlmModel, ModelVendorOption } from '@/api/adminModels';
+import { MODEL_TYPE_OPTIONS, ModelModalityTags } from '@/components/ModelTypeTag';
 
 /** 顶部 2px 细进度条（静默刷新时使用，不遮挡内容） */
 const SlimProgress: React.FC = () => (
@@ -67,7 +69,13 @@ const ModelsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<'all' | 'on' | 'off'>('all');
+  const [typeFilters, setTypeFilters] = useState<string[]>([]);
   const [vendorFilter, setVendorFilter] = useState<string>('all');
+  const [keyword, setKeyword] = useState('');
+
+  /** 表格可视高度：撑满父容器剩余空间，超出后表头固定、表体内部滚动（虚拟渲染，不再分页） */
+  const [bodyHeight, setBodyHeight] = useState(400);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
 
   // 新增 / 编辑
   const [formOpen, setFormOpen] = useState(false);
@@ -122,21 +130,49 @@ const ModelsPage: React.FC = () => {
     [rows]
   );
 
-  const filtered = useMemo(
-    () =>
-      rows.filter(
-        (r) =>
-          (filter === 'all' || (filter === 'on' ? r.enabled : !r.enabled)) &&
-          (vendorFilter === 'all' || r.vendor === vendorFilter)
-      ),
-    [rows, filter, vendorFilter]
-  );
+  const filtered = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    return rows.filter(
+      (r) =>
+        (filter === 'all' || (filter === 'on' ? r.enabled : !r.enabled)) &&
+        (typeFilters.length === 0 ||
+          typeFilters.some((type) => (r.modalities?.length ? r.modalities : [r.modelType]).includes(type))) &&
+        (vendorFilter === 'all' || r.vendor === vendorFilter) &&
+        (!kw ||
+          r.modelCode.toLowerCase().includes(kw) ||
+          r.modelName.toLowerCase().includes(kw) ||
+          r.vendorName.toLowerCase().includes(kw))
+    );
+  }, [rows, filter, typeFilters, vendorFilter, keyword]);
+
+  // 表体高度跟随容器：窗口缩放 / 数据量变化后重新测量
+  useEffect(() => {
+    const el = tableWrapRef.current;
+    if (!el) {
+      return;
+    }
+    const measure = () => {
+      const header = el.querySelector('.ant-table-thead') as HTMLElement | null;
+      const headerHeight = header?.offsetHeight ?? 48;
+      setBodyHeight(Math.max(160, Math.floor(el.clientHeight - headerHeight - 1)));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    const timer = window.setTimeout(measure, 120);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, [loading, filtered.length]);
 
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
     form.setFieldsValue({
       vendor: vendors[0]?.vendor ?? 'dashscope',
+      modelType: 'text',
+      modalities: ['text'],
       maxContextTokens: 32768,
       temperature: 0.7,
       enabled: true,
@@ -150,6 +186,8 @@ const ModelsPage: React.FC = () => {
       vendor: row.vendor,
       modelCode: row.modelCode,
       modelName: row.modelName,
+      modelType: row.modelType,
+      modalities: row.modalities?.length ? row.modalities : [row.modelType],
       maxContextTokens: row.maxContextTokens,
       temperature: Number(row.temperature),
       enabled: row.enabled,
@@ -164,6 +202,10 @@ const ModelsPage: React.FC = () => {
         vendor: String(values.vendor),
         modelCode: String(values.modelCode ?? '').trim(),
         modelName: values.modelName ? String(values.modelName).trim() : undefined,
+        modelType: String(values.modelType ?? 'text'),
+        modalities: Array.isArray(values.modalities) && values.modalities.length > 0
+          ? (values.modalities as string[])
+          : [String(values.modelType ?? 'text')],
         maxContextTokens: Number(values.maxContextTokens) || 32768,
         temperature: values.temperature === undefined ? 0.7 : Number(values.temperature),
         enabled: Boolean(values.enabled),
@@ -235,8 +277,27 @@ const ModelsPage: React.FC = () => {
                 {result.addedCodes.length > 40 ? ` 等 ${result.addedCodes.length} 个` : ''}
               </div>
             )}
+            {result.updatedCodes.length > 0 && (
+              <div
+                style={{
+                  maxHeight: 160,
+                  overflowY: 'auto',
+                  fontSize: 12,
+                  color: colors.textSecondary,
+                  background: colors.surface,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 'var(--radius-md)',
+                  padding: '8px 10px',
+                  marginBottom: 8,
+                }}
+              >
+                <div style={{ marginBottom: 4, color: colors.text }}>已修正类型 / 模态：</div>
+                {result.updatedCodes.slice(0, 40).join('、')}
+                {result.updatedCodes.length > 40 ? ` 等 ${result.updatedCodes.length} 个` : ''}
+              </div>
+            )}
             <div style={{ color: colors.textTertiary }}>
-              同步只补齐缺失项、不改动已有配置；新增模型默认不上架，请在上表按需开启。
+              同步会补齐缺失模型，并刷新已有模型的主类型与全部模态；不会删除模型，也不会覆盖上下架、温度和上下文设置。
             </div>
           </div>
         ),
@@ -278,6 +339,24 @@ const ModelsPage: React.FC = () => {
       ),
     },
     {
+      title: '类型 / 模态',
+      dataIndex: 'modalities',
+      key: 'modalities',
+      width: 218,
+      filters: MODEL_TYPE_OPTIONS.map((option) => ({
+        text: option.label,
+        value: option.value,
+      })),
+      filteredValue: typeFilters.length > 0 ? typeFilters : null,
+      onFilter: (value, record) => {
+        const list = record.modalities?.length ? record.modalities : [record.modelType];
+        return list.includes(String(value));
+      },
+      render: (_: unknown, row) => (
+        <ModelModalityTags types={row.modalities} fallback={row.modelType} compact />
+      ),
+    },
+    {
       title: '上下文',
       dataIndex: 'maxContextTokens',
       width: 100,
@@ -300,6 +379,13 @@ const ModelsPage: React.FC = () => {
       title: '状态',
       dataIndex: 'enabled',
       width: 100,
+      filters: [
+        { text: '已上架', value: 'on' },
+        { text: '未上架', value: 'off' },
+      ],
+      filterMultiple: false,
+      filteredValue: filter === 'all' ? null : [filter],
+      onFilter: (value, record) => record.enabled === (String(value) === 'on'),
       render: (_: unknown, row) => (
         <Space size={8}>
           <Switch size="small" checked={row.enabled} onChange={(value) => void onToggle(row, value)} />
@@ -341,17 +427,25 @@ const ModelsPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ position: 'relative', padding: '0 0 24px' }}>
+    <div
+      style={{
+        position: 'relative',
+        height: '100%',
+        minHeight: 420,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       {(busy || syncing) && <SlimProgress />}
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 18, flexShrink: 0 }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon icon={databaseIcon} width={18} />
             模型目录
           </h2>
           <p style={{ color: colors.textSecondary, fontSize: 13, margin: 0 }}>
-            目录是唯一真源：用户看到的、能绑定的模型都来自这里。可手工增删改查，也可从供应商拉取可对话模型。
+            目录是唯一真源：用户看到的、能绑定的模型都来自这里。可手工增删改查，也可从供应商拉取模型（含类型）。
           </p>
         </div>
         <Space>
@@ -364,7 +458,7 @@ const ModelsPage: React.FC = () => {
         </Space>
       </div>
 
-      <Space style={{ marginBottom: 14 }} wrap>
+      <Space style={{ marginBottom: 14, flexShrink: 0, width: '100%' }} wrap>
         <Segmented
           value={filter}
           onChange={(value) => setFilter(value as 'all' | 'on' | 'off')}
@@ -383,13 +477,25 @@ const ModelsPage: React.FC = () => {
             ...vendors.map((v) => ({ value: v.vendor, label: v.vendorName })),
           ]}
         />
+        <Input
+          allowClear
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          prefix={<Icon icon={searchIcon} width={14} />}
+          placeholder="搜索模型名称 / 编码 / 供应商"
+          style={{ width: 260 }}
+        />
+        {keyword.trim() && (
+          <span style={{ fontSize: 12, color: colors.textTertiary }}>命中 {filtered.length} / {rows.length}</span>
+        )}
       </Space>
 
       <div
+        ref={tableWrapRef}
+        className="admin-panel"
         style={{
-          background: colors.surface,
-          border: `1px solid ${colors.border}`,
-          borderRadius: 'var(--radius-lg)',
+          flex: 1,
+          minHeight: 0,
           overflow: 'hidden',
         }}
       >
@@ -399,11 +505,24 @@ const ModelsPage: React.FC = () => {
           </div>
         ) : (
           <Table<AdminLlmModel>
+            className="admin-table"
             rowKey="id"
             size="middle"
             columns={columns}
             dataSource={filtered}
-            pagination={{ pageSize: 12, showSizeChanger: false, hideOnSinglePage: true }}
+            pagination={false}
+            scroll={{ y: bodyHeight }}
+            onChange={(_, filters) => {
+              const nextTypeFilters = Array.isArray(filters.modalities)
+                ? filters.modalities.map(String)
+                : [];
+              setTypeFilters(nextTypeFilters);
+
+              const nextStatus = Array.isArray(filters.enabled) && filters.enabled.length > 0
+                ? String(filters.enabled[0])
+                : 'all';
+              setFilter(nextStatus === 'on' || nextStatus === 'off' ? nextStatus : 'all');
+            }}
             locale={{ emptyText: '暂无模型，点击「新增模型」或「从供应商同步」补齐' }}
           />
         )}
@@ -440,6 +559,21 @@ const ModelsPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="modelName" label="展示名称" tooltip="留空则使用模型编码">
             <Input placeholder="通义千问 Plus" maxLength={64} />
+          </Form.Item>
+          <Form.Item
+            name="modelType"
+            label="主类型"
+            tooltip="主类型决定对话门控和连通校验方式；完整模态在下一项配置"
+            rules={[{ required: true, message: '请选择主类型' }]}
+          >
+            <Select options={MODEL_TYPE_OPTIONS} />
+          </Form.Item>
+          <Form.Item
+            name="modalities"
+            label="支持的全部模态"
+            tooltip="可多选，例如推理模型同时支持文本与图片：text + reasoning + vision。留空则只保存主类型。"
+          >
+            <Select mode="multiple" allowClear options={MODEL_TYPE_OPTIONS} placeholder="选择该模型支持的全部模态" />
           </Form.Item>
           <Space size={16} style={{ display: 'flex' }}>
             <Form.Item name="maxContextTokens" label="上下文窗口（tokens）" style={{ flex: 1 }} rules={[{ required: true }]}>
@@ -484,8 +618,9 @@ const ModelsPage: React.FC = () => {
             <span style={{ fontSize: 13 }}>新增项直接上架（默认不上架，由你挑选）</span>
           </div>
           <div style={{ fontSize: 12, color: colors.textTertiary, lineHeight: 1.7 }}>
-            只补齐目录里缺失的模型，不删除、不覆盖已有配置。需要该供应商的有效 AK：优先服务端兜底配置，其次你在模型配置页保存的 AK。
-            百炼只同步具备文本生成（TG）能力的模型，语音/图像/视频类会被过滤。
+            同步会补齐目录里缺失的模型，并刷新已有模型的主类型与全部模态；不删除模型，不覆盖上下架、温度和上下文设置。
+            需要该供应商的有效 AK：优先服务端兜底配置，其次你在模型配置页保存的 AK。
+            百炼同步会按 capabilities 记录全部模态（文本 / 推理 / 多模态理解 / 图像 / 视频 / 语音 / 向量等），不再只保留一个类型。
           </div>
         </div>
       </Modal>

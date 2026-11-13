@@ -86,7 +86,7 @@ const TasksPage: React.FC = () => {
           后台自动清理和统计任务的调度状态
         </p>
       </div>
-      <Table rowKey="id" columns={columns} dataSource={tasks} loading={loading} pagination={false} size="middle" />
+      <Table className="admin-table" rowKey="id" columns={columns} dataSource={tasks} loading={loading} pagination={false} size="middle" />
     </div>
   );
 };

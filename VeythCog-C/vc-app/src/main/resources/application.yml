@@ -45,6 +45,9 @@ llm:
     dashscope:
       # 阿里百炼 AK（与 spring.ai.dashscope.api-key 保持一致，后期统一迁 Nacos）
       api-key: ${DASHSCOPE_API_KEY}
+      # 业务空间 / 地域：用户模型配置页保存的值优先，这里是服务端兜底
+      workspace-id: ${DASHSCOPE_WORKSPACE_ID:}
+      region: ${DASHSCOPE_REGION:cn-beijing}
     deepseek:
       # DeepSeek AK（你稍后填写，留空时该模型可绑定但对话会报「未配置密钥」）
       api-key: ${DEEPSEEK_API_KEY:}
@@ -83,6 +86,21 @@ nav:
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789}
   expire-hours: 24
+
+# 系统监控：接口调用指标 / LLM 用量 / 会话
+# 采集走内存队列异步落库，队列满丢弃并计数，绝不阻塞业务请求
+monitor:
+  enabled: true
+  queue-capacity: 10000
+  flush-interval-ms: 2000
+  batch-size: 300
+  # 最近 5 分钟内有请求视为「在线」
+  online-window-minutes: 5
+  retention:
+    sample-days: 30      # 单请求明细
+    metric-days: 90      # 分钟聚合
+    llm-days: 90         # LLM 用量
+    session-days: 30     # 会话
 
 springdoc:
   swagger-ui:

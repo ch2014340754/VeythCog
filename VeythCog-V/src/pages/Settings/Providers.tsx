@@ -1,30 +1,41 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { Button, Checkbox, Empty, Input, message, Modal, Select, Spin, Tag } from 'antd';
+import { Button, Checkbox, Empty, Input, message, Modal, Select, Spin, Tag, Tooltip } from 'antd';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   batchBindModels,
   clearVendorKey,
   getCatalog,
+  verifyModel,
 } from '@/api/llm';
 import type { CatalogVendorItem } from '@/types';
+import { ModelModalityTags } from '@/components/ModelTypeTag';
 
 /** 供应商卡片上的编辑草稿（前端本地状态，保存时整体提交） */
 interface VendorDraft {
   selected: string[];
   keyDraft: string;
+  /** 业务空间草稿（仅百炼） */
+  workspaceDraft: string;
+  /** 地域草稿（仅百炼） */
+  regionDraft: string;
   defaultCode?: string;
   saving: boolean;
   clearing: boolean;
+  /** 正在校验的模型编码；空表示没有进行中的校验 */
+  verifyingCode?: string;
 }
 
 function buildDraft(v: CatalogVendorItem): VendorDraft {
   return {
     selected: v.models.filter((m) => m.bound).map((m) => m.modelCode),
     keyDraft: '',
+    workspaceDraft: v.workspaceId ?? '',
+    regionDraft: v.region ?? '',
     defaultCode: v.models.find((m) => m.isDefault)?.modelCode,
     saving: false,
     clearing: false,
+    verifyingCode: undefined,
   };
 }
 
@@ -101,16 +112,20 @@ const ProvidersPage: React.FC = () => {
     setDrafts((prev) => (prev[vendor] ? { ...prev, [vendor]: { ...prev[vendor], ...p } } : prev));
   };
 
-  /** 保存：多选模型 + 可选新 AK + 默认模型，一次提交 */
+  /** 保存：多选模型 + 可选新 AK + 默认模型 + 百炼业务空间，一次提交 */
   const doSave = async (v: CatalogVendorItem, d: VendorDraft) => {
     const apiKey = d.keyDraft.trim();
     patch(v.vendor, { saving: true });
+    const isDashScope = v.vendor === 'dashscope';
     try {
       await batchBindModels({
         vendor: v.vendor,
         modelCodes: d.selected,
         apiKey: apiKey || undefined,
         defaultModelCode: d.selected.length ? d.defaultCode : undefined,
+        ...(isDashScope
+          ? { workspaceId: d.workspaceDraft.trim(), region: d.regionDraft.trim() }
+          : {}),
       });
       const data = await load(true);
       const fresh = data.find((x) => x.vendor === v.vendor);
@@ -165,6 +180,67 @@ const ProvidersPage: React.FC = () => {
     }
   };
 
+  /** 校验单个模型：不要求先绑定；优先用当前草稿 AK，其次已保存 AK / 系统兜底 */
+  const verifyOne = async (
+    v: CatalogVendorItem,
+    d: VendorDraft,
+    modelCode: string,
+    modelName: string
+  ) => {
+    patch(v.vendor, { verifyingCode: modelCode });
+    try {
+      const r = await verifyModel(
+        v.vendor,
+        modelCode,
+        d.keyDraft.trim() || undefined,
+        v.vendor === 'dashscope' ? d.workspaceDraft.trim() || undefined : undefined,
+        v.vendor === 'dashscope' ? d.regionDraft.trim() || undefined : undefined
+      );
+      if (r.valid) {
+        message.success(`${modelName} 校验通过，可勾选后保存绑定`);
+      } else {
+        Modal.warning({
+          title: `${modelName} 校验未通过`,
+          content: (
+            <div style={{ fontSize: 13 }}>
+              <div>{r.message}</div>
+              <div style={{ fontSize: 12, color: colors.textTertiary, marginTop: 8 }}>
+                修正 Key / 额度后重新点该行「校验」即可。
+              </div>
+            </div>
+          ),
+        });
+      }
+      const data = await load(true);
+      const fresh = data.find((x) => x.vendor === v.vendor);
+      if (fresh) {
+        setDrafts((prev) => {
+          const current = prev[v.vendor];
+          const rebuilt = buildDraft(fresh);
+          // 保留用户尚未保存的勾选与 AK 草稿，避免校验一次就丢失编辑状态
+          return {
+            ...prev,
+            [v.vendor]: current
+              ? {
+                  ...rebuilt,
+                  selected: current.selected,
+                  keyDraft: current.keyDraft,
+                  defaultCode: current.defaultCode,
+                  workspaceDraft: current.workspaceDraft,
+                  regionDraft: current.regionDraft,
+                }
+              : rebuilt,
+          };
+        });
+      }
+      await loadModels();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '校验失败');
+    } finally {
+      patch(v.vendor, { verifyingCode: undefined });
+    }
+  };
+
   const statusTag = (v: CatalogVendorItem) => {
     if (v.hasApiKey) {
       return <Tag color="green" style={{ marginInlineEnd: 0 }}>用户 AK</Tag>;
@@ -185,8 +261,12 @@ const ProvidersPage: React.FC = () => {
     const selectedChanged = !sameSet(d.selected, boundCodes);
     const defaultChanged =
       d.selected.length > 0 && (d.defaultCode ?? undefined) !== (serverDefault ?? undefined);
-    const dirty = selectedChanged || d.keyDraft.trim() !== '' || defaultChanged;
-    const busy = d.saving || d.clearing;
+    const workspaceChanged =
+      v.vendor === 'dashscope' &&
+      (d.workspaceDraft.trim() !== (v.workspaceId ?? '') ||
+        d.regionDraft.trim() !== (v.region ?? ''));
+    const dirty = selectedChanged || d.keyDraft.trim() !== '' || defaultChanged || workspaceChanged;
+    const busy = d.saving || d.clearing || Boolean(d.verifyingCode);
     const keyPlaceholder = v.hasApiKey
       ? `已配置：${v.apiKeyMasked ?? '****'}（留空则不修改）`
       : v.hasFallbackKey
@@ -226,9 +306,24 @@ const ProvidersPage: React.FC = () => {
             <Tag color="default" style={{ marginInlineEnd: 0 }}>{v.vendor}</Tag>
             {statusTag(v)}
           </div>
-          {v.baseUrl && (
-            <span style={{ fontSize: 12, color: colors.textTertiary }}>{v.baseUrl}</span>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {(v.effectiveBaseUrl || v.baseUrl) && (
+              <Tooltip title={v.effectiveBaseUrl || v.baseUrl}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: colors.textTertiary,
+                    maxWidth: 360,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {v.effectiveBaseUrl || v.baseUrl}
+                </span>
+              </Tooltip>
+            )}
+          </div>
         </div>
 
         {/* API Key */}
@@ -265,6 +360,54 @@ const ProvidersPage: React.FC = () => {
           </div>
         </div>
 
+        {/* 百炼地域 / 业务空间（与 AK 同级：同一供应商共用） */}
+        {v.vendor === 'dashscope' && (
+          <div
+            style={{
+              border: `1px solid ${colors.divider}`,
+              borderRadius: 'var(--radius-md)',
+              padding: '12px 14px',
+              marginBottom: 16,
+              background: colors.primary10,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
+                业务空间 / 地域
+              </span>
+              <span style={{ fontSize: 12, color: colors.textTertiary }}>
+                留空回落系统配置；配置后调用专属域名，适配工作空间模型与地域隔离
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Input
+                value={d.workspaceDraft}
+                onChange={(e) => patch(v.vendor, { workspaceDraft: e.target.value })}
+                placeholder={
+                  v.hasFallbackWorkspace && v.effectiveWorkspaceId
+                    ? `系统兜底：${v.effectiveWorkspaceId}`
+                    : '业务空间 ID，如 llm-j09pwqdqv4no16ww；留空走标准域名'
+                }
+                disabled={busy}
+                spellCheck={false}
+                style={{ flex: 1 }}
+              />
+              <Input
+                value={d.regionDraft}
+                onChange={(e) => patch(v.vendor, { regionDraft: e.target.value })}
+                placeholder={`地域，默认 ${v.effectiveRegion || 'cn-beijing'}`}
+                disabled={busy}
+                spellCheck={false}
+                style={{ width: 200 }}
+              />
+            </div>
+            <div style={{ fontSize: 12, color: colors.textTertiary, marginTop: 8 }}>
+              当前调用：{v.effectiveBaseUrl || v.baseUrl}
+              {v.hasFallbackWorkspace && !v.workspaceId ? '（系统兜底业务空间）' : ''}
+            </div>
+          </div>
+        )}
+
         {/* 模型多选 */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: colors.text, marginBottom: 8 }}>
@@ -294,14 +437,42 @@ const ProvidersPage: React.FC = () => {
                 }}
               >
                 <Checkbox value={m.modelCode} disabled={!m.enabled || busy}>
-                  <span style={{ fontSize: 14, color: colors.text, fontWeight: 500 }}>{m.modelName}</span>
-                  <span style={{ fontSize: 12, color: colors.textTertiary, marginLeft: 8 }}>
-                    {m.modelCode}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14, color: colors.text, fontWeight: 500 }}>{m.modelName}</span>
+                    <ModelModalityTags types={m.modalities} fallback={m.modelType} compact />
+                    <span style={{ fontSize: 12, color: colors.textTertiary }}>{m.modelCode}</span>
                   </span>
                 </Checkbox>
-                {m.isDefault && (
-                  <Tag color="gold" style={{ marginInlineEnd: 0 }}>当前默认</Tag>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {m.valid && (
+                    <Tag color="green" style={{ marginInlineEnd: 0 }}>
+                      {m.bound ? '已验证' : '已验证 · 待绑定'}
+                    </Tag>
+                  )}
+                  {!m.valid && m.bound && (
+                    <Tooltip title={m.verifyError || '尚未通过连通校验，不会出现在对话页'}>
+                      <Tag color="orange" style={{ marginInlineEnd: 0 }}>未校验</Tag>
+                    </Tooltip>
+                  )}
+                  {!m.valid && !m.bound && m.verifyError && (
+                    <Tooltip title={m.verifyError}>
+                      <Tag color="red" style={{ marginInlineEnd: 0 }}>校验失败</Tag>
+                    </Tooltip>
+                  )}
+                  {m.isDefault && (
+                    <Tag color="gold" style={{ marginInlineEnd: 0 }}>当前默认</Tag>
+                  )}
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ paddingInline: 4, height: 22, fontSize: 12 }}
+                    loading={d.verifyingCode === m.modelCode}
+                    disabled={!m.enabled || busy}
+                    onClick={() => void verifyOne(v, d, m.modelCode, m.modelName)}
+                  >
+                    校验
+                  </Button>
+                </div>
               </div>
             ))}
           </Checkbox.Group>
@@ -362,7 +533,8 @@ const ProvidersPage: React.FC = () => {
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: 0 }}>模型配置</h2>
           <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>
-            选择供应商 → 多选模型 → 填写你自己的 API Key（加密保存）；不填则使用系统兜底 AK
+            选择供应商 → 填写你自己的 API Key（加密保存）→ 逐行点「校验」；校验通过后再勾选要用的模型并保存。
+            校验不要求先绑定，未填 AK 时用已保存 AK 或系统兜底；只有通过校验的对话模型会出现在对话页
           </div>
         </div>
       </div>
@@ -388,7 +560,8 @@ const ProvidersPage: React.FC = () => {
         }}
       >
         提示：API Key 使用 AES-256-GCM 加密后存储在 `user_llm_binding`，同一供应商下的模型共用一把 Key；
-        清除后自动回落到后端配置文件中的 AK。
+        校验结论按「用户 + 模型 + Key 指纹」记录在 `user_llm_model_verify`，修改或清除 AK 后自动失效；
+        清除 AK 后自动回落到后端配置文件中的 AK。
       </div>
     </div>
   );

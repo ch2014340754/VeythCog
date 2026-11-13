@@ -27,7 +27,7 @@
 | 2026-11-13 | 🔧 | `@Valid` 参数校验失败改回 `{code:40000,message}` 契约（空 message / 空账号密码不再返回 Spring 默认错误体） | `vc-app/web/GlobalExceptionHandler.java` | 前后端 Agent |
 | 2026-11-13 | ✏️ | `GET /llm/models` 按绑定创建时间升序（补 spec 排序要求） | `vc-llm/repository/UserLlmBindingRepository.java`、`LlmModelService.java` | 前端 Agent |
 | 2026-11-13 | 🆕 | 模型目录管理：`/admin/llm-models` 增删改查 + 上下架 + 从供应商同步（百炼按 TG 过滤、只增不删、新增默认不上架、有绑定禁止删除/改编码） | `openspec/changes/llm-model-catalog-admin/*`、`vc-llm/service/LlmCatalogAdminService.java`、`vc-llm/dto/{AdminModelItem,ModelSyncResult}.java`、`vc-app/web/{AdminLlmModelController,AdminModelSaveRequest,AdminModelEnabledRequest,AdminModelSyncRequest}.java`、`LlmModelRepository`、`UserLlmBindingRepository` | 前后端 Agent |
-| 2026-11-13 | ✏️ | 前端系统管理「模型目录」由 mock 改为真实接口（表格/筛选/新增/编辑/删除/上下架/同步，静默刷新） | `VeythCog-V/src/api/adminModels.ts`、`src/pages/Admin/Models.tsx` | 前端 Agent |
+| 2026-11-13 | ✏️ | 前端系统管理「模型目录」由 mock 改为真实接口（表格/筛选/新增/编辑/删除/上下架/同步，静默刷新）；列表撑满父容器、取消分页改内部滚动、新增关键字搜索 | `VeythCog-V/src/api/adminModels.ts`、`src/pages/Admin/Models.tsx` | 前端 Agent |
 | 2026-11-12 | ✏️ | 导航图标接口端到端验证：18 条历史书签同步成功 13 条；5 条因站点/网络原因保留 1 天失败冷却 | `openspec/changes/p2-nav-icons/tasks.md`、`design.md §7` | 前后端 Agent |
 
 ## 关键 spec 变更明细（v0.1 → v0.2，需全体 Agent 知悉）
@@ -74,3 +74,58 @@
 - 首次误跑生成的 21–53 共 33 条文字副本已物理删除，数据库恢复后重跑。
 - 图标缓存修复：`BookmarkIcon` 命中 `localStorage` 描述缓存后未提前返回，仍会请求 `/nav/bookmarks/{id}/icon`；已改为缓存命中直接渲染，切换分类不再重复请求，只有首次或图标字段变化才查后端。`tsc --noEmit` 通过。
 - 新增 `docs/sql/014_nav_itab_data.sql`：7 分类 + 267 书签的纯 SQL 入库脚本（含图标字段），首次按 `(user_id,name)` / `(category_id,url)` 插入，已有同 URL 书签同步 4 个图标字段；隔离 schema 实测首次 7/267、二次仍 7/267，清空图标后可补回。说明见 `docs/sql/README-014-nav-data.md`。
+## 2026-11-13 系统监控（vc-admin + 可观测性）
+
+- 新增后端模块 `vc-admin`（`com.vc.admin`）：依赖 `vc-common` / `vc-llm`，被 `vc-app` 装配；**不反向依赖 vc-app**，因此用户/角色管理仍留 `vc-app`。
+- 新增 `docs/sql/016_observability.sql` 四表：`sys_api_sample`（单请求明细）、`sys_api_metric_minute`（分钟桶 + 6 档耗时直方图，唯一键 `(bucket,method,route)`）、`llm_call_log`、`sys_user_session`（sid 主键，status active/kicked/logout/expired）。开发库执行输出 `OK executed=19`。
+- 采集：`ApiAccessLogFilter` 重写为采集型过滤器（归一化路由 `BEST_MATCHING_PATTERN`、业务码、耗时、流式标记，`/api/admin/monitor` 自身不打点，搜索词不落库）；`MetricsCollector` 队列 + 2s 批量落库；`BizCodeAdvice` 把 `BaseResponse.code` 写入请求属性（后端业务错误是 HTTP 200，否则错误率恒 0）。
+- LLM 用量：`vc-llm` 新增 SPI `LlmCallRecorder` / `LlmCallRecord`；`LlmModelRouter` 改 `.chatResponse()` 捕获 usage、流式取最后 chunk，缺失按字符估算（CJK 1 字 1 token、其他 4 字符 1 token）并标 `usage_source`。
+- 会话：登录建 `sys_user_session`，JWT 增 `sid`；`JwtAuthFilter` 校验会话，踢人/登出后 token 立即 401；新增 `POST /auth/logout`。**旧 token 无 sid 失效，需重新登录**。
+- 查询/资源：`MonitorQueryService`（overview/timeseries/endpoints/errors/llm/sessions，Asia/Shanghai 分桶）、`ResourceMonitor`（JDK MXBean 采 CPU/内存/Swap/JVM/线程/磁盘，缺失 -1）、`MonitorRetentionJob`（每日 03:30 清理）。接口：`/admin/monitor/{overview,timeseries,endpoints,errors,llm,sessions,sessions/{sid}/kick,resources,status}`。
+- 前端：`types/index.ts` 增监控类型；`api/admin.ts` 监控段由 mock 改 `/admin/monitor/*`（bypass 模式仍返本地假数据）；`Admin/Monitoring.tsx` 重写为概览卡 + 调用趋势 + 服务资源 + 接口排行 + LLM 用量 + 在线会话（强制下线）+ 最近错误，60s 静默刷新。`npm run build` 通过。
+- 验证（8125 临时实例）：overview 统计到 `/auth/login`（calls=1、p95=479ms）；资源接口真实值；`chat/message` 上游 403 → errors 记录 bizCode=50000、HTTP 200、message 原文、rid；llm 记录 1 次失败调用、promptTokens 估算 1、latency 723ms；按 JWT sid 精确踢人后 token2 40100、token1 正常；logout 后原 token 40100。
+## 2026-11-13 P0 收口（连通校验 / chat_session / 上下文压缩）
+
+- `docs/sql/017_p0_verify_and_session.sql`：`user_llm_binding` 增 `is_valid` / `last_verify_at` / `verify_error`；新建 `chat_session`（unique(user_id, conversation_id)，含标题 / vendor+model / rag_doc_ids / enable_context_compress / deleted）。开发库 `OK executed=12`。
+- 连通校验：`LlmBindingVerifier` + `POST /llm/bindings/{vendor}/{modelCode}/verify`。真实最小请求探测，失败按 401/403 额度/404/429/超时翻译成用户可判断的原因；成功置 `is_valid=true`，失败写 `is_valid=false + verify_error`。`LlmModelRouter` 对话路径要求 `is_valid=true`（`probe` 单独放行），新增/换/清 AK 自动重置校验状态；`/llm/models` 与目录 `valid` 只暴露已校验绑定。
+- 会话级配置：`ChatSessionService` + JPA `ChatSession`；新增 `/chat/sessions` 增删改查。`/chat/message`、`/chat/stream` 先 `resolveForSend`，模型/`docIds`/压缩开关以会话为准；`/chat/conversations` 合并会话配置（未发消息的新会话也返回），重命名/文档范围/压缩开关刷新不丢。
+- 上下文压缩：`ContextCompressor` + `chat.compress.*`（thresholdTokens=4000、keepRounds=3、summaryInputMaxChars=8000）。超阈值把最早历史交当前会话模型摘要为 `role=system` 并重写记忆（`saveAll` 全量覆盖），摘要失败降级丢弃最早历史；`ChatService` 同步/流式均支持 `compress`。
+- SSE 修正：已建流后模型/校验异常改为 `event: error` 结束，不再抛回 MVC 被改写成 JSON；前端 `streamChatMessage` 对非 SSE 响应解析 `message` 走 `onError`。
+- 前端：模型配置页每模型「已验证/未校验」+ 卡片「校验已绑定模型（n）」，失败弹窗列原因；对话页模型下拉只显示已校验，新建会话落 `chat_session`，重命名/知识库范围/新增压缩开关均写回后端。`npm run build` EXIT=0。
+- 验证（8125）：catalog `qwen-plus valid=false`；verify 返回 `{"valid":false,"message":"Key 有效但额度不足或无调用权限（上游返回 403）","latencyMs":653}`；`/llm/models` 返回 0；会话创建/列表合并/更新/详情通过；未校验模型对话返回 40000；压缩降级 8→6 条（日志 `上下文压缩完成 ... summarized=false`）。测试会话已清理。
+- 已知缺口：当前无可用 LLM Key，压缩「摘要成功」路径未端到端回归；访客演示模型、SSE `delta/done` + 幂等 + 并发锁、temperature/topP/备注仍待做。
+## 2026-11-13 单模型校验 / 多模态校验 / 模型类型
+
+- `docs/sql/018_model_type_and_verify.sql`：`llm_model` 增 `model_type`（默认 `text`）；新建 `user_llm_model_verify`（unique(user_id,vendor_code,model_code)，is_valid / key_fingerprint / verify_error / last_verify_at）。开发库 `OK executed=7`。
+- 校验与绑定解耦：`LlmBindingVerifier` 不再要求绑定，AK 解析顺序为「本次草稿 AK → 用户该供应商已保存 AK → 配置文件兜底」；结论按「用户 + 模型 + Key 指纹」落新表，换 AK 自动失效。新增 `POST /llm/models/{vendor}/{modelCode}/verify`（body `{apiKey?}`），旧 `/llm/bindings/.../verify` 保留兼容；`LlmModelRouter.resolve` 改为查校验记录 + 指纹一致。
+- 模型类型：新增 `ModelType`（text / reasoning / vision / omni / image / video / audio / embedding / other），定义 `isChatCapable` 与 `fromCapabilities` / `inferFromCode`。多模态理解（vision）校验走百炼原生 `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`（公开示例图 + 极短指令）；图像/视频/语音/向量类只确认账号模型列表可见。
+- 同步：`LlmCatalogAdminService` 不再只保留 TG，拉取供应商全部模型并保存 `model_type`（百炼按 capabilities 映射、OpenAI 兼容按编码推断）；新增/编辑接口接受 `modelType`；目录/绑定 DTO 下发 `modelType` / `verifyError`。
+- 前端：`ModelTypeTag`（9 类中文名 + 颜色 + lucide 图标）；模型配置页去掉批量校验，改为每行「校验」并按草稿 AK 调用，状态区分已验证 / 已验证·待绑定 / 未校验 / 校验失败；模型目录新增类型列与类型表单项；对话页模型下拉带类型图标。`npm run build` EXIT=0。
+- 验证（8125）：未绑定 `qwen-plus` + 假 AK → 401 翻译（证明不要求绑定）；无 AK 且未绑定 → 系统兜底返回 403；临时 `vision` 模型假 AK 走原生 URL 返回 401；`modelType` 在 catalog/admin 列表贯通；已绑定但未校验的 `qwen3.8-flash` 对话返回「模型未通过连通校验」（40000）。测试模型/记录已清理，8125 已停止。
+- 已知缺口：无有效 LLM Key，多模态与同步的成功路径只能验证解析与错误路径；非对话模型是否允许绑定尚未定策略；未绑定校验记录暂无 TTL。
+## 2026-11-13 百炼地域 / 业务空间（019）
+
+- `docs/sql/019_llm_workspace_region.sql`：`user_llm_binding` 增 `workspace_id VARCHAR(64)` / `region VARCHAR(32)`，加索引 `idx_user_llm_binding_workspace(user_id,vendor_code,workspace_id)`。开发库 `OK executed=5`。
+- 生效地址：新增 `DashScopeEndpoint`（workspace/region 白名单、标准/空间域名拼装、去 `/compatible-mode`）与 `LlmEndpointService`（解析用户保存 → 配置 → 默认 `cn-beijing`，并生成「AK + workspace + region」复合指纹）。有 workspace → `https://{workspace}.{region}.maas.aliyuncs.com`；无 workspace → 标准域名或配置 `base-url`。
+- 保存：`user_llm_binding` 新增字段；`LlmVendorProps` 增 `workspace-id/region`；`CatalogVendorItem` 下发用户保存值 / 生效值 / 兜底标记 / 生效 baseUrl；`batchBind` 接收 `workspaceId/region`（null 不修改、空串清除），新绑定继承同供应商已有值。
+- 校验/路由/同步：`verify` 接收草稿 `workspaceId/region` 并按生效地址探测（多模态 URL 同源）；`LlmModelRouter` 校验指纹改复合值、ChatModel 缓存键加入地址指纹、`createModel` 用生效 baseUrl；管理端同步模型列表也走生效地址。
+- 前端：模型配置页「业务空间 / 地域」输入框（仅百炼），展示生效地址与系统兜底；保存与单模型校验都带草稿值；类型与 API 参数同步。`npm run build` EXIT=0。
+- 验证（8125）：`qwen3-vl-plus` 多模态校验在业务空间与标准域名均 valid=true（约 1s）；`batchBind` 保存 `llm-j09pwqdqv4no16ww` 后 catalog 生效地址为空间域名，且 `qwen-max` 真实对话返回「你好」；不传 workspace 的批量保存保留旧值；非法 workspace 被业务码 40000 拒绝；空间 `/api/v1/models` 可读（373 条）。测试绑定 / 模型上架状态 / 会话 / 校验记录已清理，8125 已停止。
+- 已知限制：`vision` 模型（如 `qwen3-vl-plus`）走现有文本生成对话路径会返回 `url error`（标准域名亦同），需后续接多模态生成路径；系统配置了 workspace 时，用户无法在同一页面强制走标准域名（清空即回落配置）。
+## 2026-11-13 百炼对话改 OpenAI 兼容接口（修复 Qwen3.8-27B `url error`）
+
+- 根因：`DashScopeVendorFactory` 用 `DashScopeChatModel` 走原生 `/api/v1/services/aigc/text-generation/generation`，该路径只覆盖老模型；`qwen3.8-27b`（capabilities `TG / Reasoning / VU`）原生接口直接 400 `url error`。实测同一 Key 下兼容接口 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` 与业务空间 `https://llm-j09pwqdqv4no16ww.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions` 均 200「你好」。
+- 对话工厂：`DashScopeVendorFactory` 改为 `OpenAiChatModel` + `OpenAiApi`，baseUrl 统一补 `/compatible-mode/v1`；因 Spring AI 默认再拼 `/v1/chat/completions`，显式设置 `completionsPath=/chat/completions`，避免 `/v1/v1` 404。AK / 生效业务空间 / 实例缓存键逻辑不变。
+- 校验：`LlmBindingVerifier` 的 VU 探测从原生 `multimodal-generation` 改为同一条兼容 `/chat/completions`（`image_url` + 极短文本），校验地址与对话地址一致；生成类请求超时由 20s 放宽到 60s（多模态实测 8~40s）。
+- 业务空间落库：校验通过且带草稿 `workspaceId/region` 时，回写该 `user+vendor` 下所有绑定行，保证对话 `resolveSaved` 拿到与校验相同的端点，避免「校验用空间域名、对话回落标准域名」。
+- 验证（8125）：`qwen3.8-27b` 用 `llm-j09pwqdqv4no16ww / cn-beijing` 校验 `valid=true`（约 4s），随后 `/chat/message` 返回 `code=0`「你好」（约 1.7s）；绑定表 `workspace_id=llm-j09pwqdqv4no16ww`、`region=cn-beijing`、指纹一致。测试会话已删除，8125 已停止。
+- 注意：Spring AI `OpenAiApi` 默认 completionsPath 是 `/v1/chat/completions`；接入任何已带版本段的 baseUrl 时必须显式覆盖，否则 404。`OpenAiCompatVendorFactory`（DeepSeek）同步修正：baseUrl 以 `/v1` 结尾时改用 `/chat/completions`，避免 `/v1/v1`。`qwen3.8-27b` 的 `model_type` 仍为 `vision`（同时具备 TG+VU），对话走兼容文本路径已可用。
+
+## 2026-11-13 模型目录记录全部模态 + 同步更新已有数据（020）
+
+- `docs/sql/020_llm_model_modalities.sql`：`llm_model` 增 `modalities VARCHAR(255)`（逗号分隔的 ModelType code），按 `model_type` 回填。开发库 `OK executed=3`，373 行无空值，且全部包含主类型。
+- `vc-llm/model/ModelType`：新增 `allFromCapabilities`（TG→text、Reasoning→reasoning、VU→vision、IG→image、VG→video、ASR/TTS→audio、ME→embedding、omni→omni），`primaryFrom` 决定主类型；不再遇 `VU` 直接返回、丢弃 `TG/Reasoning`。新增 `ModelModalities` 负责逗号串编解码与表单归一（模态里一定包含主类型）。
+- `vc-llm/service/LlmCatalogAdminService`：同步由「遇到同 code 直接 skipped」改为「按 code 映射已有行，刷新主类型与全部模态」；仅当展示名为空或等于编码时才用供应商名称覆盖，保留管理员自定义名称、上下架、温度、上下文；不删除供应商已下线模型。同步结果新增 `updated / updatedCodes / unchanged`（`skipped` 保留为 unchanged 兼容值）。
+- DTO：`AdminModelItem` / `CatalogModelItem` / `LlmModelItem` 增 `modalities`；`AdminModelSaveRequest` 接受 `modalities` 列表；新增/编辑接口保存全部模态。
+- 前端：`ModelTypeTag` 扩展 `ModelModalityTags` / `ModelModalityIcons`；管理目录类型列改为「类型 / 模态」多标签+按任一模态筛选，表单支持多选全部模态；模型配置页与对话下拉按全部模态展示图标。`npm run build` EXIT=0。
+- 验证（8125）：`mvn -o -q -pl vc-llm,vc-app -am -DskipTests compile` EXIT=0。首次同步 `total=373 / added=0 / updated=84 / unchanged=289`，`qwen3.8-27b` 由 `model_type=vision, modalities=[vision]` 变为 `model_type=reasoning, modalities=[text,reasoning,vision]`；二次同步 `updated=0 / unchanged=373`（幂等）。`/llm/models` 与 `/llm/catalog` 均下发三模态；`qwen3.8-27b` 对话 `code=0`「你好」约 1.54s。临时新增/编辑模型验证多模态保存后已删除；测试会话已删除，8125 已停止。

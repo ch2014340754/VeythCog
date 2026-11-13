@@ -9,7 +9,7 @@ import { http } from '@/api/client';
 import { config } from '@/config';
 import { useAuthStore } from '@/stores/authStore';
 
-/** 后端会话列表项（对话记忆聚合） */
+/** 后端会话列表项（chat_message 聚合 + chat_session 配置合并） */
 interface RemoteConversation {
   id: string;
   title: string;
@@ -17,6 +17,22 @@ interface RemoteConversation {
   messageCount: number;
   createdAt: number;
   updatedAt: number;
+  vendor?: string | null;
+  modelCode?: string | null;
+  knowledgeDocIds?: number[] | null;
+  compressEnabled?: boolean | null;
+}
+
+/** 后端会话配置（POST/PUT /chat/sessions） */
+export interface RemoteChatSession {
+  conversationId: string;
+  title: string;
+  vendor?: string | null;
+  modelCode?: string | null;
+  docIds?: number[] | null;
+  compressEnabled?: boolean | null;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 /** 后端会话消息项 */
@@ -43,6 +59,10 @@ export async function getConversations(): Promise<Conversation[]> {
     // 消息按需加载，避免列表页一次性拉全量
     messages: [],
     knowledgeBaseId: null,
+    knowledgeDocIds: item.knowledgeDocIds ?? [],
+    vendor: item.vendor ?? undefined,
+    modelCode: item.modelCode ?? undefined,
+    compressEnabled: item.compressEnabled !== false,
     createdAt: item.createdAt ?? Date.now(),
     updatedAt: item.updatedAt ?? Date.now(),
   }));
@@ -62,22 +82,50 @@ export async function getConversationMessages(conversationId: string): Promise<M
   }));
 }
 
-/** 创建新会话（仅存在于前端；首次发消息后由后端记忆表落库） */
+/** 创建新会话：id 由前端生成，同时写入 chat_session 持久化会话级配置 */
 export async function createConversation(
   title: string,
-  model?: { vendor?: string; modelCode?: string; modelName?: string }
+  model?: { vendor?: string; modelCode?: string; modelName?: string },
+  docIds?: number[],
+  compressEnabled = true
 ): Promise<Conversation> {
   const now = Date.now();
-  return {
-    id: generateId(),
+  const id = generateId();
+  const conversation: Conversation = {
+    id,
     title,
     lastMessage: '',
     messages: [],
     knowledgeBaseId: null,
+    knowledgeDocIds: docIds ?? [],
+    compressEnabled,
     ...model,
     createdAt: now,
     updatedAt: now,
   };
+  await http.post<RemoteChatSession>('/chat/sessions', {
+    conversationId: id,
+    title,
+    vendor: model?.vendor,
+    modelCode: model?.modelCode,
+    docIds: docIds && docIds.length > 0 ? docIds : undefined,
+    compressEnabled,
+  });
+  return conversation;
+}
+
+/** 更新会话配置（模型 / 标题 / 文档集合 / 压缩开关；null 字段不修改） */
+export async function updateConversation(
+  id: string,
+  patch: {
+    title?: string;
+    vendor?: string;
+    modelCode?: string;
+    docIds?: number[];
+    compressEnabled?: boolean;
+  }
+): Promise<RemoteChatSession> {
+  return http.put<RemoteChatSession>(`/chat/sessions/${encodeURIComponent(id)}`, patch);
 }
 
 /** 删除会话（清空后端该会话记忆行） */
@@ -91,13 +139,15 @@ export async function sendMessage(
   content: string,
   vendor: string,
   modelCode: string,
-  conversationId?: string | null
+  conversationId?: string | null,
+  compressEnabled = true
 ): Promise<string> {
   const reply = await http.post<string>('/chat/message', {
     message: content,
     vendor,
     modelCode,
     conversationId,
+    compressEnabled,
   });
   return reply;
 }
@@ -109,6 +159,8 @@ export interface StreamChatMessageOptions {
   conversationId?: string | null;
   /** 本次对话绑定的知识库文档 id；非空时由后端检索并注入上下文，引用随 SSE 下发 */
   docIds?: number[];
+  /** 是否开启上下文自动压缩（会话级配置） */
+  compressEnabled?: boolean;
   /** 后端产出的引用片段（event: references 到达时触发一次） */
   onReferences?: (references: RetrieveChunk[]) => void;
   /** 增量文本回调（每到达一个 token 触发一次） */
@@ -142,12 +194,19 @@ export function streamChatMessage(o: StreamChatMessageOptions): AbortController 
           modelCode: o.modelCode,
           conversationId: o.conversationId ?? undefined,
           docIds: o.docIds && o.docIds.length > 0 ? o.docIds : undefined,
+          compressEnabled: o.compressEnabled !== false,
         }),
         signal: controller.signal,
       });
 
       if (!resp.ok) {
         throw new Error(`流式请求失败 (${resp.status})`);
+      }
+      // 参数校验/业务异常可能以 JSON 返回（非 SSE）：解析 message 交给 onError，避免被当成空回复
+      const contentType = resp.headers.get('content-type') ?? '';
+      if (!contentType.includes('text/event-stream')) {
+        const body = (await resp.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message || '流式请求失败');
       }
 
       const reader = resp.body!.getReader();

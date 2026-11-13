@@ -54,6 +54,8 @@ export interface Conversation {
   vendor?: string;
   modelCode?: string;
   modelName?: string;
+  /** 是否开启上下文自动压缩（会话级，默认开启） */
+  compressEnabled?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -217,6 +219,10 @@ export interface LlmModelItem {
   modelCode: string;
   /** 显示名 */
   modelName: string;
+  /** 主类型：text / reasoning / vision / omni / image / video / audio / embedding / other */
+  modelType?: string;
+  /** 支持的全部模态（含主类型） */
+  modalities?: string[];
   /** 是否可用 */
   enabled: boolean;
   /** 是否默认模型 */
@@ -227,10 +233,18 @@ export interface LlmModelItem {
 export interface CatalogModelItem {
   modelCode: string;
   modelName: string;
+  /** 主类型：text / reasoning / vision / omni / image / video / audio / embedding / other */
+  modelType?: string;
+  /** 支持的全部模态（含主类型） */
+  modalities?: string[];
   /** 当前用户是否已绑定 */
   bound: boolean;
   isDefault: boolean;
   enabled: boolean;
+  /** 该模型是否已通过连通校验（与是否绑定无关） */
+  valid: boolean;
+  /** 最近一次校验失败原因 */
+  verifyError?: string | null;
 }
 
 /** 供应商枚举 + 其下模型目录 */
@@ -245,6 +259,18 @@ export interface CatalogVendorItem {
   apiKeyMasked: string | null;
   /** 配置文件是否配置了兜底 AK */
   hasFallbackKey: boolean;
+  /** 用户保存的业务空间 ID（未保存为 null） */
+  workspaceId: string | null;
+  /** 用户保存的地域代码（未保存为 null） */
+  region: string | null;
+  /** 当前生效的业务空间 ID（用户保存 → 系统配置兜底） */
+  effectiveWorkspaceId: string | null;
+  /** 当前生效的地域代码 */
+  effectiveRegion: string;
+  /** 系统是否配置了兜底业务空间 */
+  hasFallbackWorkspace: boolean;
+  /** 当前生效的调用根地址 */
+  effectiveBaseUrl: string;
 }
 
 /** 后端统一响应包装 */
@@ -290,7 +316,7 @@ export interface AdminVendorModel {
   isDefault: boolean;
 }
 
-/** 调用统计日项 */
+/** 调用统计日项（旧 mock 结构，保留给本地演示） */
 export interface CallStatDay {
   date: string;
   /** 调用次数 */
@@ -299,7 +325,7 @@ export interface CallStatDay {
   tokens: number;
 }
 
-/** 在线会话 */
+/** 在线会话（旧 mock 结构，保留给本地演示） */
 export interface OnlineSession {
   sessionId: string;
   username: string;
@@ -309,13 +335,130 @@ export interface OnlineSession {
   lastActiveAt: number;
 }
 
-/** 错误日志 */
+/** 错误日志（旧 mock 结构，保留给本地演示） */
 export interface ErrorLog {
   id: string;
   time: number;
   level: 'error' | 'warn';
   source: string;
   message: string;
+}
+
+// ---------- 系统监控（真实数据） ----------
+
+/** 概览卡片 */
+export interface MonitorOverview {
+  calls: number;
+  errors: number;
+  /** 业务错误率 0~1（后端按 biz_code 统计，不看 HTTP status） */
+  errorRate: number;
+  p95Ms: number;
+  avgCostMs: number;
+  llmCalls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** usage 缺失、按字符估算的调用数 */
+  estimatedCalls: number;
+  activeUsers: number;
+  onlineSessions: number;
+  callsLastMinute: number;
+}
+
+/** 趋势点：24h 内按小时、超过 24h 按天 */
+export interface MonitorPoint {
+  time: string;
+  calls: number;
+  errors: number;
+  avgCostMs: number;
+  p95Ms: number;
+  tokens: number;
+}
+
+/** 接口排行 */
+export interface MonitorEndpoint {
+  route: string;
+  method: string;
+  calls: number;
+  errors: number;
+  errorRate: number;
+  avgCostMs: number;
+  p95Ms: number;
+  maxCostMs: number;
+}
+
+/** 错误明细 */
+export interface MonitorError {
+  id: number;
+  time: string;
+  route: string;
+  method: string;
+  bizCode: number;
+  status: number;
+  userId: number | null;
+  rid: string;
+  message: string;
+}
+
+/** LLM 用量（按供应商 + 模型） */
+export interface MonitorLlmStat {
+  vendor: string;
+  modelCode: string;
+  calls: number;
+  errors: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  avgLatencyMs: number;
+  maxLatencyMs: number;
+}
+
+export interface MonitorLlmSummary {
+  rows: MonitorLlmStat[];
+  calls: number;
+  totalTokens: number;
+  errors: number;
+}
+
+/** 在线会话 */
+export interface MonitorSession {
+  sid: string;
+  userId: number | null;
+  username: string;
+  nickname: string | null;
+  ip: string;
+  userAgent: string;
+  loginAt: string;
+  lastActiveAt: string;
+  online: boolean;
+  status: string;
+}
+
+/** 服务资源占用 */
+export interface MonitorResource {
+  osName: string;
+  osVersion: string;
+  cpuCores: number;
+  /** <0 表示拿不到 */
+  systemCpuLoad: number;
+  processCpuLoad: number;
+  systemLoadAverage: number;
+  memoryTotal: number;
+  memoryUsed: number;
+  swapTotal: number;
+  swapUsed: number;
+  heapUsed: number;
+  heapMax: number;
+  heapCommitted: number;
+  nonHeapUsed: number;
+  liveThreads: number;
+  jvmUptimeMs: number;
+  jvmStartTime: string;
+  diskPath: string;
+  diskTotal: number;
+  diskUsable: number;
+  diskUsed: number;
+  sampledAt: string;
 }
 
 /** 审计日志 */
