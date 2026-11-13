@@ -11,6 +11,7 @@ import volumeXIcon from '@iconify-icons/lucide/volume-x';
 import listMusicIcon from '@iconify-icons/lucide/list-music';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useMusicStore } from '@/stores/musicStore';
 import { mockTracks, formatTime } from '@/mock/music';
 
 const CARD_WIDTH = 340;
@@ -28,7 +29,11 @@ const FloatingMusicPlayer: React.FC = () => {
   const { colors } = useTheme();
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
   /** 固定模式：true=始终展开不自动收起（左箭头）；false=鼠标移开自动隐藏（右箭头） */
-  const [pinned, setPinned] = useState(false);
+  const pinned = useMusicStore((s) => s.pinned);
+  const openMusic = useMusicStore((s) => s.open);
+  const closeMusic = useMusicStore((s) => s.close);
+  /** 外部入口（首页工具条）触发的展开 */
+  const opened = useMusicStore((s) => s.opened);
   const [hovered, setHovered] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -67,7 +72,7 @@ const FloatingMusicPlayer: React.FC = () => {
   }, []);
 
   const track = mockTracks[currentIndex];
-  const expanded = pinned || hovered;
+  const expanded = pinned || hovered || opened;
 
   // 初始化 audio
   useEffect(() => {
@@ -153,8 +158,11 @@ const FloatingMusicPlayer: React.FC = () => {
       setDragging(false);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      // 没拖动 → 点击切换 固定/自动隐藏
-      if (!moved) setPinned((v) => !v);
+      // 没拖动 → 点击切换 固定/自动隐藏；取消固定时一并清掉外部展开态，保证能收起
+      if (!moved) {
+        if (pinned) closeMusic();
+        else openMusic();
+      }
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -207,7 +215,7 @@ const FloatingMusicPlayer: React.FC = () => {
         {!expanded && (
           <div
             onMouseEnter={() => setHovered(true)}
-            onClick={() => setPinned(true)}
+            onClick={() => openMusic()}
             style={{
               position: 'absolute',
               left: 0,

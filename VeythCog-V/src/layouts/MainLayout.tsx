@@ -1,4 +1,3 @@
-import FloatingMusicPlayer from '@/components/FloatingMusicPlayer';
 import UserMenu from '@/components/UserMenu';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -213,9 +212,6 @@ const MainLayout: React.FC = () => {
           <Outlet />
         </div>
       </main>
-
-      {/* 全局浮动音乐播放器（mock） */}
-      <FloatingMusicPlayer />
     </div>
   );
 };

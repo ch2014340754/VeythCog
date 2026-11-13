@@ -8,6 +8,7 @@ import MainLayout from '@/layouts/MainLayout';
 import HomePage from '@/pages/Home';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import WallpaperBackdrop from '@/components/WallpaperBackdrop';
+import FloatingMusicPlayer from '@/components/FloatingMusicPlayer';
 import { useAuthStore } from '@/stores/authStore';
 import { useNavStore } from '@/stores/navStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
@@ -69,6 +70,13 @@ const WallpaperRouteSync: React.FC = () => {
   return null;
 };
 
+/** 全局音乐播放器：受保护页面与首页共用同一实例，登录页不挂载 */
+const GlobalMusic: React.FC = () => {
+  const { pathname } = useLocation();
+  if (pathname === '/login') return null;
+  return <FloatingMusicPlayer />;
+};
+
 const AppContent: React.FC = () => {
   const { presetName, isDark } = useTheme();
   const token = useAuthStore((s) => s.token);
@@ -93,6 +101,7 @@ const AppContent: React.FC = () => {
       <WallpaperBackdrop />
       <BrowserRouter>
         <WallpaperRouteSync />
+        <GlobalMusic />
         <ErrorBoundary>
           <React.Suspense
             fallback={

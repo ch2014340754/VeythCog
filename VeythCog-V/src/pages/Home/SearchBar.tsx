@@ -186,6 +186,13 @@ const SearchBar: React.FC = () => {
   const searchStatusRequestedRef = React.useRef(false);
   const aliveRef = React.useRef(true);
 
+  /** 空闲渐隐：鼠标未悬停、输入框未聚焦、面板关闭且 AI 空闲时，3 分钟后淡化为淡轮廓 */
+  const FADE_TIMEOUT_MS = 3 * 60 * 1000;
+  const [dimmed, setDimmed] = React.useState(false);
+  const hoverRef = React.useRef(false);
+  const focusRef = React.useRef(false);
+  const fadeTimerRef = React.useRef<number | null>(null);
+
   React.useEffect(() => {
     aliveRef.current = true;
     return () => {
@@ -278,6 +285,25 @@ const SearchBar: React.FC = () => {
     return [...localSuggestions, ...remote];
   }, [localSuggestions, remoteSuggestions]);
 
+  // 引用按文档聚合：同一篇文档的多个分片合并为一条来源，避免标题重复堆叠
+  const sourceGroups = React.useMemo(() => {
+    const map = new Map<number, { docId: number; title: string; chunks: number[]; preview: string }>();
+    for (const ref of ai.references) {
+      const group = map.get(ref.docId);
+      if (group) {
+        group.chunks.push(ref.chunkIndex);
+      } else {
+        map.set(ref.docId, {
+          docId: ref.docId,
+          title: ref.title,
+          chunks: [ref.chunkIndex],
+          preview: ref.chunkText,
+        });
+      }
+    }
+    return [...map.values()];
+  }, [ai.references]);
+
   // 远端联想：300ms 防抖，仅对非 URL、长度 ≥2 的输入请求
   React.useEffect(() => {
     const query = q.trim();
@@ -350,6 +376,43 @@ const SearchBar: React.FC = () => {
       window.removeEventListener('mousedown', close);
     };
   }, [panelOpen, engineOpen, ai.status]);
+
+  // ---- 空闲渐隐调度：悬停 / 聚焦 / 面板展开 / AI 作答期间保持清晰，其余 3 分钟后淡化 ----
+  const clearFadeTimer = React.useCallback(() => {
+    if (fadeTimerRef.current !== null) {
+      window.clearTimeout(fadeTimerRef.current);
+      fadeTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleFade = React.useCallback(() => {
+    clearFadeTimer();
+    const active =
+      hoverRef.current || focusRef.current || panelOpen || engineOpen || ai.status !== 'idle';
+    if (active) {
+      setDimmed(false);
+      return;
+    }
+    fadeTimerRef.current = window.setTimeout(() => {
+      fadeTimerRef.current = null;
+      setDimmed(true);
+    }, FADE_TIMEOUT_MS);
+  }, [clearFadeTimer, panelOpen, engineOpen, ai.status]);
+
+  const wake = React.useCallback(() => {
+    clearFadeTimer();
+    setDimmed(false);
+    scheduleFade();
+  }, [clearFadeTimer, scheduleFade]);
+
+  // 面板 / AI 状态变化时重新判定是否进入空闲
+  React.useEffect(() => {
+    scheduleFade();
+    return clearFadeTimer;
+  }, [scheduleFade, clearFadeTimer]);
+
+  // 卸载清理计时
+  React.useEffect(() => clearFadeTimer, [clearFadeTimer]);
 
   // 输入变化时终止旧 AI 流，避免旧结果落到新问题
   const stopAi = React.useCallback(() => {
@@ -513,7 +576,26 @@ const SearchBar: React.FC = () => {
     translation.translatedText.trim() !== q.trim();
 
   return (
-    <div ref={rootRef} style={{ position: 'relative', zIndex: 60, width: '100%', maxWidth: 640, margin: '0 auto 32px' }}>
+    <div
+      ref={rootRef}
+      onMouseEnter={() => {
+        hoverRef.current = true;
+        wake();
+      }}
+      onMouseLeave={() => {
+        hoverRef.current = false;
+        scheduleFade();
+      }}
+      style={{
+        position: 'relative',
+        zIndex: 60,
+        width: '100%',
+        maxWidth: 640,
+        margin: '0 auto 32px',
+        opacity: dimmed ? 0.16 : 1,
+        transition: 'opacity 0.6s ease',
+      }}
+    >
       <div
         style={{
           display: 'flex',
@@ -641,9 +723,15 @@ const SearchBar: React.FC = () => {
           value={q}
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => {
+            focusRef.current = true;
+            wake();
             ensureAllBookmarks();
             ensureSearchStatus();
             if (q.trim()) setPanelOpen(true);
+          }}
+          onBlur={() => {
+            focusRef.current = false;
+            scheduleFade();
           }}
           onKeyDown={handleKeyDown}
           placeholder="输入搜索内容，Ctrl/Cmd+Enter 让 AI 回答"
@@ -861,27 +949,42 @@ const SearchBar: React.FC = () => {
                 </div>
               )}
 
-              {ai.references.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '4px 12px 8px' }}>
-                  {ai.references.map((ref, index) => (
-                    <span
-                      key={`${ref.docId}-${ref.chunkIndex}`}
-                      title={ref.chunkText}
+              {sourceGroups.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 12px 8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: panelSubText }}>
+                    <Icon icon={bookOpenIcon} width={12} />
+                    参考来源 · 知识库文档（{sourceGroups.length} 篇）
+                  </div>
+                  {sourceGroups.map((group) => (
+                    <div
+                      key={group.docId}
+                      title={group.preview}
                       style={{
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        padding: '3px 8px',
-                        borderRadius: 999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 10px',
+                        borderRadius: 10,
                         background: panelInputBg,
                         border: `1px solid ${panelDivider}`,
-                        color: panelSubText,
-                        fontSize: 11,
+                        fontSize: 12,
                       }}
                     >
-                      [{index + 1}] {ref.title}
-                    </span>
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          color: panelText,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        《{group.title || '未命名文档'}》
+                      </span>
+                      <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 10, color: panelSubText }}>
+                        分片 {group.chunks.map((c) => `#${c}`).join('、')}
+                      </span>
+                    </div>
                   ))}
                 </div>
               )}

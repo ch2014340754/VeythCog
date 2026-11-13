@@ -342,7 +342,7 @@ const ModelsPage: React.FC = () => {
       title: '类型 / 模态',
       dataIndex: 'modalities',
       key: 'modalities',
-      width: 218,
+      width: 300,
       filters: MODEL_TYPE_OPTIONS.map((option) => ({
         text: option.label,
         value: option.value,

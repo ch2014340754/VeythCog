@@ -76,7 +76,7 @@ public class SearchService {
         prompt.append("你是 VeythCog 的搜索助手。请用简洁中文回答用户问题：")
                 .append("先用一两句话给结论，再列 3 到 5 条要点；")
                 .append("不要展开无关背景；不确定时直接说明，不要编造来源。")
-                .append("回答末尾另起一行写“AI 生成，未联网核实”。\n\n");
+                .append("回答末尾另起一行写“AI 生成，未联网核实。”；不要自行罗列资料来源，来源由系统在回答下方统一标注。\n\n");
 
         if (knowledgeFirst) {
             if (references == null || references.isEmpty()) {

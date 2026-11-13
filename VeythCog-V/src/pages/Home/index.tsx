@@ -21,6 +21,7 @@ import BookmarkModal from './BookmarkModal';
 import CategoryManageModal from './CategoryManageModal';
 import CategorySidebar from './CategorySidebar';
 import Clock from './Clock';
+import HomeDock from './HomeDock';
 import HomeSidebar from './HomeSidebar';
 import QuoteBar from './QuoteBar';
 import SearchBar from './SearchBar';
@@ -85,6 +86,8 @@ const HomePage: React.FC = () => {
   const [editingBookmark, setEditingBookmark] = React.useState<NavBookmark | null>(null);
   const [categoryManageOpen, setCategoryManageOpen] = React.useState(false);
   const [wallpaperManagerOpen, setWallpaperManagerOpen] = React.useState(false);
+  /** 书签图标版块显隐（底部工具条第一个开关，带过渡动画） */
+  const [gridVisible, setGridVisible] = React.useState(true);
   /** 右键菜单：书签菜单 / 空白区菜单，同一时间只允许一个 */
   const [menu, setMenu] = React.useState<
     | { kind: 'bookmark'; bookmark: NavBookmark; x: number; y: number }
@@ -258,22 +261,36 @@ const HomePage: React.FC = () => {
 
         {/* 切换区：搜索框不参与，只有书签网格从底部弹入。
             key 取 dataCategoryId —— 新分类的书签真正到位时才重挂载、播一次；
-            同一分类内的静默刷新（图标同步完成）不会重播。 */}
+            同一分类内的静默刷新（图标同步完成）不会重播。
+            外层 wrapper 承担版块显隐过渡（opacity / 位移 / 高度）。 */}
         <div
-          key={dataCategoryId ?? 'nav-empty'}
-          className="vc-nav-pop"
-          style={{ paddingTop: '40px' }}
+          style={{
+            overflow: 'hidden',
+            maxHeight: gridVisible ? 1600 : 0,
+            opacity: gridVisible ? 1 : 0,
+            transform: gridVisible ? 'translateY(0)' : 'translateY(16px)',
+            transition:
+              'max-height 0.35s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), opacity 0.3s ease, transform 0.35s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1))',
+            pointerEvents: gridVisible ? 'auto' : 'none',
+          }}
         >
-          <BookmarkGrid
-            onAddBookmark={handleAddBookmark}
-            onEditBookmark={handleEditBookmark}
-            onContextMenu={(b, e) => setMenu({ kind: 'bookmark', bookmark: b, x: e.clientX, y: e.clientY })}
-          />
+          <div
+            key={dataCategoryId ?? 'nav-empty'}
+            className="vc-nav-pop"
+            style={{ paddingTop: '40px' }}
+          >
+            <BookmarkGrid
+              onAddBookmark={handleAddBookmark}
+              onEditBookmark={handleEditBookmark}
+              onContextMenu={(b, e) => setMenu({ kind: 'bookmark', bookmark: b, x: e.clientX, y: e.clientY })}
+            />
+          </div>
         </div>
       </div>
 
       <CategorySidebar onAddCategory={() => setCategoryManageOpen(true)} />
       <QuoteBar />
+      <HomeDock gridVisible={gridVisible} onToggleGrid={() => setGridVisible((v) => !v)} />
 
       {/* 全局右键菜单：书签菜单 / 空白区菜单共用一个容器 */}
       {menu && (

@@ -339,33 +339,81 @@ public class LlmBindingVerifier {
 
     // ---------------- 错误翻译 ----------------
 
-    /** 把上游报错翻译成用户能判断「该改什么」的一句话 */
-    private static String describe(RuntimeException e) {
+    /**
+     * 把上游报错翻译成用户能判断「该改什么」的一句话。
+     *
+     * <p>优先解析上游 JSON 错误体（Spring AI 透传形如 {@code 403 - {"error":{...}}}），
+     * 按错误码精确区分「用完即停 / 余额不足 / 无权限 / Key 无效」；无法识别时保留上游原始
+     * message，避免笼统的「额度不足」掩盖真实原因。</p>
+     */
+    private String describe(RuntimeException e) {
         String raw = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         String lower = raw.toLowerCase(Locale.ROOT);
+        UpstreamError upstream = parseUpstream(raw);
+        String code = upstream.code() == null ? "" : upstream.code().toLowerCase(Locale.ROOT);
+
         if (lower.contains("timeout") || lower.contains("timed out")) {
             return "请求超时，请检查网络或代理";
         }
-        if (lower.contains("401") || lower.contains("invalid_api_key") || lower.contains("invalid api key")
-                || lower.contains("unauthorized") || lower.contains("incorrect api key")) {
+        if (lower.contains("401") || code.equals("invalid_api_key")
+                || lower.contains("invalid api key") || lower.contains("unauthorized")
+                || lower.contains("incorrect api key")) {
             return "API Key 无效或已过期，请重新填写";
         }
-        if (lower.contains("403") || lower.contains("freetieronly") || lower.contains("quota")
-                || lower.contains("insufficient") || lower.contains("balance")
-                || lower.contains("allocationquota")) {
-            return "Key 有效但额度不足或无调用权限（上游返回 403）";
+        if (code.contains("freetieronly") || lower.contains("freetieronly")) {
+            return "免费额度已用完且开启了「免费额度用完即停」：请在百炼控制台「免费额度」页面关闭该开关，"
+                    + "确认余额到账后即可按量付费";
         }
-        if (lower.contains("404") || lower.contains("model_not_found") || lower.contains("does not exist")
+        if (code.contains("insufficient_quota") || code.contains("insufficient_balance")
+                || code.contains("quota_exceeded") || lower.contains("insufficient")
+                || lower.contains("balance") || lower.contains("allocationquota")) {
+            return "账户余额或调用额度不足，请充值后重试";
+        }
+        if (lower.contains("403")) {
+            return "无该模型调用权限（上游 403）：请确认 AK 所属账号/业务空间已开通此模型";
+        }
+        if (lower.contains("404") || code.equals("model_not_found")
+                || lower.contains("model_not_found") || lower.contains("does not exist")
                 || lower.contains("model not found")) {
             return "模型不存在或该账号无权访问此模型";
         }
         if (lower.contains("429") || lower.contains("rate limit")) {
             return "触发上游限流，请稍后重试";
         }
-        if (lower.contains("未配置密钥") || lower.contains("未配置可用 ak")) {
+        if (raw.contains("未配置密钥") || raw.contains("未配置可用 ak")) {
             return "该供应商未配置可用 AK（用户 AK 与系统兜底均为空）";
         }
-        return truncate("校验失败：" + raw, 300);
+        // 兜底：透出上游真实报错（英文 message 一并保留，便于定位）
+        String detail = StringUtils.hasText(upstream.message()) ? upstream.message() : raw;
+        return truncate("校验失败：" + detail, 300);
+    }
+
+    /** 从异常文本中提取上游错误体的 code / message；解析失败返回空值 */
+    private UpstreamError parseUpstream(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return new UpstreamError(null, null);
+        }
+        int start = raw.indexOf('{');
+        int end = raw.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            return new UpstreamError(null, null);
+        }
+        try {
+            JsonNode root = objectMapper.readTree(raw.substring(start, end + 1));
+            JsonNode error = root.path("error");
+            JsonNode target = error.isObject() ? error : root;
+            // 部分厂商只给 type 不给 code，code 缺失时回落 type
+            String code = target.path("code").asText(null);
+            if (!StringUtils.hasText(code)) {
+                code = target.path("type").asText(null);
+            }
+            return new UpstreamError(code, target.path("message").asText(null));
+        } catch (IOException ignore) {
+            return new UpstreamError(null, null);
+        }
+    }
+
+    private record UpstreamError(String code, String message) {
     }
 
     private static int elapsed(long start) {
