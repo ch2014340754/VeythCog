@@ -13,4 +13,6 @@ public interface LlmModelRepository extends JpaRepository<LlmModel, Long> {
     List<LlmModel> findByEnabledTrue();
 
     List<LlmModel> findByVendorCodeAndEnabledTrue(String vendorCode);
+
+    List<LlmModel> findByVendorCode(String vendorCode);
 }

@@ -42,4 +42,16 @@ public class UserLlmBinding implements Serializable {
 
     @Column(name = "create_time", insertable = false, updatable = false)
     private LocalDateTime createTime;
+
+    /**
+     * 用户自持 API Key 的 AES-256-GCM 密文（base64(iv):base64(ct)）。
+     * <p>语义为「用户 + 供应商」级：同一 vendor 下所有绑定行共享同一份密文；
+     * 为 NULL 时回落到配置文件 llm.vendors.*.api-key。</p>
+     */
+    @Column(name = "api_key_cipher")
+    private String apiKeyCipher;
+
+    /** 最近一次写入用户 AK 的时间 */
+    @Column(name = "api_key_updated_at")
+    private LocalDateTime apiKeyUpdatedAt;
 }

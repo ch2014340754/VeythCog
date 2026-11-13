@@ -239,6 +239,12 @@ export interface CatalogVendorItem {
   vendorName: string;
   baseUrl: string;
   models: CatalogModelItem[];
+  /** 当前用户是否已配置自持 AK */
+  hasApiKey: boolean;
+  /** 用户 AK 脱敏值（未配置为 null） */
+  apiKeyMasked: string | null;
+  /** 配置文件是否配置了兜底 AK */
+  hasFallbackKey: boolean;
 }
 
 /** 后端统一响应包装 */

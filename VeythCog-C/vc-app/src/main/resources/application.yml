@@ -30,6 +30,9 @@ spring:
           dimensions: 1024
           text-type: document
 llm:
+  # 用户自持 API Key 的加密口令：只走环境变量，禁止硬编码；未配置时保存 Key 会返回明确错误
+  api-key-crypto:
+    secret: ${LLM_KEY_AES_SECRET:}
   # 辅助小模型：知识库摘要/标签生成 + RAG 检索 rerank，与用户对话模型解耦
   aux-model:
     vendor: dashscope

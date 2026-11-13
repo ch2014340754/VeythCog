@@ -60,14 +60,14 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
   const fallbackBg = isWallpaperMode ? 'rgba(0,0,0,0.3)' : colors.surfaceElevated;
   const fallbackColor = isWallpaperMode ? '#fff' : colors.text;
 
-  const imgSize = Math.round(size * 0.62);
+  const imgSize = Math.round(size * 0.9);
 
   return (
     <div
       style={{
         width: size,
         height: size,
-        borderRadius: Math.round(size * 0.24),
+        borderRadius: Math.round(size * 0.15),
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
@@ -87,7 +87,7 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
         <span
           style={{
             color: readableTextColor(icon.color),
-            fontSize: Math.round(size * 0.2),
+            fontSize: Math.round(size * 0.3),
             fontWeight: 400,
             lineHeight: 1,
             userSelect: 'none',

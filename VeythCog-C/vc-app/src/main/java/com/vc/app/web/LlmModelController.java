@@ -2,8 +2,10 @@ package com.vc.app.web;
 
 import com.vc.common.BaseResponse;
 import com.vc.common.ResultUtils;
+import com.vc.llm.dto.BatchBindResult;
 import com.vc.llm.dto.CatalogVendorItem;
 import com.vc.llm.dto.LlmModelItem;
+import com.vc.llm.dto.VendorKeyStatus;
 import com.vc.llm.service.LlmModelService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -49,6 +51,27 @@ public class LlmModelController {
     public BaseResponse<Boolean> bind(@Valid @RequestBody BindRequest request) {
         return ResultUtils.success(llmModelService.bind(
                 currentUserId(), request.getVendor(), request.getModelCode(), request.getIsDefault()));
+    }
+
+    /** 批量绑定：供应商 → 多选模型 + 可选新 AK + 可选默认模型 */
+    @PostMapping("/bindings/batch")
+    public BaseResponse<BatchBindResult> batchBind(@Valid @RequestBody BatchBindRequest request) {
+        return ResultUtils.success(llmModelService.batchBind(
+                currentUserId(), request.getVendor(), request.getModelCodes(),
+                request.getApiKey(), request.getDefaultModelCode()));
+    }
+
+    /** 单独编辑某供应商的用户 AK */
+    @PutMapping("/vendors/{vendor}/api-key")
+    public BaseResponse<VendorKeyStatus> updateVendorKey(@PathVariable String vendor,
+                                                         @Valid @RequestBody ApiKeyRequest request) {
+        return ResultUtils.success(llmModelService.updateVendorKey(currentUserId(), vendor, request.getApiKey()));
+    }
+
+    /** 清除某供应商的用户 AK，回落到配置文件兜底 */
+    @DeleteMapping("/vendors/{vendor}/api-key")
+    public BaseResponse<VendorKeyStatus> clearVendorKey(@PathVariable String vendor) {
+        return ResultUtils.success(llmModelService.clearVendorKey(currentUserId(), vendor));
     }
 
     /** 解绑模型 */

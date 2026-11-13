@@ -2,7 +2,7 @@
 
 > **本文件用途**：给未来的 AI Agent（以及协作者）快速恢复项目心智模型，减少每次迭代重新摸底的成本。
 > **维护规则**：每次项目迭代（改架构、加接口、换库、迁移模块）后，由 Agent 在本文件同步更新，并保持与真实代码一致。
-> **信息基准**：2026-11-09，依据对仓库源码与配置的实际遍历（非仅凭 README）。
+> **信息基准**：2026-11-13，依据对仓库源码与配置的实际遍历（非仅凭 README）。
 
 ---
 
@@ -86,10 +86,12 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 **vc-llm**（`com.vc.llm`）—— LLM 调度网关（面试深水区①）：
 - `enums/LlmVendor`：**供应商固定枚举**（`dashscope` 阿里百炼 / `deepseek`），不建表。
 - `entity/LlmModel`（模型目录）、`entity/UserLlmBinding`（用户-模型绑定中间表）。
-- `factory/LlmVendorFactory` + `DashScopeVendorFactory` / `OpenAiCompatVendorFactory`：按供应商创建 `ChatModel`，收敛厂商差异。
-- `router/LlmModelRouter`：核心。校验绑定→查模型→`ConcurrentHashMap` 缓存 `ChatClient` 实例（key=`vendor:modelCode`）→ 挂 `MessageChatMemoryAdvisor`（JDBC 记忆）→ 提供**同步 `chat()` 与流式 `stream()`**。
-- `config/LlmVendorProps`：AK/baseUrl 配置映射（`llm.vendors.*`）。
-- `service/LlmModelService`：绑定查询/目录/绑定/解绑/设默认（应用层保证默认唯一：设默认先清该用户其他默认）。
+- `factory/LlmVendorFactory` + `DashScopeVendorFactory` / `OpenAiCompatVendorFactory`：按供应商创建 `ChatModel`，收敛厂商差异；**DashScope 必须按入参 AK 动态构建**（`DashScopeApi.builder().apiKey(...)`），不得复用 starter 全局单例，否则用户自持 Key 不生效。
+- `router/LlmModelRouter`：核心。校验绑定→查模型→解析密钥（**用户自持 AK（AES 解密）优先 → 配置文件 AK 兜底**）→`ConcurrentHashMap` 缓存 `ChatClient`（key=`userId:vendor:modelCode:SHA256(key) 前8位`，换 Key 自然 miss）→ 挂 `MessageChatMemoryAdvisor`（JDBC 记忆）→ 提供**同步 `chat()` 与流式 `stream()`**。
+- `config/LlmVendorProps`：配置 AK/baseUrl（`llm.vendors.*`，兜底用）。
+- `config/ApiKeyCryptoProps` + `crypto/ApiKeyCryptoService`：用户 Key 的 AES-256-GCM 加解密与脱敏，口令取 `LLM_KEY_AES_SECRET`（未配置时保存/解密报明确错误，不影响启动）。
+- `service/LlmModelService`：绑定查询/目录/批量绑定/解绑/设默认/编辑或清除用户 AK（应用层保证默认唯一；AK 为「用户 + 供应商」级，同一 vendor 下所有绑定行共享密文）。
+- `service/LlmCatalogAdminService`：管理端模型目录 CRUD + 上下架 + 从供应商同步（百炼原生 `/api/v1/models` 按 `capabilities=TG` 过滤、DeepSeek 走 OpenAI 兼容 `/models`）；同步 AK 取服务端兜底配置，缺失时回退管理员的用户自持 AK。
 - `LlmChatService`：对外的对话入口，转发到 `LlmModelRouter`。
 
 **vc-chat**（`com.vc.chat`）—— 对话域（无 Controller）：
@@ -151,8 +153,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | 表 | 说明 | 关键约束 |
 |---|---|---|
 | `app_user` | 用户 | username unique；password 为 BCrypt |
-| `llm_model` | 模型目录（vendor_code 仅存字符串，供应商为枚举不建表） | unique(vendor_code, model_code) |
-| `user_llm_binding` | 用户-模型绑定中间表 | unique(user_id, vendor_code, model_code)；is_default 应用层保证每用户至多 1 个 |
+| `llm_model` | 模型目录（vendor_code 仅存字符串，供应商为枚举不建表） | unique(vendor_code, model_code)；由 `/admin/llm-models` 增删改查 + 上下架，启动时仅在**空表**插入 qwen-plus / deepseek-chat 两条种子 |
+| `user_llm_binding` | 用户-模型绑定中间表 | unique(user_id, vendor_code, model_code)；is_default 应用层保证每用户至多 1 个；`api_key_cipher`（TEXT，AES-256-GCM 密文 `base64(iv):base64(ct)`）/ `api_key_updated_at`（`015_user_llm_binding_api_key.sql`），NULL = 配置兜底；AK 为「用户 + 供应商」级，同 vendor 各行共享密文 |
 | `chat_message` | 对话记忆（Spring AI JDBC 落库） | unique(conversation_id, seq)；conversation_id=`userId:conversationId` |
 | `knowledge_doc` | 知识库文档 | 无 `lib_type`（历史列已由 `011` 删除）；block_data JSONB 权威源；markdown_text 派生缓存；tags text[]；deleted 软删除；summary ≤500。新库按 `009→010→011` 执行 |
 | `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ `embedding_model` 标识（禁止不同模型向量混查）；doc_id 外键（软删除时显式清理，不依赖级联）。⚠️ `embedding_model` 由 `010` 补充，服务器库已执行 |
@@ -174,8 +176,18 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | GET | `/llm/models` | - | 是（当前用户绑定启用模型） |
 | GET | `/llm/catalog` | - | 是（供应商枚举+模型目录+绑定标记） |
 | POST | `/llm/bindings` | {vendor, modelCode, isDefault?} | 是 |
+| POST | `/llm/bindings/batch` | {vendor, modelCodes[], apiKey?, defaultModelCode?} | 是（供应商→多选模型；apiKey 留空不改；空数组=解绑该供应商全部；default 必须来自选中集合） |
+| PUT | `/llm/vendors/{vendor}/api-key` | {apiKey} | 是（加密写入该供应商下全部绑定行） |
+| DELETE | `/llm/vendors/{vendor}/api-key` | - | 是（清除用户 AK，回落配置兜底） |
 | DELETE | `/llm/bindings/{vendor}/{modelCode}` | - | 是 |
 | PUT | `/llm/bindings/{vendor}/{modelCode}/default` | - | 是 |
+| GET | `/admin/llm-models` | - | **仅 admin**（全部模型含未上架 + bindingCount） |
+| GET | `/admin/llm-models/vendors` | - | 仅 admin（供应商枚举选项） |
+| POST | `/admin/llm-models` | {vendor, modelCode, modelName?, maxContextTokens?, temperature?, enabled?} | 仅 admin（编码重复 40000） |
+| PUT | `/admin/llm-models/{id}` | 同上 | 仅 admin（已有绑定则禁止改供应商/编码） |
+| DELETE | `/admin/llm-models/{id}` | - | 仅 admin（仍有用户绑定 → 40000） |
+| PUT | `/admin/llm-models/{id}/enabled` | {enabled} | 仅 admin（上架/下架） |
+| POST | `/admin/llm-models/sync` | {vendor, enableNew?} | 仅 admin（从供应商拉取可对话模型，只增不删，新增默认不上架） |
 | POST | `/chat/message` | {message, vendor, modelCode, conversationId?, docIds?} | 是（同步返回 string；docIds 非空时后端先召回再拼上下文） |
 | POST | `/chat/stream` | {message, vendor, modelCode, conversationId?, docIds?} | 是（SSE：先 `event: references`（JSON 数组），后 `data: <token>`，末尾 `data: [DONE]`，错误 `event:error`） |
 | GET | `/chat/conversations` | - | 是（会话列表来自 `chat_message` 记忆表，剥离 `userId:` 前缀，按最近活动倒序） |
@@ -244,6 +256,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 新建会话可选模型并写入 `Conversation.vendor/modelCode/modelName`；进入已有会话后**下拉禁用**（会话内禁切）。无绑定→空态引导去模型配置页。
 
 ### 7.5 其他已落地
+- **模型配置页（2026-11-13 重构）**：供应商卡片内「多选模型 + 编辑 AK + 默认模型」一次保存（`POST /llm/bindings/batch`）；AK 输入框密码态、脱敏占位（`sk-a****7890`）、留空不改、`清除我的 AK` 回落系统兜底；保存/清除走静默刷新 + 卡片顶部 2px 细进度条，不整块 Spin。
+- **系统管理 · 模型目录页（2026-11-13 接真）**：`Admin/Models.tsx` 原为前端 mock，现接 `/admin/llm-models`；表格按供应商分组展示、支持全部/已上架/未上架筛选、上架开关、编辑（已绑定模型锁定供应商与编码）、删除（有绑定则禁用并提示）、新增、从供应商同步（弹窗选供应商 + 是否直接上架，结果弹窗列出新增编码）。所有变更静默刷新 + 顶部细进度条。
 - 导航首页（`/home`，对标 iTab）：分类竖栏 + 书签网格 + 壁纸；`BookmarkModal` 按 iTab「自定义图标」重做，支持「获取图标 / 上传图片 / 文字图标 + 12 色板 / 保存并继续」；`BookmarkIcon` 先查 localStorage 图标缓存，未命中再 `GET /nav/bookmarks/{id}/icon`，不再实时拼对方站点 favicon；进入首页延后 1.5s 触发一次 `POST /nav/icons/sync`（后端幂等 + 失败冷却）。
 - 主题系统：6 预设 × 亮暗 + **全局毛玻璃开关**（CSS 变量 + inline style 双轨）。
 - 浮动音乐播放器（`FloatingMusicPlayer`，真 `<audio>`，mock 歌单）。
@@ -259,8 +273,9 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 配置文件：`vc-app/src/main/resources/application.yml`（通用）+ `application-local.yml`（**本地环境，已被 .gitignore 忽略，不入库**）。
 - **当前 active：PostgreSQL（个人服务器 docker 容器，连接串在 application-local.yml）**；`docs/architecture.md` 记的"MySQL 先行"已过时。
 - 导航图标同步：`nav.icon.sync-on-startup`（默认 `true`）控制启动时后台补同步，离线演示可设 `false`；单次上限 200 条，2 线程守护池，失败按 1 天冷却。
-- **安全红线**：`application-local.yml` 含**真实 DashScope AK 与数据库密码，严禁写入任何文档/提交 Git**；密钥一律环境变量注入（`DASHSCOPE_API_KEY` / `DEEPSEEK_API_KEY` / `JWT_SECRET` / DB 密码）。
-- AK 未配置时：可绑定但对话报「该模型未配置密钥」（`ErrorCode.SYSTEM_ERROR`）。
+- **安全红线**：`application-local.yml` 含**真实 DashScope AK 与数据库密码，严禁写入任何文档/提交 Git**；密钥一律环境变量注入（`DASHSCOPE_API_KEY` / `DEEPSEEK_API_KEY` / `JWT_SECRET` / **`LLM_KEY_AES_SECRET`** / DB 密码）。
+- **用户自持 Key（2026-11-13）**：模型配置页按供应商录入并多选模型，Key 经 AES-256-GCM 加密存 `user_llm_binding.api_key_cipher`；调用时**用户 Key 优先，配置文件 AK 兜底**。加密口令 `LLM_KEY_AES_SECRET` 只走环境变量，**丢失后已存用户 Key 无法解密**（需用户重填）。未配置口令时应用可正常启动，仅保存/解密报 50000。
+- AK 全缺失时：可绑定但对话报「该模型未配置密钥」（`ErrorCode.SYSTEM_ERROR`）。
 - **启动（唯一推荐方式，后端+前端一条命令）**：`pwsh VeythCog-C/scripts/dev.ps1`，或双击 `VeythCog-C/scripts/dev.cmd`，或在 Trae 里跑任务 `dev: 后端+前端`（`tasks.json` 已内置，Ctrl+Shift+P → Tasks: Run Task）。
   脚本固定流程：① **先释放端口**（8123 / 3000 上有旧进程就先 Stop-Process，确认端口真空了才继续）→ ② mvn 打包（默认离线，`-Online` 联网）→ ③ 打包失败立即中止，绝不启动旧 class → ④ 后端 `java -jar` 起在后台（日志 `vc-app/target/dev-logs/backend.log`）→ ⑤ 前端 Vite 前台跑在 3000。
   子命令：`dev.ps1 backend`（只后端，前台）、`dev.ps1 frontend`（只前端）、`dev.ps1 stop`（只释放 8123/3000）。
@@ -298,7 +313,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 ## 10. 当前状态快照与待办
 
-**已打通（可演示）**：真 JWT 登录（账号密码；微信扫码登录已移除）→ 模型绑定管理 → 同步对话 + **SSE 流式对话**（带 JDBC 会话记忆、可中断）；RAG 知识库 P0（文档 CRUD/导入导出/向量化/RAG 召回/**后端注入 prompt + 引用下发** + `DocEditor`（基于 BlockNote）文档编辑器 + 对话侧引用卡片）；已去除「私有库/演示库」概念（`lib_type` 列已删）；导航首页 P2 图标资产化 + iTab 备份导入（2026-11-12：`nav_bookmark` 共 267 条，238 条 upload、18 条 text、11 条 auto；S3 `public-icons` 245 个唯一图标对象被引用、247 条书签引用，直链 HEAD 全部 200；70 个 SVG 半图已用“2 倍窗口截图 + 透明包围盒裁剪”重刷修复）。
+**已打通（可演示）**：真 JWT 登录（账号密码；微信扫码登录已移除）→ 模型绑定管理（**用户自持 AES 加密 Key + 配置兜底**，2026-11-13）→ 同步对话 + **SSE 流式对话**（带 JDBC 会话记忆、可中断）；RAG 知识库 P0（文档 CRUD/导入导出/向量化/RAG 召回/**后端注入 prompt + 引用下发** + `DocEditor`（基于 BlockNote）文档编辑器 + 对话侧引用卡片）；已去除「私有库/演示库」概念（`lib_type` 列已删）；导航首页 P2 图标资产化 + iTab 备份导入（2026-11-12：`nav_bookmark` 共 267 条，238 条 upload、18 条 text、11 条 auto；S3 `public-icons` 245 个唯一图标对象被引用、247 条书签引用，直链 HEAD 全部 200；70 个 SVG 半图已用“2 倍窗口截图 + 透明包围盒裁剪”重刷修复）。
 
 **已知阻塞**：
 - DashScope 免费额度曾耗尽（403 FreeTierOnly），需充值或换有效 AK 才能拿真实回复；DeepSeek AK 待填。
@@ -309,11 +324,13 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 **待办/演进**（源自架构文档 + 现状）：
 1. 会话元数据持久化（现仅记忆层落库，会话列表在前端内存，`chatStore` 未接入）。
 2. ~~RAG 知识库实现~~ ✅ 已完成 P0；**RAG 引用已收归后端**（`RagChatOrchestrator` 检索 + 注入 prompt + SSE `event: references`，前端不再自行 retrieve）。P1 待办：① 文档更新时清理旧向量（当前只置 `is_vectorized=false`，检索端已过滤，旧向量仅占空间）；② 批量向量化/移动/打标；③ `importMd` 的 md→block 结构与 BlockNote 块结构对齐（当前靠前端降级解析）；④ `vectorize` 长事务拆分、`dimensions` 校验、IVFFlat/阈值调参、单测；⑤ 辅助模型选型收敛（当前为可用性妥协的 `deepseek-v4-pro-0813`，带 reasoning 成本偏高），rerank 需补端到端回归与失败用例。
-3. Admin 后台：用户/角色管理**已接真后端**（`/admin/users`、`/admin/roles`）；模型目录/监控/审计/系统配置/定时任务仍 mock。
+3. Admin 后台：用户/角色管理、**模型目录**已接真后端（`/admin/users`、`/admin/roles`、`/admin/llm-models`）；监控/审计/系统配置/定时任务仍 mock。
 4. `role` 已随登录响应下发（`LoginResponse.role`，取多角色中的主角色）；暂无 `/auth/me` 接口，需重新拉取用户信息时再补。
 5. ~~清理残留 MySQL 驱动~~ ✅ 已清理（全模块 pom 无 mysql 依赖）。
 6. vc-learn 未提交改动整理（结构化输出实验）。
 7. 同步各文档滞后点（见 §4 / §7.3 / §8.1）。
+8. **P0 用户自持 Key 已落地（2026-11-13）**：AES-256-GCM 加密入库、供应商多选模型、配置兜底。`openspec/llm-binding-prd.md` 仍剩：Key 连通校验 `is_valid` 门控、`chat_session` 会话元数据（`ragDocIds` / 压缩开关 / 标题）、上下文压缩、访客演示模型、SSE 协议 `delta/done` + 幂等 + 同会话并发锁、限流。
+9. **模型目录管理已落地（2026-11-13）**：`/admin/llm-models` 增删改查 + 上下架 + 从供应商同步。实测百炼 `/api/v1/models` 返回 373 个模型、其中 108 个具备 TG（文本生成）能力；DeepSeek 的 `/models` 需要该供应商 AK，而当前配置 `deepseek.api-key` 为空，同步会返回 40000 提示先配 AK。同步为「只增不删、新增默认不上架」，避免误删用户绑定。
 
 ---
 
@@ -339,6 +356,6 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 ## 12. 安全约束（重申）
 
-- 真实 AK（DashScope/DeepSeek）与数据库凭证只存 `application-local.yml`（已 gitignore），不得出现在任何提交文件或本记忆文档。
-- 前端任何层不得落 API Key；密钥只存后端并加密。
+- 真实 AK（DashScope/DeepSeek）/ `LLM_KEY_AES_SECRET` 与数据库凭证只存 `application-local.yml`（已 gitignore）或环境变量，不得出现在任何提交文件或本记忆文档。
+- 前端任何层**不持久化** API Key：只在配置页表单内瞬时持有并随请求提交，不写 localStorage / sessionStorage / 日志；后端以 AES-256-GCM 加密后入库，响应只回脱敏值。
 - 本记忆文档不含任何密钥、口令、令牌。

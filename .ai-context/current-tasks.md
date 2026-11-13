@@ -46,3 +46,30 @@
 | NAV-06 | MainAgent | iTab 备份分析导入：容错解析、URL 去重、SVG/ICO 转 PNG、S3 上传、书签合并、失败恢复与直链校验 | 已完成 | `VeythCog-C/scripts/import_itab_backup.py`、`.ai-context/itab-import-2026-11-12/*` | NAV-02 |
 | NAV-07 | MainAgent | 半图图标修复（Chrome 2 倍窗口 + alpha 裁剪，70 个 SVG 重刷）、首页书签区宽度 66.6667vw、线上同步脚本与 README | 已完成 | `.ai-context/itab-import-2026-11-12/report.md`、`VeythCog-V/src/pages/Home/BookmarkGrid.tsx`、`VeythCog-C/scripts/README-nav-import.md` | NAV-06 |
 | NAV-08 | MainAgent | SQL 入库脚本（7 分类/267 书签，幂等插入 + 同 URL 图标同步）；修复图标缓存命中后仍请求后端的问题 | 已完成 | `VeythCog-C/docs/sql/014_nav_itab_data.sql`、`README-014-nav-data.md`、`VeythCog-V/src/pages/Home/BookmarkIcon.tsx` | NAV-07 |
+
+## 5. 用户自持加密 Key（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| KEY-01 | MainAgent | 变更文档：proposal / specs / design / tasks | 已完成 | `openspec/changes/p0-user-llm-key/*` | 用户拍板「用户自持加密 Key，配置兜底」 |
+| KEY-02 | MainAgent | 库迁移：`user_llm_binding` 加 `api_key_cipher` / `api_key_updated_at` 并执行 | 已完成 | `docs/sql/015_user_llm_binding_api_key.sql` | 开发库 `vector_test` |
+| KEY-03 | MainAgent | 后端：AES-256-GCM 加解密/脱敏、批量绑定、改/清 Key、路由用户 Key 优先 + 配置兜底、缓存按指纹、DashScope 动态实例 | 已完成 | `vc-llm/{crypto,config,entity,service,router,factory,dto}`、`vc-app/{LlmModelController,BatchBindRequest,ApiKeyRequest,GlobalExceptionHandler}` | KEY-02 |
+| KEY-04 | MainAgent | 前端：供应商卡片多选模型 + AK 编辑/清除 + 默认模型 + 静默刷新 | 已完成 | `VeythCog-V/src/{api/llm.ts,types/index.ts,pages/Settings/Providers.tsx}` | KEY-03 |
+| KEY-05 | MainAgent | 编译与接口验证（临时端口 8125，验证后已停） | 已完成 | `openspec/changes/p0-user-llm-key/design.md §5` | KEY-03/04 |
+| KEY-06 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | KEY-05 |
+
+> 验证记录（2026-11-13）：用户 Key 保存后目录返回 `sk-d****7890` 且无明文；用 dummy Key 对话返回上游 401 InvalidApiKey（证明用户 Key 优先）；清除后回落配置 AK（返回 403 FreeTierOnly，鉴权通过、额度不足）；密文落库 65 字符 `base64(iv):base64(ct)`、库内无明文；空 vendor / 空 message 均返回 `{code:40000}`。
+
+## 6. 模型目录管理（2026-11-13）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| MDL-01 | MainAgent | 实测供应商模型列表接口（百炼原生 373/108 TG、兼容模式、DeepSeek 需 AK） | 已完成 | `openspec/changes/llm-model-catalog-admin/proposal.md §实测` | 本地 config AK |
+| MDL-02 | MainAgent | 后端：`/admin/llm-models` CRUD + 上下架 + 同步 + 绑定保护 | 已完成 | `vc-app/web/AdminLlmModelController.java`、`vc-llm/service/LlmCatalogAdminService.java`、DTO/请求体 4 个、两个 Repository 方法 | MDL-01 |
+| MDL-03 | MainAgent | 前端：模型目录页由 mock 改真实接口（表格/筛选/CRUD/同步/静默刷新） | 已完成 | `VeythCog-V/src/api/adminModels.ts`、`src/pages/Admin/Models.tsx` | MDL-02 |
+| MDL-04 | MainAgent | 编译 + 接口验证（临时 8125，验证后清理 107 条同步行并停服） | 已完成 | `openspec/changes/llm-model-catalog-admin/design.md §5` | MDL-02/03 |
+| MDL-05 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | MDL-04 |
+
+> 验证记录（2026-11-13）：新增/编辑/下架/删除均 200；重复编码 40000；删除有绑定模型 40000、改其编码 40000；DeepSeek 无 AK 同步 40000；百炼同步 `total=108 / added=107 / skipped=1`，新增行未上架；清理后目录恢复 2 行、qwen-plus 仍为默认。
+
+

@@ -23,6 +23,11 @@
 | 2026-11-06 | ✏️ | RAG 返回增加 `chunkIndex`；前端引用卡片改显示「分片# + 距离」 | `RetrieveChunk.java`、`VeythCog-V/src/types/index.ts`、`pages/Chat/index.tsx` | 前后端 Agent |
 | 2026-11-06 | 📄 | 同步 PRD/API 契约/PROJECT_MEMORY/协作文档至 v0.3 | `openspec/knowledge-prd.md`、`openspec/api-spec.md`、`PROJECT_MEMORY.md` | 全体 Agent |
 | 2026-11-12 | 🆕 | 导航书签图标资产化：站点图标 / 自定义图标统一存 S3 `public-icons`，前端缓存优先 + DB 解析 | `openspec/changes/p2-nav-icons/*`、`docs/sql/013_nav_bookmark_icon.sql`、`vc-nav`（entity/dto/service）、`vc-app/web/NavIconController.java`、`VeythCog-V`（client/nav/iconCache/BookmarkModal/BookmarkIcon/Home） | 全体 Agent |
+| 2026-11-13 | 🆕 | 用户自持加密 Key：AES-256-GCM 入库（`user_llm_binding.api_key_cipher` / `api_key_updated_at`）、供应商多选批量绑定、AK 编辑/清除、用户 Key 优先 + 配置 AK 兜底、缓存按 Key 指纹隔离、DashScope 动态实例 | `openspec/changes/p0-user-llm-key/*`、`docs/sql/015_user_llm_binding_api_key.sql`、`vc-llm`（crypto/config/entity/service/router/factory/dto）、`vc-app`（LlmModelController/BatchBindRequest/ApiKeyRequest/GlobalExceptionHandler/application.yml）、`VeythCog-V`（api/llm.ts、types、Settings/Providers.tsx） | 前后端 Agent |
+| 2026-11-13 | 🔧 | `@Valid` 参数校验失败改回 `{code:40000,message}` 契约（空 message / 空账号密码不再返回 Spring 默认错误体） | `vc-app/web/GlobalExceptionHandler.java` | 前后端 Agent |
+| 2026-11-13 | ✏️ | `GET /llm/models` 按绑定创建时间升序（补 spec 排序要求） | `vc-llm/repository/UserLlmBindingRepository.java`、`LlmModelService.java` | 前端 Agent |
+| 2026-11-13 | 🆕 | 模型目录管理：`/admin/llm-models` 增删改查 + 上下架 + 从供应商同步（百炼按 TG 过滤、只增不删、新增默认不上架、有绑定禁止删除/改编码） | `openspec/changes/llm-model-catalog-admin/*`、`vc-llm/service/LlmCatalogAdminService.java`、`vc-llm/dto/{AdminModelItem,ModelSyncResult}.java`、`vc-app/web/{AdminLlmModelController,AdminModelSaveRequest,AdminModelEnabledRequest,AdminModelSyncRequest}.java`、`LlmModelRepository`、`UserLlmBindingRepository` | 前后端 Agent |
+| 2026-11-13 | ✏️ | 前端系统管理「模型目录」由 mock 改为真实接口（表格/筛选/新增/编辑/删除/上下架/同步，静默刷新） | `VeythCog-V/src/api/adminModels.ts`、`src/pages/Admin/Models.tsx` | 前端 Agent |
 | 2026-11-12 | ✏️ | 导航图标接口端到端验证：18 条历史书签同步成功 13 条；5 条因站点/网络原因保留 1 天失败冷却 | `openspec/changes/p2-nav-icons/tasks.md`、`design.md §7` | 前后端 Agent |
 
 ## 关键 spec 变更明细（v0.1 → v0.2，需全体 Agent 知悉）
