@@ -46,6 +46,14 @@ public class NavBookmarkService {
      */
     public List<BookmarkView> list(Long userId, Long categoryId) {
         requireCategory(userId, categoryId);
+        return listOwned(userId, categoryId);
+    }
+
+    /**
+     * 列出已确认属于当前用户的分类下书签。
+     * <p>供首页聚合接口使用：分类归属已在同一请求里校验过，避免重复查一次分类。</p>
+     */
+    List<BookmarkView> listOwned(Long userId, Long categoryId) {
         return bookmarkMapper.selectList(
                         new LambdaQueryWrapper<NavBookmark>()
                                 .eq(NavBookmark::getCategoryId, categoryId)

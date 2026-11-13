@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from 'antd';
 import { Icon } from '@iconify/react';
 import userIcon from '@iconify-icons/lucide/user';
@@ -36,6 +36,12 @@ const SettingsModal: React.FC<Props> = ({ open, onClose, defaultTab = 'account' 
   const { colors } = useTheme();
   const glassEnabled = useSettingsStore((s) => s.glassEnabled);
   const [tab, setTab] = useState<SettingsTab>(defaultTab);
+
+  // 弹窗关闭时组件仍保留上一次的内部 tab；每次重新打开都必须跟随本次入口的 defaultTab，
+  // 否则从“外观主题”进来仍会显示上一次的“账号设置”。
+  useEffect(() => {
+    if (open) setTab(defaultTab);
+  }, [open, defaultTab]);
 
   return (
     <Modal

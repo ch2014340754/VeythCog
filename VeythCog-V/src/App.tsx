@@ -5,28 +5,32 @@ import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { generateAntDTheme } from '@/styles/theme';
 import { getPreset } from '@/styles/presets';
 import MainLayout from '@/layouts/MainLayout';
-import ChatPage from '@/pages/Chat';
-import KnowledgePage from '@/pages/Knowledge';
 import HomePage from '@/pages/Home';
-import ToolsLayout from '@/pages/tools/ToolsLayout';
-import LoginPage from '@/pages/Login';
-import SettingsPage from '@/pages/Settings';
-import AccountSettings from '@/pages/Settings/Account';
-import ProvidersSettings from '@/pages/Settings/Providers';
-import LarkBindSettings from '@/pages/Settings/LarkBind';
-import AppearanceSettings from '@/pages/Settings/Appearance';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import WallpaperBackdrop from '@/components/WallpaperBackdrop';
 import { useAuthStore } from '@/stores/authStore';
+import { useNavStore } from '@/stores/navStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
-import AdminPage from '@/pages/Admin';
-import AdminUsers from '@/pages/Admin/Users';
-import AdminRoles from '@/pages/Admin/Roles';
-import AdminModels from '@/pages/Admin/Models';
-import AdminMonitor from '@/pages/Admin/Monitoring';
-import AdminAudit from '@/pages/Admin/AuditLog';
-import AdminTasks from '@/pages/Admin/Tasks';
-import AdminConfig from '@/pages/Admin/Config';
+
+// 首屏只保留 /home 需要的依赖；其余页面按路由懒加载，避免把 Chat / Knowledge /
+// Tools / Settings / Admin 全部塞进首包（原主包 2.36MB / gzip 731KB）。
+const ChatPage = React.lazy(() => import('@/pages/Chat'));
+const KnowledgePage = React.lazy(() => import('@/pages/Knowledge'));
+const ToolsLayout = React.lazy(() => import('@/pages/tools/ToolsLayout'));
+const LoginPage = React.lazy(() => import('@/pages/Login'));
+const SettingsPage = React.lazy(() => import('@/pages/Settings'));
+const AccountSettings = React.lazy(() => import('@/pages/Settings/Account'));
+const ProvidersSettings = React.lazy(() => import('@/pages/Settings/Providers'));
+const LarkBindSettings = React.lazy(() => import('@/pages/Settings/LarkBind'));
+const AppearanceSettings = React.lazy(() => import('@/pages/Settings/Appearance'));
+const AdminPage = React.lazy(() => import('@/pages/Admin'));
+const AdminUsers = React.lazy(() => import('@/pages/Admin/Users'));
+const AdminRoles = React.lazy(() => import('@/pages/Admin/Roles'));
+const AdminModels = React.lazy(() => import('@/pages/Admin/Models'));
+const AdminMonitor = React.lazy(() => import('@/pages/Admin/Monitoring'));
+const AdminAudit = React.lazy(() => import('@/pages/Admin/AuditLog'));
+const AdminTasks = React.lazy(() => import('@/pages/Admin/Tasks'));
+const AdminConfig = React.lazy(() => import('@/pages/Admin/Config'));
 
 /** 路由守卫：未登录跳 /login，并记录来源以便登录后回跳 */
 const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -47,17 +51,37 @@ const RequireAdmin: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   return <>{children}</>;
 };
 
+/**
+ * 壁纸加载分流：
+ * - /home 由首页 /nav/bootstrap 聚合接口带回，避免再单独请求 /wallpaper/current；
+ * - 其它受保护页面仍单独加载，保证直接刷新 /chat 等页面也有壁纸。
+ */
+const WallpaperRouteSync: React.FC = () => {
+  const { pathname } = useLocation();
+  const token = useAuthStore((s) => s.token);
+  const loadActiveWallpaper = useWallpaperStore((s) => s.loadActive);
+
+  React.useEffect(() => {
+    if (!token || pathname === '/home' || pathname === '/login' || pathname === '/') return;
+    loadActiveWallpaper();
+  }, [token, pathname, loadActiveWallpaper]);
+
+  return null;
+};
+
 const AppContent: React.FC = () => {
   const { presetName, isDark } = useTheme();
   const token = useAuthStore((s) => s.token);
-  const loadActiveWallpaper = useWallpaperStore((s) => s.loadActive);
   const resetWallpaper = useWallpaperStore((s) => s.reset);
+  const resetNav = useNavStore((s) => s.reset);
 
-  // 登录后读取用户预设壁纸；登出清空（登录页保持光斑背景）
+  // 登出清空壁纸和导航本地缓存，避免下一个账号看到上一个账号的数据
   React.useEffect(() => {
-    if (token) loadActiveWallpaper();
-    else resetWallpaper();
-  }, [token, loadActiveWallpaper, resetWallpaper]);
+    if (!token) {
+      resetWallpaper();
+      resetNav();
+    }
+  }, [token, resetWallpaper, resetNav]);
 
   const antdTheme = useMemo(() => {
     const preset = getPreset(presetName, isDark);
@@ -68,8 +92,25 @@ const AppContent: React.FC = () => {
     <ConfigProvider theme={antdTheme}>
       <WallpaperBackdrop />
       <BrowserRouter>
+        <WallpaperRouteSync />
         <ErrorBoundary>
-          <Routes>
+          <React.Suspense
+            fallback={
+              <div
+                style={{
+                  minHeight: '100vh',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-tertiary, #8b90a0)',
+                  fontSize: 13,
+                }}
+              >
+                加载中…
+              </div>
+            }
+          >
+            <Routes>
             {/* 登录页（独立布局） */}
             <Route path="/login" element={<LoginPage />} />
 
@@ -128,7 +169,8 @@ const AppContent: React.FC = () => {
 
             {/* 根路径默认跳首页 */}
             <Route path="/" element={<Navigate to="/home" replace />} />
-          </Routes>
+            </Routes>
+          </React.Suspense>
         </ErrorBoundary>
       </BrowserRouter>
     </ConfigProvider>

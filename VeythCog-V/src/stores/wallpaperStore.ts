@@ -69,6 +69,8 @@ interface WallpaperState {
 
   /** 登录后读取用户预设壁纸 */
   loadActive: () => Promise<void>;
+  /** 直接应用服务端下发的壁纸（首页 bootstrap 已带回，避免重复请求） */
+  applyActive: (item: WallpaperItem | null) => void;
   /** 拉取壁纸库清单（默认命中缓存，force=true 时强制重新签名） */
   loadList: (force?: boolean) => Promise<void>;
   /** 选用某张壁纸（立即全局生效并写入用户配置） */
@@ -93,6 +95,10 @@ export const useWallpaperStore = create<WallpaperState>((set, get) => ({
     } catch (e) {
       console.error('[wallpaperStore] loadActive failed', e);
     }
+  },
+
+  applyActive: (item) => {
+    set({ active: item ? { ...item, kind: resolveWallpaperKind(item) } : null });
   },
 
   loadList: async (force = false) => {

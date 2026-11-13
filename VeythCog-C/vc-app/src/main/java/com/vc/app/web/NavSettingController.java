@@ -2,9 +2,11 @@ package com.vc.app.web;
 
 import com.vc.common.BaseResponse;
 import com.vc.common.ResultUtils;
+import com.vc.nav.dto.NavBootstrapView;
 import com.vc.nav.dto.SettingUpdateRequest;
 import com.vc.nav.dto.WallpaperLockRequest;
 import com.vc.nav.entity.NavSetting;
+import com.vc.nav.service.NavBootstrapService;
 import com.vc.nav.service.NavSettingService;
 import com.vc.nav.service.NavWallpaperService;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,17 @@ public class NavSettingController {
 
     private final NavSettingService settingService;
     private final NavWallpaperService wallpaperService;
+    private final NavBootstrapService bootstrapService;
+
+    /**
+     * 0. 首页启动数据聚合：配置 + 分类 + 当前分类书签 + 当前壁纸。
+     * <p>categoryId 为前端本地缓存的上次分类，失效时服务端自动回落到默认分类。</p>
+     */
+    @GetMapping("/bootstrap")
+    public BaseResponse<NavBootstrapView> bootstrap(
+            @RequestParam(value = "categoryId", required = false) Long categoryId) {
+        return ResultUtils.success(bootstrapService.get(currentUserId(), categoryId));
+    }
 
     /** 1. 读取当前用户首页配置 */
     @GetMapping("/setting")

@@ -88,6 +88,15 @@ export interface WallpaperItem {
   kind?: 'image' | 'video';
 }
 
+/** 首页启动聚合数据：一个请求拿齐配置、分类、当前分类书签和当前壁纸 */
+export interface NavBootstrap {
+  setting: NavSetting;
+  categories: NavCategory[];
+  activeCategoryId: number | null;
+  bookmarks: NavBookmark[];
+  wallpaper: WallpaperItem | null;
+}
+
 // ============ 分类 ============
 
 export const getCategories = () =>
@@ -114,8 +123,38 @@ export const getBookmarks = (categoryId: number) =>
   http.get<NavBookmark[]>('/nav/bookmarks', { categoryId });
 
 /** 全量书签：搜索框本地联想一次拉取 */
-export const getAllBookmarks = () =>
-  http.get<NavBookmark[]>('/nav/bookmarks/all');
+let allBookmarksCache: { items: NavBookmark[]; at: number } | null = null;
+let allBookmarksInFlight: Promise<NavBookmark[]> | null = null;
+const ALL_BOOKMARKS_TTL = 5 * 60 * 1000;
+
+function invalidateAllBookmarksCache() {
+  allBookmarksCache = null;
+  allBookmarksInFlight = null;
+}
+
+/**
+ * 全量书签：搜索联想使用。
+ * - 5 分钟内命中缓存，不再请求；
+ * - 并发调用复用同一个 Promise（dev StrictMode 也不会发两遍）。
+ */
+export const getAllBookmarks = (force = false): Promise<NavBookmark[]> => {
+  if (!force && allBookmarksCache && Date.now() - allBookmarksCache.at < ALL_BOOKMARKS_TTL) {
+    return Promise.resolve(allBookmarksCache.items);
+  }
+  if (!force && allBookmarksInFlight) return allBookmarksInFlight;
+
+  const request = http.get<NavBookmark[]>('/nav/bookmarks/all')
+    .then((list) => {
+      const items = list ?? [];
+      allBookmarksCache = { items, at: Date.now() };
+      return items;
+    })
+    .finally(() => {
+      if (allBookmarksInFlight === request) allBookmarksInFlight = null;
+    });
+  allBookmarksInFlight = request;
+  return request;
+};
 
 /** 解析单个书签图标：前端缓存未命中时调用 */
 export const getBookmarkIcon = (id: number) =>
@@ -133,17 +172,26 @@ export const uploadIcon = (file: File) =>
 export const syncIcons = () =>
   http.post<IconSyncResult>('/nav/icons/sync');
 
-export const createBookmark = (data: BookmarkSaveInput & { categoryId: number }) =>
-  http.post<number>('/nav/bookmarks', data);
+export const createBookmark = async (data: BookmarkSaveInput & { categoryId: number }) => {
+  const id = await http.post<number>('/nav/bookmarks', data);
+  invalidateAllBookmarksCache();
+  return id;
+};
 
-export const updateBookmark = (id: number, data: BookmarkSaveInput) =>
-  http.put<void>(`/nav/bookmarks/${id}`, data);
+export const updateBookmark = async (id: number, data: BookmarkSaveInput) => {
+  await http.put<void>(`/nav/bookmarks/${id}`, data);
+  invalidateAllBookmarksCache();
+};
 
-export const deleteBookmark = (id: number) =>
-  http.del<void>(`/nav/bookmarks/${id}`);
+export const deleteBookmark = async (id: number) => {
+  await http.del<void>(`/nav/bookmarks/${id}`);
+  invalidateAllBookmarksCache();
+};
 
-export const reorderBookmarks = (categoryId: number, items: { id: number; sortOrder: number }[]) =>
-  http.put<void>('/nav/bookmarks/reorder', { categoryId, items });
+export const reorderBookmarks = async (categoryId: number, items: { id: number; sortOrder: number }[]) => {
+  await http.put<void>('/nav/bookmarks/reorder', { categoryId, items });
+  invalidateAllBookmarksCache();
+};
 
 // ============ 壁纸 ============
 
@@ -168,6 +216,21 @@ export const getCurrentWallpaper = () =>
   http.get<WallpaperItem | null>('/nav/wallpaper/current');
 
 // ============ 配置 ============
+
+/** 首页启动数据：setting + categories + 当前分类 bookmarks + current wallpaper */
+const bootstrapInFlight = new Map<string, Promise<NavBootstrap>>();
+export const getNavBootstrap = (categoryId?: number | null): Promise<NavBootstrap> => {
+  const key = categoryId == null ? 'default' : String(categoryId);
+  const existing = bootstrapInFlight.get(key);
+  if (existing) return existing;
+  const request = http
+    .get<NavBootstrap>('/nav/bootstrap', categoryId != null ? { categoryId } : undefined)
+    .finally(() => {
+      if (bootstrapInFlight.get(key) === request) bootstrapInFlight.delete(key);
+    });
+  bootstrapInFlight.set(key, request);
+  return request;
+};
 
 export const getNavSetting = () =>
   http.get<NavSetting>('/nav/setting');

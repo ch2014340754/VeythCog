@@ -7,8 +7,10 @@ import { persist } from 'zustand/middleware';
 import {
   getCategories,
   getBookmarks,
+  getNavBootstrap,
   getNavSetting,
   updateNavSetting,
+  type NavBootstrap,
   type NavCategory,
   type NavBookmark,
 } from '@/api/nav';
@@ -36,12 +38,16 @@ interface NavState {
   loadCategories: () => Promise<void>;
   /** 加载某分类下的书签 */
   loadBookmarks: (categoryId: number) => Promise<void>;
+  /** 首页启动：缓存优先渲染 + bootstrap 静默刷新 */
+  loadHome: () => Promise<NavBootstrap | null>;
   /** 切换当前分类 */
   setActiveCategory: (id: number) => Promise<void>;
   /** 设置搜索引擎 */
   setSearchEngine: (engine: 'baidu' | 'google' | 'bing') => void;
   /** 从后端拉取用户配置（搜索引擎 / 上次分类） */
   loadSetting: () => Promise<void>;
+  /** 登出时清空本地缓存，避免下一个账号看到上一个账号的导航数据 */
+  reset: () => void;
 }
 
 /** 书签加载请求序号：用于丢弃被后续切换取代的旧响应 */
@@ -73,6 +79,29 @@ export const useNavStore = create<NavState>()(
           await get().loadBookmarks(targetId);
         } catch (e) {
           console.error('[navStore] loadCategories failed', e);
+        }
+      },
+
+      loadHome: async () => {
+        // 先让本地缓存（persist 恢复的分类 / 书签）直接渲染，网络结果到了再静默覆盖。
+        const seq = ++bookmarkLoadSeq;
+        set({ loadingBookmarks: true });
+        try {
+          const data = await getNavBootstrap(get().activeCategoryId);
+          if (seq !== bookmarkLoadSeq) return data;
+          set({
+            categories: data.categories ?? [],
+            activeCategoryId: data.activeCategoryId ?? null,
+            bookmarks: data.bookmarks ?? [],
+            dataCategoryId: data.activeCategoryId ?? null,
+            searchEngine: data.setting?.searchEngine ?? get().searchEngine,
+          });
+          return data;
+        } catch (e) {
+          console.error('[navStore] loadHome failed', e);
+          return null;
+        } finally {
+          if (seq === bookmarkLoadSeq) set({ loadingBookmarks: false });
         }
       },
 
@@ -114,13 +143,28 @@ export const useNavStore = create<NavState>()(
           console.error('[navStore] loadSetting failed', e);
         }
       },
+
+      reset: () => {
+        set({
+          categories: [],
+          activeCategoryId: null,
+          bookmarks: [],
+          dataCategoryId: null,
+          searchEngine: 'baidu',
+          loadingBookmarks: false,
+        });
+      },
     }),
     {
       name: 'veythcog:nav:v1',
-      // 只持久化用户偏好，不持久化运行时数据
+      // 持久化「上次分类 + 分类/书签快照」：刷新时先渲染旧内容，再由 loadHome 静默刷新。
+      // 登出会调用 reset() 清空，避免换账号后闪现上一个账号的数据。
       partialize: (state) => ({
         activeCategoryId: state.activeCategoryId,
         searchEngine: state.searchEngine,
+        categories: state.categories,
+        bookmarks: state.bookmarks,
+        dataCategoryId: state.dataCategoryId,
       }),
     },
   ),

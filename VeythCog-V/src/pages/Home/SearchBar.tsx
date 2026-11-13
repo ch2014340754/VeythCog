@@ -58,6 +58,36 @@ const EMPTY_AI: AiState = {
   knowledgeFirst: false,
 };
 
+type EngineKey = 'baidu' | 'google' | 'bing';
+
+/** 搜索引擎品牌图标路径（Simple Icons，固定配置，不依赖运行时图标请求） */
+const ENGINE_ICON_PATHS: Record<EngineKey, string> = {
+  baidu:
+    'M9.154 0C7.71 0 6.54 1.658 6.54 3.707c0 2.051 1.171 3.71 2.615 3.71 1.446 0 2.614-1.659 2.614-3.71C11.768 1.658 10.6 0 9.154 0zm7.025.594C14.86.58 13.347 2.589 13.2 3.927c-.187 1.745.25 3.487 2.179 3.735 1.933.25 3.175-1.806 3.422-3.364.252-1.555-.995-3.364-2.362-3.674a1.218 1.218 0 0 0-.261-.03zM3.582 5.535a2.811 2.811 0 0 0-.156.008c-2.118.19-2.428 3.24-2.428 3.24-.287 1.41.686 4.425 3.297 3.864 2.617-.561 2.262-3.68 2.183-4.362-.125-1.018-1.292-2.773-2.896-2.75zm16.534 1.753c-2.308 0-2.617 2.119-2.617 3.616 0 1.43.121 3.425 2.988 3.362 2.867-.063 2.553-3.238 2.553-3.988 0-.745-.62-2.99-2.924-2.99zm-8.264 2.478c-1.424.014-2.708.925-3.323 1.947-1.118 1.868-2.863 3.05-3.112 3.363-.25.309-3.61 2.116-2.864 5.42.746 3.301 3.365 3.237 3.365 3.237s1.93.19 4.171-.31c2.24-.495 4.17.123 4.17.123s5.233 1.748 6.665-1.616c1.43-3.364-.808-5.109-.808-5.109s-2.99-2.306-4.736-4.798c-1.072-1.665-2.348-2.268-3.528-2.257zm-2.234 3.84l1.542.024v8.197H7.758c-1.47-.291-2.055-1.292-2.13-1.462-.072-.173-.488-.976-.268-2.343.635-2.049 2.447-2.196 2.447-2.196h1.81zm3.964 2.39v3.881c.096.413.612.488.612.488h1.614v-4.343h1.689v5.782h-3.915c-1.517-.39-1.59-1.465-1.59-1.465v-4.317zm-5.458 1.147c-.66.197-.978.708-1.05.928-.076.22-.247.78-.1 1.269.294 1.095 1.248 1.144 1.248 1.144h1.37v-3.34z',
+  google:
+    'M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z',
+  bing:
+    'M20.176 15.406a6.48 6.48 0 0 1-1.736 4.414c1.338-1.47.803-3.869-1.003-4.635-.862-.305-2.488-.85-3.367-1.158a1.834 1.834 0 0 1-.932-.818c-.381-.975-1.163-2.968-1.548-3.948-.095-.285-.31-.625-.265-.938.046-.598.724-1.003 1.276-.754l3.682 1.888c.621.292 1.305.692 1.796 1.172a6.486 6.486 0 0 1 2.097 4.777zm-1.44 1.888c-.264-1.194-1.135-1.744-2.216-2.028-1.527.902-4.853 2.878-6.952 4.13-1.103.68-2.13 1.35-2.919 1.242a2.866 2.866 0 0 1-2.77-2.325c-.012-.048-.008-.03-.001.01a6.4 6.4 0 0 0 .947 2.653 6.498 6.498 0 0 0 5.486 3.022c1.908.062 3.536-1.153 5.099-2.096.292-.188.804-.496 1.332-.831l1.423-1.51c.553-.577.764-1.426.571-2.267zm-12.04 2.97c.422 0 .822-.1 1.173-.29.355-.215.964-.579 1.7-1.018L9.57 4.502c0-.99-.497-1.864-1.257-2.382-.08-.059-2.91-1.901-2.99-1.956-.605-.432-1.523.045-1.5.797v14.887l.417 2.36a2.488 2.488 0 0 0 2.455 2.056z',
+};
+
+const EngineLogo: React.FC<{ engine: EngineKey; size?: number; color: string }> = ({
+  engine,
+  size = 18,
+  color,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill={color}
+    aria-hidden="true"
+    focusable="false"
+    style={{ display: 'block', flexShrink: 0 }}
+  >
+    <path d={ENGINE_ICON_PATHS[engine]} />
+  </svg>
+);
+
 /** 是否为可直接打开的 URL：命中时跳过翻译 / 远端联想，回车按网址处理 */
 function isLikelyUrl(value: string): boolean {
   const text = value.trim();
@@ -152,6 +182,50 @@ const SearchBar: React.FC = () => {
   const aiAbortRef = React.useRef<AbortController | null>(null);
   const requestSeq = React.useRef(0);
   const translationSeq = React.useRef(0);
+  const bookmarksRequestedRef = React.useRef(false);
+  const searchStatusRequestedRef = React.useRef(false);
+  const aliveRef = React.useRef(true);
+
+  React.useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  /**
+   * 全量书签只在用户真正搜索时加载：首屏不再拉 /nav/bookmarks/all（约 103KB）。
+   * 失败后允许下次重新请求。
+   */
+  const ensureAllBookmarks = React.useCallback(() => {
+    if (bookmarksRequestedRef.current) return;
+    bookmarksRequestedRef.current = true;
+    getAllBookmarks()
+      .then((list) => {
+        if (aliveRef.current) setBookmarks(list ?? []);
+      })
+      .catch(() => {
+        bookmarksRequestedRef.current = false;
+        if (aliveRef.current) setBookmarks([]);
+      });
+  }, []);
+
+  /**
+   * 知识库可用性 / 默认模型状态也只在用户聚焦搜索框时拉取：
+   * 首屏不打开搜索面板就不需要它，避免和 /nav/bootstrap 抢带宽。
+   */
+  const ensureSearchStatus = React.useCallback(() => {
+    if (searchStatusRequestedRef.current) return;
+    searchStatusRequestedRef.current = true;
+    getSearchStatus()
+      .then((value) => {
+        if (aliveRef.current) setStatus(value);
+      })
+      .catch(() => {
+        searchStatusRequestedRef.current = false;
+        if (aliveRef.current) setStatus(null);
+      });
+  }, []);
 
   const isWallpaperMode = !!wallpaper?.url;
   // 无壁纸：完全用主题玻璃；有壁纸：白色玻璃，厚度与全局「朦胧度」联动
@@ -177,10 +251,10 @@ const SearchBar: React.FC = () => {
   const panelDivider = isDark ? 'rgba(255,255,255,0.10)' : colors.divider;
   const panelInputBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.035)';
 
-  const engines = [
-    { key: 'baidu' as const, label: '百度' },
-    { key: 'google' as const, label: 'Google' },
-    { key: 'bing' as const, label: 'Bing' },
+  const engines: { key: EngineKey; label: string }[] = [
+    { key: 'baidu', label: 'Baidu' },
+    { key: 'google', label: 'Google' },
+    { key: 'bing', label: 'Bing' },
   ];
   const currentEngine = engines.find((e) => e.key === searchEngine) ?? engines[0];
 
@@ -203,36 +277,6 @@ const SearchBar: React.FC = () => {
       .slice(0, 4);
     return [...localSuggestions, ...remote];
   }, [localSuggestions, remoteSuggestions]);
-
-  // 全量书签只拉一次，供本地联想；失败不影响输入
-  React.useEffect(() => {
-    let alive = true;
-    getAllBookmarks()
-      .then((list) => {
-        if (alive) setBookmarks(list ?? []);
-      })
-      .catch(() => {
-        if (alive) setBookmarks([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // 知识库可用性 / 默认模型状态
-  React.useEffect(() => {
-    let alive = true;
-    getSearchStatus()
-      .then((value) => {
-        if (alive) setStatus(value);
-      })
-      .catch(() => {
-        if (alive) setStatus(null);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   // 远端联想：300ms 防抖，仅对非 URL、长度 ≥2 的输入请求
   React.useEffect(() => {
@@ -315,6 +359,8 @@ const SearchBar: React.FC = () => {
   }, []);
 
   const handleChange = (value: string) => {
+    ensureAllBookmarks();
+    ensureSearchStatus();
     setQ(value);
     setPanelOpen(!!value.trim());
     setActiveIndex(-1);
@@ -472,11 +518,12 @@ const SearchBar: React.FC = () => {
         style={{
           display: 'flex',
           alignItems: 'center',
+          height: 54,
           background: barBg,
           backdropFilter: glassBlur(glassOpacity),
           WebkitBackdropFilter: glassBlur(glassOpacity),
-          borderRadius: 16,
-          padding: '4px 8px',
+          borderRadius: 18,
+          padding: '0 8px',
           border: `1px solid ${barBorder}`,
           boxShadow: barShadow,
         }}
@@ -489,6 +536,8 @@ const SearchBar: React.FC = () => {
               setEngineOpen((o) => !o);
               setPanelOpen(false);
             }}
+            title={currentEngine.label}
+            aria-label={`Search engine: ${currentEngine.label}`}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -497,13 +546,13 @@ const SearchBar: React.FC = () => {
               border: 'none',
               color: textColor,
               textShadow,
-              padding: '8px 12px',
+              padding: '10px 12px',
               cursor: 'pointer',
               fontSize: 14,
               outline: 'none',
             }}
           >
-            {currentEngine.label}
+            <EngineLogo engine={currentEngine.key} size={18} color={textColor} />
             <Icon
               icon={chevronIcon}
               width={14}
@@ -550,6 +599,7 @@ const SearchBar: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
+                      gap: 12,
                       padding: '9px 12px',
                       borderRadius: 9,
                       fontSize: 13,
@@ -562,7 +612,14 @@ const SearchBar: React.FC = () => {
                       transition: 'background 0.12s ease',
                     }}
                   >
-                    {e.label}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                      <EngineLogo
+                        engine={e.key}
+                        size={16}
+                        color={active ? colors.primary : panelText}
+                      />
+                      {e.label}
+                    </span>
                     {active && (
                       <Icon
                         icon={chevronIcon}
@@ -583,7 +640,11 @@ const SearchBar: React.FC = () => {
           className={`nav-search-input${isWallpaperMode ? ' is-white' : ''}`}
           value={q}
           onChange={(e) => handleChange(e.target.value)}
-          onFocus={() => q.trim() && setPanelOpen(true)}
+          onFocus={() => {
+            ensureAllBookmarks();
+            ensureSearchStatus();
+            if (q.trim()) setPanelOpen(true);
+          }}
           onKeyDown={handleKeyDown}
           placeholder="输入搜索内容，Ctrl/Cmd+Enter 让 AI 回答"
           aria-label="搜索"
@@ -598,7 +659,7 @@ const SearchBar: React.FC = () => {
             color: textColor,
             textShadow,
             fontSize: 16,
-            padding: '8px 12px',
+            padding: '10px 12px',
           }}
         />
 
@@ -614,7 +675,7 @@ const SearchBar: React.FC = () => {
             gap: 5,
             background: 'transparent',
             border: 'none',
-            padding: '8px 8px',
+            padding: '10px 8px',
             cursor: 'pointer',
             flexShrink: 0,
             color: textColor,
@@ -640,7 +701,7 @@ const SearchBar: React.FC = () => {
             justifyContent: 'center',
             background: 'transparent',
             border: 'none',
-            padding: '8px 12px',
+            padding: '10px 12px',
             cursor: 'pointer',
             flexShrink: 0,
             opacity: 0.85,

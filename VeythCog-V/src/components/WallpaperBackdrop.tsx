@@ -37,7 +37,8 @@ const WallpaperBackdrop: React.FC = () => {
         loop
         muted
         playsInline
-        preload="auto"
+        // 首帧只需要元数据就能起播，避免一进页面就把整段视频拉满、和首页接口抢带宽
+        preload="metadata"
         // 视频加载失败时不留纯黑块，直接回退到 body 的主题兜底色
         onError={(e) => {
           const el = e.currentTarget;

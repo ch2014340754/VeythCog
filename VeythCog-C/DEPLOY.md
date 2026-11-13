@@ -246,7 +246,9 @@ services:
 
     ```nginx
     # S3 对象直读：桶名即一级路径，必须原样转发（不能 rewrite/去前缀，否则签名校验失败）
-    location /wallpapers/ {
+    # 必须用 ^~：宝塔默认有 location ~ .*\.(png|jpg...)$ 的图片缓存规则，
+    # 普通前缀会被正则覆盖，图标会被当成本地静态文件去查找而 404。
+    location ^~ /wallpapers/ {
         proxy_pass http://127.0.0.1:9000;
         proxy_set_header Host $host;              # 必须保持外网 Host，SigV4 要校验它
         proxy_set_header X-Real-IP $remote_addr;
@@ -256,10 +258,14 @@ services:
         proxy_request_buffering off;
         proxy_buffering off;
     }
-    # 公开图标桶同理（匿名可读的 public-icons）
-    location /public-icons/ {
+    # 公开图标桶同理（匿名可读的 public-icons），同样必须 ^~
+    location ^~ /public-icons/ {
         proxy_pass http://127.0.0.1:9000;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        expires 30d;
     }
     ```
 
@@ -267,6 +273,7 @@ services:
 
     ```bash
     curl -sI "https://api.veythcog.top/wallpapers/随便一个已存在的key.jpg"   # 期望 200 或 403(签名问题)，不能是 404/502
+    curl -sI "https://api.veythcog.top/public-icons/随便一个已存在的key.png" # 期望 200 image/png，不能是 404
     docker logs --tail=50 veyth-cog-backend | grep 预签名                     # 应出现「预签名地址使用公网 endpoint」
     ```
 
@@ -834,7 +841,9 @@ services:
 
     ```nginx
     # S3 对象直读：桶名即一级路径，必须原样转发（不能 rewrite/去前缀，否则签名校验失败）
-    location /wallpapers/ {
+    # 必须用 ^~：宝塔默认有 location ~ .*\.(png|jpg...)$ 的图片缓存规则，
+    # 普通前缀会被正则覆盖，图标会被当成本地静态文件去查找而 404。
+    location ^~ /wallpapers/ {
         proxy_pass http://127.0.0.1:9000;
         proxy_set_header Host $host;              # 必须保持外网 Host，SigV4 要校验它
         proxy_set_header X-Real-IP $remote_addr;
@@ -844,10 +853,14 @@ services:
         proxy_request_buffering off;
         proxy_buffering off;
     }
-    # 公开图标桶同理（匿名可读的 public-icons）
-    location /public-icons/ {
+    # 公开图标桶同理（匿名可读的 public-icons），同样必须 ^~
+    location ^~ /public-icons/ {
         proxy_pass http://127.0.0.1:9000;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        expires 30d;
     }
     ```
 
@@ -855,6 +868,7 @@ services:
 
     ```bash
     curl -sI "https://api.veythcog.top/wallpapers/随便一个已存在的key.jpg"   # 期望 200 或 403(签名问题)，不能是 404/502
+    curl -sI "https://api.veythcog.top/public-icons/随便一个已存在的key.png" # 期望 200 image/png，不能是 404
     docker logs --tail=50 veyth-cog-backend | grep 预签名                     # 应出现「预签名地址使用公网 endpoint」
     ```
 

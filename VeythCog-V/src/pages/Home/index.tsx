@@ -68,15 +68,16 @@ const MenuItem: React.FC<MenuItemProps> = ({ label, icon, color, hoverBg, onSele
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { colors } = useTheme();
-  const loadCategories = useNavStore((s) => s.loadCategories);
-  const loadSetting = useNavStore((s) => s.loadSetting);
+  const loadHome = useNavStore((s) => s.loadHome);
   const categories = useNavStore((s) => s.categories);
   const activeCategoryId = useNavStore((s) => s.activeCategoryId);
   /** 书签数据实际所属分类：数据到位才变，用它触发切分类的入场动画 */
   const dataCategoryId = useNavStore((s) => s.dataCategoryId);
   const setActiveCategory = useNavStore((s) => s.setActiveCategory);
-  // 全站唯一壁纸：由全局 wallpaperStore 管理，导航页只负责入口
+  // 全站唯一壁纸：由全局 wallpaperStore 管理，首页 bootstrap 会顺手带回当前壁纸
   const activeWallpaper = useWallpaperStore((s) => s.active);
+  const applyWallpaper = useWallpaperStore((s) => s.applyActive);
+  const loadActiveWallpaper = useWallpaperStore((s) => s.loadActive);
   const switchRandomWallpaper = useWallpaperStore((s) => s.switchRandom);
   const logout = useAuthStore((s) => s.logout);
 
@@ -92,11 +93,22 @@ const HomePage: React.FC = () => {
   >(null);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 进入页面
+  // 进入页面：本地缓存先渲染，bootstrap 聚合接口静默刷新并带回壁纸
   React.useEffect(() => {
-    loadSetting();
-    loadCategories();
-  }, [loadSetting, loadCategories]);
+    let alive = true;
+    loadHome().then((data) => {
+      if (!alive) return;
+      if (data) {
+        applyWallpaper(data.wallpaper);
+      } else {
+        // 聚合接口不可用时退回单接口，保证壁纸不会因一次失败而消失
+        loadActiveWallpaper();
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loadHome, applyWallpaper, loadActiveWallpaper]);
 
   // 进页面后触发一次「缺失图标补齐」：后端只挑 icon_type=auto 且没有 icon_key 的书签，
   // 已同步过 / 失败冷却中的会直接跳过，因此可以安全地每次进页面调用。延后 1.5s 不抢首屏。
