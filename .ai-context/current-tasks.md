@@ -181,3 +181,14 @@
 | FRM-06 | MainAgent | 文档同步 | 已完成 | `openspec/changes/p3-forms/*`、`.ai-context/change-log.md`、本表 | FRM-05 |
 
 > 验证记录（2026-11-14）：登录空提交「请输入用户名/请输入密码」、注册 `123`「密码至少 6 位」、确认不一致「两次输入的密码不一致」，toast 计数均为 0；书签空提交「请填写网址/请填写名称」、`abc` 触发前缀错误、图标文字清空「请填写图标文字」（`rgb(239,68,68)` / 12px）；「获取图标」在 API 不可达时提示「网络连接失败，请检查网络或服务地址」。preview 构建 API base 为 `https://api.veythcog.top`，`/api/*` 不可达属预期；30s 超时未实机触发。推迟项：Admin 四页 loading/error、≤520px、表格横滚、会话搜索、统一错误摘要。
+## 14. 对话输入框布局 P3（2026-11-14）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| CMP-01 | MainAgent | 工具行分组（左工具 / 右参数 + 分隔线），类名统一 `.vc-composer__resize` / `__grip` | 已完成 | `VeythCog-V/src/pages/Chat/index.tsx` | 用户反馈截图 |
+| CMP-02 | MainAgent | 补齐拖拽把手样式（静置可见、hover/聚焦/拖拽加粗主色、ns-resize、焦点环） | 已完成 | `VeythCog-V/src/styles/page.css` | CMP-01 |
+| CMP-03 | MainAgent | 知识库引用行间距/省略、模型下拉与已绑定模型间距收敛 | 已完成 | `VeythCog-V/src/styles/page.css` | CMP-01 |
+| CMP-04 | MainAgent | 构建/类型检查 + 4173 preview 实测把手、拖拽、键盘、分组 | 已完成（`tsc` 0；build 12.5s） | `openspec/changes/p3-composer-layout/tasks.md`、本表 | CMP-02~03 |
+| CMP-05 | MainAgent | 文档同步 + 行尾归一（page.css 恢复 LF） | 已完成 | `openspec/changes/p3-composer-layout/*`、`.ai-context/change-log.md`、本表 | CMP-04 |
+
+> 验证记录（2026-11-14）：抓手 `44×4`、圆角 `9999px`、`cursor:ns-resize`、`touch-action:none`；拖拽 140px 使 textarea `44→110`、grip `is-active`；合成 `ArrowUp` 使 `44→68`；左组 x≈418–542、分隔线 x≈550、右组 x≈2408–2488，右组靠右成立。preview API base 指向 `https://api.veythcog.top`，验收用 `page.route` 桩接会话/模型接口。推迟项：≤520px 移动端换行与触屏拖拽、输入法回车、流式滚动跟随、Admin 四页状态、表格横滚。

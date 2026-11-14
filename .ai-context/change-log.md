@@ -161,3 +161,14 @@
 - **验证**：`cd VeythCog-V && npx tsc --noEmit` EXIT=0；`npm run build` EXIT=0（7.47s，入口 `index-BYWnmg7-.js` 892.60 kB / gzip 288.48）。4173 preview + Tabbit 实测：登录空提交内联「请输入用户名/请输入密码」、注册密码 `123` 内联「密码至少 6 位」、确认不一致内联「两次输入的密码不一致」，三处 toast 计数 0；书签空提交内联「请填写网址/请填写名称」、网址 `abc` 内联「网址需以 http:// 或 https:// 开头」、清空图标文字后内联「请填写图标文字」（`rgb(239,68,68)` / 12px）；点「获取图标」在 API 不可达时提示「网络连接失败，请检查网络或服务地址」，证明 client.ts 映射生效。
 - **环境说明**：preview 构建 API base = `https://api.veythcog.top`，`/api/*` 全部 `ERR_FAILED`，故书签分类/列表为空、保存请求不可达属预期；30s 超时（AbortError）未实机触发，仅做代码路径与类型校验。
 - **本次推迟**：Admin 四页 loading/error、≤520px 移动端、表格横滚、会话搜索、统一错误摘要。
+
+## 2026-11-14 P3 对话输入框布局优化（前端）
+
+- **背景**：用户反馈对话输入框"左端过于紧凑、交互全挤在一坨"，且原本可拖拽拉高的把手（短横线）消失，图标/按钮缺少分组。
+- **把手消失根因**：`VeythCog-V/src/pages/Chat/index.tsx` 一直渲染 `composer-resize-handle` / `composer-resize-grip`，但 `VeythCog-V/src/styles/page.css` 从未定义这两个类，元素无尺寸无背景 → 既看不见也点不到；拖拽算法本身正常。
+- **`Chat/index.tsx`**：工具行拆为左「工具」组（知识库/附件/联网/语音）与右「参数」组（压缩/模型/已绑定），中间 `.vc-composer__divider`；类名统一为 `.vc-composer__resize` / `.vc-composer__grip`；保留 `role="slider"`、`aria-valuemin/max/now` 与方向键 24px 步长。
+- **`page.css`**：补齐把手样式（容器 12px 高、`cursor:ns-resize`、`touch-action:none`；抓手 44×4 圆角、静置可见，hover/`is-active`/`:focus-visible` 变 60×4 主色）；工具行 `gap:8px`、两组 `inline-flex`、右组 `margin-left:auto`；知识库引用行 `padding:10px 10px 0`、间距 10px、提示单行省略；模型下拉与已绑定模型间距 2px。颜色/圆角/时长全部取令牌。
+- **构建**：`cd VeythCog-V && npx tsc --noEmit` EXIT=0；`npm run build` EXIT=0（12.5s，入口 `index-DXvm-7IX.js` 892.60 kB / gzip 288.48）。
+- **运行时验收（4173 preview + Tabbit）**：为让 composer 出现，用 `page.route` 桩接 `/api/chat/conversations`、`/messages`、`/api/llm/models`、`/api/nav/**`（preview 构建 API base 为 `https://api.veythcog.top`，直连 `ERR_FAILED`）。实测抓手 44×4、`border-radius:9999px`、`cursor:ns-resize`、`touch-action:none`；鼠标从把手向上拖 140px，textarea 44→110，grip 含 `is-active`；分组矩形：左组 x≈418–542、分隔线 x≈550、右组 x≈2408–2488（容器 405–2501），右组靠右成立。方向键 resize 以合成 `KeyboardEvent` 验证（44→68）；Playwright `keyboard.press` 在该页未触发高度变化，属自动化焦点限制，React 处理器本身已确认执行（`dispatchEvent` 返回 false 即 `preventDefault` 被调用）。
+- **注意**：`sed -i` 曾把 `page.css` 行尾改为 CRLF，已用 `sed -i 's/\r$//'` 归一为 LF，`git diff` 从 1.1 万行回落到 85 行，避免整文件重写。
+- **本次推迟**：≤520px 移动端工具行换行与触屏拖拽、对话页输入法回车误发/流式滚动跟随、Admin 四页 loading/error、表格横滚。

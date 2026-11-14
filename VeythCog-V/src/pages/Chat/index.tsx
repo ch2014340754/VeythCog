@@ -681,7 +681,7 @@ const ChatPage: React.FC = () => {
                 </div>
               )}
               <div
-                className="composer-resize-handle"
+                className="vc-composer__resize"
                 role="slider"
                 aria-label="拖动调整输入框高度"
                 aria-orientation="vertical"
@@ -694,7 +694,7 @@ const ChatPage: React.FC = () => {
                 onKeyDown={handleComposerResizeKeyDown}
               >
                 <div
-                  className={'composer-resize-grip' + (composerHeight > MIN_COMPOSER_HEIGHT ? ' is-active' : '')}
+                  className={'vc-composer__grip' + (composerHeight > MIN_COMPOSER_HEIGHT ? ' is-active' : '')}
                 />
               </div>
               <div className="vc-composer composer-glow">
@@ -746,73 +746,80 @@ const ChatPage: React.FC = () => {
                     disabled={!inputValue.trim()}
                   />
                 </div>
-                {/* 工具行 */}
+                {/* 工具行：左侧工具按钮组 / 右侧参数与设置组，中间细分隔线 */}
                 <div className="vc-composer__tools">
-                  <Tooltip title="知识库（RAG）">
-                    <button
-                      className={
-                        'vc-composer-tool' + ((activeConv?.knowledgeDocIds?.length ?? 0) > 0 ? ' is-on' : '')
-                      }
-                      onClick={openKbDrawer}
-                    >
-                      <Icon icon={databaseIcon} width={16} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip title="上下文自动压缩：历史超过阈值时摘要最早对话，摘要失败则丢弃最早历史">
-                    <span
-                      className={
-                        'vc-composer-switch' + (activeConv?.compressEnabled !== false ? ' is-on' : '')
-                      }
-                    >
-                      <Switch
+                  <div className="vc-composer__group">
+                    <Tooltip title="知识库（RAG）">
+                      <button
+                        className={
+                          'vc-composer-tool' + ((activeConv?.knowledgeDocIds?.length ?? 0) > 0 ? ' is-on' : '')
+                        }
+                        onClick={openKbDrawer}
+                      >
+                        <Icon icon={databaseIcon} width={16} />
+                      </button>
+                    </Tooltip>
+                    <Tooltip title="附件（demo）">
+                      <button className="vc-composer-tool">
+                        <Icon icon={paperclipIcon} width={16} />
+                      </button>
+                    </Tooltip>
+                    <Tooltip title="联网搜索（demo）">
+                      <button className="vc-composer-tool">
+                        <Icon icon={globeIcon} width={16} />
+                      </button>
+                    </Tooltip>
+                    <Tooltip title="语音输入（demo）">
+                      <button className="vc-composer-tool">
+                        <Icon icon={micIcon} width={16} />
+                      </button>
+                    </Tooltip>
+                  </div>
+
+                  <span className="vc-composer__divider" aria-hidden="true" />
+
+                  <div className="vc-composer__group vc-composer__group--end">
+                    <Tooltip title="上下文自动压缩：历史超过阈值时摘要最早对话，摘要失败则丢弃最早历史">
+                      <span
+                        className={
+                          'vc-composer-switch' + (activeConv?.compressEnabled !== false ? ' is-on' : '')
+                        }
+                      >
+                        <Switch
+                          size="small"
+                          checked={activeConv?.compressEnabled !== false}
+                          onChange={toggleCompress}
+                        />
+                        <span>压缩</span>
+                      </span>
+                    </Tooltip>
+                    {models.length > 0 && (
+                      <Select
                         size="small"
-                        checked={activeConv?.compressEnabled !== false}
-                        onChange={toggleCompress}
+                        variant="borderless"
+                        className="composer-model-select vc-composer-model"
+                        value={
+                          activeConv?.vendor
+                            ? modelId(activeConv.vendor, activeConv.modelCode!)
+                            : currentModelId ?? undefined
+                        }
+                        placeholder="选择模型"
+                        options={models.map((m) => ({
+                          value: modelId(m.vendor, m.modelCode),
+                          label: (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <ModelModalityIcons types={m.modalities} fallback={m.modelType} size={13} />
+                              {m.modelName}（{m.vendor}）
+                            </span>
+                          ),
+                        }))}
+                        onChange={(id) => setCurrentModel(id)}
+                        disabled={!!activeConv?.vendor || loadingModels}
+                        popupMatchSelectWidth={false}
                       />
-                      <span>压缩</span>
-                    </span>
-                  </Tooltip>
-                  <Tooltip title="附件（demo）">
-                    <button className="vc-composer-tool">
-                      <Icon icon={paperclipIcon} width={16} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip title="联网搜索（demo）">
-                    <button className="vc-composer-tool">
-                      <Icon icon={globeIcon} width={16} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip title="语音输入（demo）">
-                    <button className="vc-composer-tool">
-                      <Icon icon={micIcon} width={16} />
-                    </button>
-                  </Tooltip>
-                  {models.length > 0 && (
-                    <Select
-                      size="small"
-                      variant="borderless"
-                      className="composer-model-select vc-composer-model"
-                      value={
-                        activeConv?.vendor
-                          ? modelId(activeConv.vendor, activeConv.modelCode!)
-                          : currentModelId ?? undefined
-                      }
-                      placeholder="选择模型"
-                      options={models.map((m) => ({
-                        value: modelId(m.vendor, m.modelCode),
-                        label: (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <ModelModalityIcons types={m.modalities} fallback={m.modelType} size={13} />
-                            {m.modelName}（{m.vendor}）
-                          </span>
-                        ),
-                      }))}
-                      onChange={(id) => setCurrentModel(id)}
-                      disabled={!!activeConv?.vendor || loadingModels}
-                      popupMatchSelectWidth={false}
-                    />
-                  )}
-                  {activeConv?.vendor && <span className="vc-composer-bound">已绑定模型</span>}
+                    )}
+                    {activeConv?.vendor && <span className="vc-composer-bound">已绑定模型</span>}
+                  </div>
                 </div>
               </div>
             </div>
