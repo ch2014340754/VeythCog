@@ -13,6 +13,7 @@
 > - `.ai-context/global-rule.md`：编码规范 / 命名规约 / 错误处理 / 返回体格式（怎么做）
 > - `.ai-context/current-tasks.md`：当前任务分配表（谁 / 做什么 / 状态 / 输出文件 / 依赖）
 > - `.ai-context/change-log.md`：spec 变更记录（改了哪个接口 / 表，通知所有 Agent）
+> - **`VeythCog-V/docs/frontend-style-guide.md`：前端视觉规范（颜色/令牌/玻璃/排版/动效/暗色/反模式）—— 任何前端页面改动前必读**
 > - `openspec/knowledge-prd.md`：知识库 PRD（优化版 v0.2）
 > - `openspec/api-spec.md`：知识库 API 契约
 > - `openspec/sql/knowledge-init.sql`：知识库建表脚本
@@ -410,3 +411,16 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 真实 AK（DashScope/DeepSeek）/ `LLM_KEY_AES_SECRET` 与数据库凭证只存 `application-local.yml`（已 gitignore）或环境变量，不得出现在任何提交文件或本记忆文档。
 - 前端任何层**不持久化** API Key：只在配置页表单内瞬时持有并随请求提交，不写 localStorage / sessionStorage / 日志；后端以 AES-256-GCM 加密后入库，响应只回脱敏值。
 - 本记忆文档不含任何密钥、口令、令牌。
+
+---
+
+## 13. 前端视觉体系（2026-11-14 起）
+
+> 完整规范见 `VeythCog-V/docs/frontend-style-guide.md`（改任何前端页面前先读它）。这里只记"为什么"和"当前基准"。
+
+- **设计语言**：淡紫低饱和空间感 + 真毛玻璃层叠 + 克制的品牌紫光；不堆纯白卡片，颜色只从主题预设取。
+- **颜色三层**：`src/styles/presets.ts`（6 套 preset × 亮/暗）→ `ThemeContext` 的 `colors`（inline style 首选）→ `applyCSSVariables` 写入的 `--color-* / --glass-*`。
+- **参考实现**：登录页 `VeythCog-V/src/pages/Login/`（`index.tsx` + `login.css`），已实现：两栏品牌 + 玻璃卡、4 团漂移光斑（5/5/7/4s）+ 静态底光、指针视差（34/26px）、conic 渐变描边随指针方位（`atan2(dx,-dy)`）、暗色"亮填充 + 深字 `#14102B`"、autofill 覆盖、≥1900px 放大档与 `max-height:780px` 压缩档。
+- **两条硬约束（用户明确要求）**：① 动效要看得出来（位移 ≤20%、scale ≤1.28，但周期控制在 4–12s）；② **回复里不再输出图片**，视觉验收一律用计算样式/几何数值（`.tabbit/measure-speed.js`、`verify-*.js`）。
+- **踩坑记录**：只做漂移光斑会让某相位整页发白（必须有静态 `core` 底光）；暗色 primary 被提亮到 `#A78BFA` 后白字只有 2.4:1（改深字）；`primary → accent` 渐变在 amethyst 下是紫→琥珀的"夕阳橙"（改同色相叠加）。
+- **迭代规则**：视觉规则变更 = 先改代码 → 再改该规范文档 → 保持本节与索引有效。设计预览图存放 `VeythCog-V/design-preview/`。

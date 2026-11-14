@@ -73,3 +73,16 @@ VeythCog-V/.env
 VeythCog-V/.env.local
 VeythCog-V/.env.*.local
 **/*-local.yml
+
+========================================
+### 本地工具草稿（不随仓库分发） ###
+=======================================
+
+# Tabbit 浏览器验证脚本（视觉/动效验收用的临时 Playwright 片段，可随时删除）
+.tabbit/
+
+# MemSearch 本地记忆（跨会话上下文，含本机绝对路径，不入库）
+.memsearch/
+
+# 设计预览大图（单张 3–4MB，仅本机对照用）
+VeythCog-V/design-preview/

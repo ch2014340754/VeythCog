@@ -29,6 +29,7 @@
 | 2026-11-13 | 🆕 | 模型目录管理：`/admin/llm-models` 增删改查 + 上下架 + 从供应商同步（百炼按 TG 过滤、只增不删、新增默认不上架、有绑定禁止删除/改编码） | `openspec/changes/llm-model-catalog-admin/*`、`vc-llm/service/LlmCatalogAdminService.java`、`vc-llm/dto/{AdminModelItem,ModelSyncResult}.java`、`vc-app/web/{AdminLlmModelController,AdminModelSaveRequest,AdminModelEnabledRequest,AdminModelSyncRequest}.java`、`LlmModelRepository`、`UserLlmBindingRepository` | 前后端 Agent |
 | 2026-11-13 | ✏️ | 前端系统管理「模型目录」由 mock 改为真实接口（表格/筛选/新增/编辑/删除/上下架/同步，静默刷新）；列表撑满父容器、取消分页改内部滚动、新增关键字搜索 | `VeythCog-V/src/api/adminModels.ts`、`src/pages/Admin/Models.tsx` | 前端 Agent |
 | 2026-11-12 | ✏️ | 导航图标接口端到端验证：18 条历史书签同步成功 13 条；5 条因站点/网络原因保留 1 天失败冷却 | `openspec/changes/p2-nav-icons/tasks.md`、`design.md §7` | 前后端 Agent |
+| 2026-11-14 | 📄 | 新增前端视觉规范（颜色三层 / 令牌 / 玻璃配方 / 排版 / 动效 / 暗色清单 / 新页面 checklist / 反模式）；登录页定为视觉基准并完成改版（玻璃卡 + 漂移光斑 + 指针视差 + 方位渐变描边） | `VeythCog-V/docs/frontend-style-guide.md`（新）、`VeythCog-V/src/pages/Login/{index.tsx,login.css}`、`PROJECT_MEMORY.md §13`、`.ai-context/global-rule.md §9` | 全体 Agent（尤其前端） |
 
 ## 关键 spec 变更明细（v0.1 → v0.2，需全体 Agent 知悉）
 
@@ -129,3 +130,11 @@
 - DTO：`AdminModelItem` / `CatalogModelItem` / `LlmModelItem` 增 `modalities`；`AdminModelSaveRequest` 接受 `modalities` 列表；新增/编辑接口保存全部模态。
 - 前端：`ModelTypeTag` 扩展 `ModelModalityTags` / `ModelModalityIcons`；管理目录类型列改为「类型 / 模态」多标签+按任一模态筛选，表单支持多选全部模态；模型配置页与对话下拉按全部模态展示图标。`npm run build` EXIT=0。
 - 验证（8125）：`mvn -o -q -pl vc-llm,vc-app -am -DskipTests compile` EXIT=0。首次同步 `total=373 / added=0 / updated=84 / unchanged=289`，`qwen3.8-27b` 由 `model_type=vision, modalities=[vision]` 变为 `model_type=reasoning, modalities=[text,reasoning,vision]`；二次同步 `updated=0 / unchanged=373`（幂等）。`/llm/models` 与 `/llm/catalog` 均下发三模态；`qwen3.8-27b` 对话 `code=0`「你好」约 1.54s。临时新增/编辑模型验证多模态保存后已删除；测试会话已删除，8125 已停止。
+## 2026-11-14 前端视觉规范落地 + 登录页改版（视觉基准确立）
+
+- **背景**：前端此前无统一视觉规范，页面各自为政（纯白卡片、硬编码紫 `#7C3AED`、深浅色不一致）。登录页被用户指定为改版起点，改完后沉淀为规范。
+- **新增文档**：`VeythCog-V/docs/frontend-style-guide.md`（14 节）。核心：颜色三层（presets → ThemeContext.colors → CSS 变量）、令牌表（radius/space/shadow/font/easing/duration/z-index/glass）、玻璃四层配方、排版表、动效约束（只动 transform/opacity、位移 ≤20%、scale 0.94–1.28、必须写 reduced-motion 与 pointer:coarse 降级、同屏常驻动画 ≤2 组）、暗色 7 项清单、新页面 10 条 checklist、8 条真实反模式。
+- **登录页（`VeythCog-V/src/pages/Login/index.tsx` + 新建 `login.css`）**：两栏（品牌语 + 玻璃卡）；场景层 = 静态 `core` 底光 + 漂移光斑 a/b/c/d（5/5/7/4s）+ `orbit` ±7°/12s + 指针视差 34px/26px + 网格 + 噪点 + 暗角呼吸；卡片 `blur(32px) saturate(180%)` + `::before` 1px 渐变描边 + `::after` 顶部霜面；`conic-gradient` 亮边跟随指针方位（`atan2(dx,-dy)`、lerp 0.18、距离衰减 `clamp(.32, 1.18-dist*.42, 1)`）。
+- **设计与无障碍决策**：放弃 `primary→accent` 渐变（amethyst 的 accent 是 `#FBBF24`，紫→黄=夕阳橙），改同色相白/黑叠加；暗色 preset primary 被提亮（`#A78BFA`）白字仅 2.4:1，改"亮填充 + `#14102B` 深字"（≈8:1）；覆盖 Chrome autofill 的 `#E8F0FE`；≥1900px 放大档与 `max-height:780px` 压缩档。
+- **验证**：`npx tsc --noEmit` EXIT=0；动效实测 a 94px/s、b 89、c 87、d 57、orbit 2.09°/s；描边方位右下 146.33°（期望 146.3°）、左下 -147.8°（期望 -146.3°）；光源与卡片矩形重叠面积 0。
+- **用户约束（长期）**：视觉验收不要用截图，用 computed style / getBoundingClientRect 数值；回复中不输出图片。

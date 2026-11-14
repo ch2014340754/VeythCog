@@ -67,3 +67,11 @@
 - 契约先行：前端先 mock，后端按 `openspec/api-spec.md` 实现后切换；切换时 `api/*.ts` 只替换数据来源，不改变调用方式。
 - `ApiResponse<T> = { code, data, message }` 与后端 `BaseResponse` 对齐。
 - 前端不感知厂商差异（不写死厂商/模型列表），差异收敛在后端网关/工厂层。
+## 9. 前端视觉规范（硬性）
+
+- 任何 `VeythCog-V` 页面/组件改版前，必须先读 `VeythCog-V/docs/frontend-style-guide.md`，按其中的颜色三层、令牌表、玻璃配方、排版表、动效约束执行。
+- **禁止硬编码颜色**：只能用 `useTheme().colors`、CSS 变量 `--color-*` / `--glass-*`，或由 `colors` 派生的页面级 `--xx-*` 变量。
+- **禁止魔法数值**：圆角/间距/阴影/z-index 用 `--radius-*` / `--space-*` / `--shadow-*` / `--z-*` 令牌。
+- 新增动画必须只动 `transform` / `opacity`，并同时提供 `prefers-reduced-motion` 与 `(pointer: coarse)` 降级；同屏常驻动画 ≤ 2 组。
+- 交付前置：`cd VeythCog-V && npx tsc --noEmit` 必须 0 错误；暗色（`theme-appearance=dark`）、≤520px 宽、≤780px 高、2544×1380 四态都要能看。
+- **不要用截图当验收材料**（用户明确要求）：视觉验证用 computed style / getBoundingClientRect 的数值。
