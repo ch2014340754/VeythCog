@@ -403,3 +403,26 @@ body.has-bg .vc-subnav__item {
 代价要说清楚：`cover` 会按比例**裁掉**长宽比偏离 1:1 的图（宽图裁左右、高图裁上下）。绝大多数站点 favicon 是 1:1，实测方形 1:1、16:6、1:2.5 三种样例：1:1 完整满格，16:6 左右各裁掉一段；如果某个站点是纯字标、裁掉会影响识别，可以改成让它 `contain`（需要按书签单独指定）——这条留作可选后续。
 
 验证：预览环境注入 88px 的样例磁贴，三张图都是边到边、圆角裁切，磁贴内沿无玻璃底残留；`build` ✓ 7.67s。
+
+### 10.10 切页不再闪：把"整页重画"拆掉
+
+用户反馈：点左侧 rail 菜单或系统管理的子菜单，切路由时会短暂闪一下。要求尽量无感（可以加 loading / 过渡）。
+
+排查出三个叠加来源，都指向"整块内容被重画"：
+
+1. **Suspense 摆错层**。`App.tsx` 的 `<Suspense fallback={<div style={{minHeight:'100vh'}}>加载中…</div>}>` 裹着整个 `<Routes>`，而页面是 `React.lazy` 的。任何一次首次进入某个页面，chunk 没到位 → 整个路由树被 fallback 顶掉 → **外壳（rail + 玻璃内容卡）一起消失**，只剩一句"加载中…"在屏幕中央。这是最明显的那一闪。
+2. **内页整页入场动画**。`page.css` 里 `.vc-page, .vc-home { animation: vc-fade-up 400ms both }`，每次挂载都从 `opacity: 0` + 下移 10px 淡入——每点一次菜单，内容区先空 400ms 再出现。
+3. **表格行错峰入场**。`.admin-table .ant-table-tbody > tr` 带 `vc-fade-up` + `45ms × 行号` 的 `animation-delay` + `both`，先把所有行压到 `opacity: 0`，再逐行浮现，最大行累计到 405ms 才开始动。系统管理全是表格页，所以这条格外显眼。
+
+改法：
+
+- **App.tsx**：全局 Suspense 的 fallback 换成 `PageLoadingBar`（一条 3px 顶部细进度条），不再整屏占位；新增 `React.useEffect(() => schedulePreloadPages(), [])`。
+- **MainLayout.tsx**：在 `<Outlet/>` 外面再套一层局部 `<Suspense fallback={<PageLoadingBar docked />}>`。页面 chunk 加载时只影响内容区，rail 与内容卡原地不动。
+- **新增 `src/routes/lazyPages.ts`**：`PAGE_MODULES` 懒加载清单集中一处，`App.tsx` 的 17 个 `React.lazy` 全部改成读这份清单；`schedulePreloadPages()` 在首屏稳定后（`requestIdleCallback`，兜底 900ms）把其余 chunk 全部预取一遍。之后切页只是同步渲染，没有网络等待，也就没有空档。
+- **page.css**：`.vc-page` 移出 `vc-fade-up`，只有 `.vc-home`（整屏换页）保留淡入；`.admin-table` 的行移出错峰入场，表格的高光交给已有的 sheen 扫光。
+
+验证：`/admin/users` 载入后检查 45 个 assets 里 `Roles/Models/Monitoring/AuditLog/Tasks/Config` 等 chunk 已全部预取；`.vc-page` 与表格行的 `animationName` 均为 `none`。随后装一个 rAF 采样器点「角色管理」：97 帧内 `.vc-page` 缺失 0 帧、`.vc-shell` 缺失 0 帧、无"加载中…"文案；rail 点「对话」85 帧内 `.vc-shell` 缺失 0 帧。
+
+遗留（无法彻底消除的那部分）：**首次**进入某个页面且预取还没跑完时，仍会走一次局部 Suspense，此时只有一条细进度条 + 外壳保持不动，但内容区会短暂空一下。正常情况下预取在首屏后 1 秒内完成，实际很难撞上。
+
+`build` ✓ 7.13s。

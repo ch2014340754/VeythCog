@@ -800,6 +800,31 @@ body.has-bg .vc-subnav__foot {
   100% { transform: translateX(240%); }
 }
 
+/* ---------- 页面加载条（路由 chunk 未到位时的那 2px 线） ----------
+   整屏"加载中…"会把外壳一起顶掉，观感就是闪一下白；这里只画线、外壳不动。 */
+.vc-page-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 40;
+  pointer-events: none;
+}
+.vc-page-loading .vc-slim-progress {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.vc-page-loading--docked {
+  position: absolute;
+  inset: 0;
+  height: auto;
+}
+.vc-page-loading--docked .vc-slim-progress {
+  border-radius: 0;
+  height: 3px;
+}
+
 .vc-provider__head {
   display: flex;
   align-items: center;
@@ -5129,18 +5154,20 @@ body.has-bg .vc-search__icon-btn {
   to { transform: translate3d(130%, 0, 0); }
 }
 
-/* ---------- 页面切换：淡入上滑 ---------- */
+/* ---------- 页面切换：只有首屏（/home）保留淡入上滑 ----------
+   内页每次挂载都从 opacity 0 淡入 = 点一次菜单闪一下，和"切页要无感"冲突，
+   所以内页不再做整页入场；列表/表格的行错峰仍保留（幅度小，看不出空档）。 */
 
-.vc-page,
 .vc-home {
   animation: vc-fade-up var(--motion-duration-slow) var(--motion-ease-out) both;
 }
 
-/* ---------- 列表 / 网格：错峰淡入 ---------- */
+/* ---------- 列表 / 网格：错峰淡入 ----------
+   表格行不再参与：`both` 会先把行压到 opacity 0，再按 45ms × 行号 依次浮现，
+   每次切页都能看见表格"一行行长出来"，就是那道闪。行的高光交给 sheen 扫光。 */
 
 .vc-stagger > *,
-.vc-grid > *,
-.admin-table .ant-table-tbody > tr {
+.vc-grid > * {
   animation: vc-fade-up var(--motion-duration-base) var(--motion-ease-out) both;
 }
 

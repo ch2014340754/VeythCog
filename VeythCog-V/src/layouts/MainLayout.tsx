@@ -1,5 +1,6 @@
 import UserMenu from '@/components/UserMenu';
 import VeythCogLogo from '@/components/VeythCogLogo';
+import PageLoadingBar from '@/components/PageLoadingBar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useAuthStore } from '@/stores/authStore';
@@ -107,7 +108,10 @@ const MainLayout: React.FC = () => {
       {/* 右侧内容区 - 留出导航栏空间 */}
       <main className="vc-shell__main">
         <div className="vc-shell__canvas">
-          <Outlet />
+          {/* 局部 Suspense：页面 chunk 未到位时只出细进度条，外壳（rail + 内容卡）原地不动 */}
+          <React.Suspense fallback={<PageLoadingBar docked />}>
+            <Outlet />
+          </React.Suspense>
         </div>
       </main>
     </div>
