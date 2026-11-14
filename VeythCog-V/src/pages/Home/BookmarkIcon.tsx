@@ -54,20 +54,22 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
 
   const isTextIcon = !!icon && icon.type === 'text';
   const isFallback = !isTextIcon && (imgError || !imageUrl);
-  const imgSize = Math.round(size * 0.9);
+  /** 图片图标：整块磁贴就是这张图，没有玻璃底、没有留白（见 .vc-iconpreview--img） */
+  const isImageIcon = !isTextIcon && !isFallback;
 
   const cls = [
     'vc-iconpreview',
     isTextIcon ? 'vc-iconpreview--text' : '',
+    isImageIcon ? 'vc-iconpreview--img' : '',
     plain && !isTextIcon ? 'vc-iconpreview--plain' : '',
     isFallback ? 'vc-iconpreview--fallback' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
-  // 壁纸模式：白色玻璃图标底（透明度随全局玻璃强度变化）
+  // 壁纸模式：白色玻璃图标底（透明度随全局玻璃强度变化）；图片图标已铺满磁贴，不再垫底
   const wallpaperStyle: React.CSSProperties =
-    isWallpaperMode && !isTextIcon && !isFallback
+    isWallpaperMode && !isTextIcon && !isFallback && !isImageIcon
       ? {
           backgroundColor: whiteGlass(glassOpacity, 0.1, 0.3),
           borderColor: 'rgba(255,255,255,0.28)',
@@ -98,7 +100,7 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
           src={imageUrl}
           alt={title}
           onError={() => setImgError(true)}
-          style={{ width: imgSize, height: imgSize }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           loading="lazy"
         />
       ) : (

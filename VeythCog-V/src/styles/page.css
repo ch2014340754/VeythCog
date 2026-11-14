@@ -2103,8 +2103,8 @@ body.dark .vc-dialog-scrim {
    颜色全部由主题变量派生，亮/暗/玻璃/壁纸下自动适配，不引入新色值。 */
 .vc-panel.vc-table-card {
   --vc-table-glow:
-    0 0 0 1px color-mix(in srgb, var(--color-primary) 14%, transparent),
-    0 0 26px -16px color-mix(in srgb, var(--color-primary) 55%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent),
+    0 0 34px -12px color-mix(in srgb, var(--color-primary) 66%, transparent),
     inset 0 1px 0 color-mix(in srgb, #ffffff 55%, transparent);
   position: relative;
   isolation: isolate;
@@ -2182,13 +2182,19 @@ body.dark .vc-panel.vc-table-card {
 .vc-table-card .admin-table .ant-table-thead > tr > th {
   background: color-mix(in srgb, var(--color-primary) 4%, transparent) !important;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 900;
+  text-align: center;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-tertiary);
+  /* 表头不要圆角：圆角是卡片的语言，表头跟着圆会像一条被裁掉两端的色带 */
+  border-radius: 0 !important;
 }
 
-.vc-table-card .admin-table .ant-table-tbody > tr > td { font-size: 13px; }
+.vc-table-card .admin-table .ant-table-tbody > tr > td {
+    font-size: 13px;
+    text-align: center;
+}
 
 .vc-table-card .ant-pagination { margin: var(--space-md) var(--space-lg) !important; }
 
@@ -4349,6 +4355,26 @@ body.has-bg .vc-bookmark__add-text {
 .vc-iconpreview img {
   object-fit: contain;
 }
+
+/* 图片图标：整块磁贴就是这张图 —— 去掉玻璃底与描边，图片 100% 铺满，圆角由外层裁 */
+.vc-iconpreview--img {
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* 极细内描边：纯白底的 logo 摆在浅色壁纸/白底上时还能看出边界，不算留白 */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #0f172a 6%, transparent);
+}
+.vc-iconpreview--img img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+body.has-bg .vc-iconpreview--img,
+body.dark .vc-iconpreview--img {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
 body.has-bg .vc-iconpreview {
   border-color: rgba(255, 255, 255, 0.28);
 }
@@ -5551,6 +5577,49 @@ body.dark .vc-panel:not(.vc-stat)::after {
     color-mix(in srgb, var(--color-primary) 36%, transparent) 48deg,
     transparent 60deg
   );
+}
+
+/* ---------- 5.5 表格卡：流光加大一档 ----------
+   表格又宽又长，同一套面板配方放在小卡上刚好，铺在大表上就显得发虚：
+   光弧拉长（±30° → ±51°）、描边从 2px 加到 3px、底光与峰值各提一档。
+   只动 `.vc-table-card`（放在 4、5 之后，才能压过壁纸/暗色的通用面板规则），
+   设置页分区与弹窗保持原强度。 */
+
+.vc-panel.vc-table-card::after {
+  z-index: 5;
+  padding: 3px;
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 46deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 44%, transparent) 16deg,
+    color-mix(in srgb, var(--color-primary) 100%, transparent) 44deg,
+    color-mix(in srgb, var(--color-primary) 44%, transparent) 72deg,
+    transparent 102deg
+  );
+  opacity: calc(0.14 + var(--glow) * 0.86);
+}
+
+body.has-bg .vc-panel.vc-table-card::after {
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 46deg),
+    transparent 0deg,
+    rgba(255, 255, 255, 0.46) 16deg,
+    rgba(255, 255, 255, 1) 44deg,
+    rgba(255, 255, 255, 0.46) 72deg,
+    transparent 102deg
+  );
+}
+
+body.dark .vc-panel.vc-table-card::after {
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 46deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 46%, transparent) 16deg,
+    rgba(255, 255, 255, 0.92) 44deg,
+    color-mix(in srgb, var(--color-primary) 46%, transparent) 72deg,
+    transparent 102deg
+  );
+  opacity: calc(0.16 + var(--glow) * 0.84);
 }
 
 /* ---------- 6. 降级 ---------- */
