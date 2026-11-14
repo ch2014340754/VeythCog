@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { Input, Button } from 'antd';
+import { Input, Button, Segmented } from 'antd';
 import * as yaml from 'js-yaml';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 const JsonYaml: React.FC = () => {
-  const { colors } = useTheme();
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [mode, setMode] = useState<'json2yaml' | 'yaml2json'>('json2yaml');
@@ -28,59 +26,61 @@ const JsonYaml: React.FC = () => {
   };
 
   return (
-    <ToolShell
-      title="JSON ↔ YAML"
-      description="JSON 和 YAML 互转"
-      fillHeight
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
-              {mode === 'json2yaml' ? 'JSON' : 'YAML'}
+    <ToolShell title="JSON ↔ YAML" description="JSON 和 YAML 互转" fillHeight>
+      <div className="vc-tool-split">
+        <div className={`vc-tool-pane${error ? ' has-error' : ''}`}>
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">{mode === 'json2yaml' ? 'JSON' : 'YAML'}</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{input.length.toLocaleString()} 字符</span>
             </div>
+          </div>
+          <div className="vc-tool-pane__body">
             <Input.TextArea
+              className="vc-mono-input"
+              variant="borderless"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={mode === 'json2yaml' ? '{"a":1,"b":[1,2]}' : 'a: 1\nb:\n  - 1\n  - 2'}
-              style={{ flex: 1, minHeight: 0, fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>输出</div>
-            <Input.TextArea
-              value={error || output}
-              readOnly
-              style={{
-                flex: 1,
-                minHeight: 0,
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
-                fontSize: 13,
-                color: error ? colors.error : colors.text,
-              }}
             />
           </div>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 12,
-            flexShrink: 0,
-            paddingTop: 12,
-            borderTop: `1px solid ${colors.border}`,
-          }}
-        >
-          <Button size="small" type={mode === 'json2yaml' ? 'primary' : 'default'} onClick={() => setMode('json2yaml')}>
-            JSON → YAML
-          </Button>
-          <Button size="small" type={mode === 'yaml2json' ? 'primary' : 'default'} onClick={() => setMode('yaml2json')}>
-            YAML → JSON
-          </Button>
-          <div style={{ flex: 1 }} />
-          <Button size="small" type="primary" onClick={convert} disabled={!input.trim()}>转换</Button>
+
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">输出</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{output.length.toLocaleString()} 字符</span>
+            </div>
+          </div>
+          <div className="vc-tool-pane__body">
+            {error ? (
+              <div className="vc-tool-error">{error}</div>
+            ) : (
+              <Input.TextArea
+                className="vc-mono-input"
+                variant="borderless"
+                value={output}
+                readOnly
+                placeholder="转换结果"
+              />
+            )}
+          </div>
         </div>
+      </div>
+
+      <div className="vc-tool-bar">
+        <Segmented
+          className="vc-segmented"
+          value={mode}
+          onChange={(v) => setMode(v as 'json2yaml' | 'yaml2json')}
+          options={[
+            { label: 'JSON → YAML', value: 'json2yaml' },
+            { label: 'YAML → JSON', value: 'yaml2json' },
+          ]}
+        />
+        <div className="vc-tool-bar__spacer" />
+        <Button type="primary" onClick={convert} disabled={!input.trim()}>转换</Button>
       </div>
     </ToolShell>
   );

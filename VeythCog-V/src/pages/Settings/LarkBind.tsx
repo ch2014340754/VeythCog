@@ -4,8 +4,8 @@ import { Icon } from '@iconify/react';
 import birdIcon from '@iconify-icons/lucide/bird';
 import linkIcon from '@iconify-icons/lucide/link';
 import unlinkIcon from '@iconify-icons/lucide/unlink';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
+import PageHeader from '@/components/PageHeader';
 
 function formatTime(ts?: number): string {
   if (!ts) return '-';
@@ -14,7 +14,6 @@ function formatTime(ts?: number): string {
 }
 
 const LarkBindPage: React.FC = () => {
-  const { colors } = useTheme();
   const { lark, bindLark, unbindLark } = useAuthStore();
 
   const onBind = async () => {
@@ -31,51 +30,22 @@ const LarkBindPage: React.FC = () => {
 
   return (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: '0 0 20px' }}>
-        飞书账号绑定
-      </h2>
+      <PageHeader title="飞书账号绑定"  />
 
-      <div
-        className="glass-panel"
-        style={{
-          background: colors.surface,
-          borderRadius: 'var(--radius-lg)',
-          border: `1px solid ${colors.border}`,
-          padding: 32,
-        }}
-      >
+      <section className="vc-panel">
         {lark.bound ? (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-              <div
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: '50%',
-                  background: colors.primary10,
-                  color: colors.primary,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 24,
-                  flexShrink: 0,
-                }}
-              >
-                <Icon icon={birdIcon} width={28} />
+            <div className="vc-lark-head">
+              <div className="vc-lark-head__icon">
+                <Icon icon={birdIcon} width={26} />
               </div>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16, fontWeight: 600, color: colors.text }}>
-                    {lark.name ?? '飞书用户'}
-                  </span>
+                <div className="vc-toolbar" style={{ gap: 8 }}>
+                  <span className="vc-lark-head__name">{lark.name ?? '飞书用户'}</span>
                   <Tag color="success">已绑定</Tag>
                 </div>
-                <div style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-                  Open ID：{lark.openId}
-                </div>
-                <div style={{ fontSize: 12, color: colors.textSecondary }}>
-                  绑定时间：{formatTime(lark.boundAt)}
-                </div>
+                <div className="vc-meta" style={{ marginTop: 4 }}>Open ID：{lark.openId}</div>
+                <div className="vc-meta">绑定时间：{formatTime(lark.boundAt)}</div>
               </div>
             </div>
             <Popconfirm
@@ -92,47 +62,20 @@ const LarkBindPage: React.FC = () => {
             </Popconfirm>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: '50%',
-                background: colors.primary10,
-                color: colors.primary,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 16,
-              }}
-            >
-              <Icon icon={birdIcon} width={36} />
+          <div className="vc-state">
+            <div className="vc-lark-head__icon vc-lark-head__icon--lg">
+              <Icon icon={birdIcon} width={34} />
             </div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: colors.text, marginBottom: 8 }}>
-              尚未绑定飞书账号
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: colors.textSecondary,
-                marginBottom: 24,
-                maxWidth: 380,
-                margin: '0 auto 24px',
-              }}
-            >
+            <div className="vc-state__title">尚未绑定飞书账号</div>
+            <div className="vc-state__desc">
               绑定后可使用飞书笔记同步、文档读取等功能。当前为 mock 阶段，点击按钮模拟授权流程。
             </div>
-            <Button
-              type="primary"
-              icon={<Icon icon={linkIcon} width={15} />}
-              onClick={onBind}
-              style={{ background: colors.primary, borderColor: colors.primary }}
-            >
+            <Button type="primary" icon={<Icon icon={linkIcon} width={15} />} onClick={onBind}>
               绑定飞书账号
             </Button>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };

@@ -7,7 +7,6 @@ import historyIcon from '@iconify-icons/lucide/history';
 import trashIcon from '@iconify-icons/lucide/trash-2';
 import closeIcon from '@iconify-icons/lucide/x';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 interface MatchSeg {
   text: string;
@@ -27,21 +26,15 @@ interface HistoryItem {
 
 const MAX_HISTORY = 50;
 
-function highlightOccurrences(
-  text: string,
-  match: string,
-  useRegex: boolean,
-  bg: string,
-  color: string
-): React.ReactNode {
+function highlightOccurrences(text: string, match: string, useRegex: boolean, variant: 'add' | 'del'): React.ReactNode {
   if (!match) return text;
-  const style: React.CSSProperties = { background: bg, color, padding: '0 2px', borderRadius: 2 };
+  const className = variant === 'del' ? 'vc-mark vc-mark--del' : 'vc-mark';
   try {
     if (useRegex) {
       const parts = text.split(new RegExp(`(${match})`, 'g'));
       return parts.map((part, i) =>
         i % 2 === 1 ? (
-          <mark key={i} style={style}>{part}</mark>
+          <mark key={i} className={className}>{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         )
@@ -50,7 +43,7 @@ function highlightOccurrences(
     const parts = text.split(match);
     const out: React.ReactNode[] = [];
     parts.forEach((p, i) => {
-      if (i > 0) out.push(<mark key={`m${i}`} style={style}>{match}</mark>);
+      if (i > 0) out.push(<mark key={`m${i}`} className={className}>{match}</mark>);
       out.push(<span key={`p${i}`}>{p}</span>);
     });
     return out;
@@ -60,7 +53,6 @@ function highlightOccurrences(
 }
 
 const TextReplace: React.FC = () => {
-  const { colors } = useTheme();
   const [source, setSource] = useState('');
   const [find, setFind] = useState('');
   const [replacement, setReplacement] = useState('');
@@ -192,189 +184,125 @@ const TextReplace: React.FC = () => {
     }
   };
 
+  const copyResult = async () => {
+    const text = result.map((s) => s.text).join('');
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    message.success('已复制');
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <ToolShell
       title="文本替换"
       description="支持正则，替换后高亮显示被替换的位置"
       actions={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: colors.textSecondary }}>正则</span>
+        <div className="vc-toolbar" style={{ padding: 0, border: 'none', background: 'transparent', gap: 'var(--space-md)' }}>
+          <span className="vc-meta">正则</span>
           <Switch checked={useRegex} onChange={setUseRegex} size="small" />
-          <span style={{ fontSize: 13, color: colors.textSecondary }}>自动复制</span>
+          <span className="vc-meta">自动复制</span>
           <Switch checked={autoCopy} onChange={setAutoCopy} size="small" />
-          <Button size="small" type="primary" onClick={run} disabled={!find || !source}>
+          <Button type="primary" onClick={run} disabled={!find || !source}>
             替换
           </Button>
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>原文</div>
+      <div className="vc-stack">
+        <div className="vc-panel">
+          <div className="vc-panel__head">
+            <div>
+              <h2 className="vc-panel__title">原文</h2>
+            </div>
+            <span className="vc-meta">{source.length.toLocaleString()} 字符</span>
+          </div>
           <Input.TextArea
+            className="vc-mono-input"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             placeholder="粘贴原文"
             autoSize={{ minRows: 5, maxRows: 10 }}
-            style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
           />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+        <div className="vc-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <div>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>查找内容{useRegex ? '（正则）' : ''}</div>
+            <div className="vc-field-label">查找内容{useRegex ? '（正则）' : ''}</div>
             <Input
+              className="vc-mono-input"
               value={find}
               onChange={(e) => setFind(e.target.value)}
               placeholder={useRegex ? '\\bfoo\\b' : 'foo'}
-              style={{ fontFamily: "'JetBrains Mono', Consolas, monospace" }}
             />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>替换为</div>
+            <div className="vc-field-label">替换为</div>
             <Input
+              className="vc-mono-input"
               value={replacement}
               onChange={(e) => setReplacement(e.target.value)}
               placeholder="bar"
-              style={{ fontFamily: "'JetBrains Mono', Consolas, monospace" }}
             />
           </div>
         </div>
 
-        {error && <div style={{ color: colors.error, fontSize: 12 }}>{error}</div>}
-
-        {count > 0 && (
-          <div style={{ fontSize: 12, color: colors.textSecondary }}>
-            共替换 <span style={{ color: colors.primary, fontWeight: 600 }}>{count}</span> 处
-          </div>
-        )}
+        {error && <div className="vc-tool-error">{error}</div>}
 
         {result.length > 0 && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ fontSize: 12, color: colors.textSecondary }}>结果（高亮为替换处）</div>
-              <button
-                onClick={async () => {
-                  const text = result.map((s) => s.text).join('');
-                  await navigator.clipboard.writeText(text);
-                  setCopied(true);
-                  message.success('已复制');
-                  setTimeout(() => setCopied(false), 1500);
-                }}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: colors.primary,
-                  fontSize: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <Icon icon={copied ? checkIcon : copyIcon} width={12} />
+          <div className="vc-panel">
+            <div className="vc-panel__head">
+              <div>
+                <h2 className="vc-panel__title">结果</h2>
+                <p className="vc-panel__desc">
+                  共替换 <span className="vc-num" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{count}</span> 处，高亮为替换后的内容。
+                </p>
+              </div>
+              <button className="vc-icon-btn" onClick={copyResult}>
+                <Icon icon={copied ? checkIcon : copyIcon} width={13} />
                 {copied ? '已复制' : '复制'}
               </button>
             </div>
-            <div
-              style={{
-                padding: 12,
-                background: colors.surface,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 'var(--radius-md)',
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
-                fontSize: 13,
-                lineHeight: 1.8,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
+            <pre className="vc-json-pre" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.8 }}>
               {result.map((seg, i) =>
                 seg.isReplaced ? (
-                  <mark
-                    key={i}
-                    style={{
-                      background: colors.primary15,
-                      color: colors.primary,
-                      borderRadius: 2,
-                      padding: '0 3px',
-                    }}
-                  >
-                    {seg.text}
-                  </mark>
+                  <mark key={i} className="vc-mark">{seg.text}</mark>
                 ) : (
                   <span key={i}>{seg.text}</span>
                 )
               )}
-            </div>
+            </pre>
           </div>
         )}
 
         {history.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: colors.textSecondary }}>
-                <Icon icon={historyIcon} width={14} />
-                替换历史（近 {history.length} 条，点一条查看 diff）
+          <div className="vc-panel">
+            <div className="vc-panel__head">
+              <div>
+                <h2 className="vc-panel__title">
+                  <Icon icon={historyIcon} width={16} style={{ marginRight: 6, verticalAlign: '-2px' }} />
+                  替换历史
+                </h2>
+                <p className="vc-panel__desc">近 {history.length} 条，点任意一条查看对比。</p>
               </div>
-              <button
-                onClick={() => setHistory([])}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: colors.textTertiary,
-                  fontSize: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <Icon icon={trashIcon} width={12} />
+              <button className="vc-icon-btn" onClick={() => setHistory([])}>
+                <Icon icon={trashIcon} width={13} />
                 清空
               </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="vc-stack vc-stack--tight">
               {history.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => openDlg(item)}
-                  style={{
-                    padding: '8px 12px',
-                    background: colors.surface,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = colors.primary10)}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = colors.surface)}
-                >
-                  <span style={{ color: colors.textTertiary, fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
-                    {item.time}
-                  </span>
-                  <span
-                    style={{
-                      flex: 1,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      color: colors.text,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <span style={{ color: colors.textTertiary }}>{item.useRegex ? '正则' : '文本'}</span>{' '}
-                    <span style={{ color: colors.error }}>{item.find.length > 30 ? item.find.slice(0, 30) + '…' : item.find}</span>
+                <button key={item.id} className="vc-history-row" onClick={() => openDlg(item)}>
+                  <span className="vc-history-row__time">{item.time}</span>
+                  <span className="vc-history-row__main">
+                    <span style={{ color: 'var(--color-text-tertiary)' }}>{item.useRegex ? '正则' : '文本'}</span>{' '}
+                    <span style={{ color: 'var(--color-error)' }}>{item.find.length > 30 ? item.find.slice(0, 30) + '…' : item.find}</span>
                     {' → '}
-                    <span style={{ color: colors.primary }}>
+                    <span style={{ color: 'var(--color-primary)' }}>
                       {item.replacement.length > 30 ? item.replacement.slice(0, 30) + '…' : item.replacement}
                     </span>
                   </span>
-                  <span style={{ color: colors.textTertiary, flexShrink: 0 }}>{item.count} 处</span>
-                </div>
+                  <span className="vc-history-row__count">{item.count} 处</span>
+                </button>
               ))}
             </div>
           </div>
@@ -383,112 +311,42 @@ const TextReplace: React.FC = () => {
 
       {selected && (
         <>
+          <div className="vc-dialog-scrim" onClick={() => setSelected(null)} />
           <div
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000 }}
-            onClick={() => setSelected(null)}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              left: dlgPos.x,
-              top: dlgPos.y,
-              width: dlgSize.w,
-              height: dlgSize.h,
-              background: colors.surface,
-              borderRadius: 12,
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              zIndex: 1001,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
+            className="vc-floating-dialog"
+            style={{ left: dlgPos.x, top: dlgPos.y, width: dlgSize.w, height: dlgSize.h }}
           >
-            <div
-              onMouseDown={(e) => startDrag(e, 'move')}
-              style={{
-                padding: '10px 16px',
-                borderBottom: `1px solid ${colors.border}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'move',
-                userSelect: 'none',
-                background: colors.surface,
-              }}
-            >
-              <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                <span style={{ color: colors.textSecondary, flexShrink: 0 }}>{selected.time}</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <span style={{ color: colors.error }}>{selected.find}</span>
+            <div className="vc-floating-dialog__head" onMouseDown={(e) => startDrag(e, 'move')}>
+              <div className="vc-floating-dialog__title">
+                <span style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }}>{selected.time}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--color-error)' }}>{selected.find}</span>
                   {' → '}
-                  <span style={{ color: colors.primary }}>{selected.replacement}</span>
+                  <span style={{ color: 'var(--color-primary)' }}>{selected.replacement}</span>
                 </span>
-                <span style={{ color: colors.textTertiary, fontSize: 12, flexShrink: 0 }}>{selected.count} 处</span>
+                <span className="vc-meta" style={{ flexShrink: 0 }}>{selected.count} 处</span>
               </div>
-              <button
-                onClick={() => setSelected(null)}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: colors.textSecondary, padding: 4, display: 'flex', flexShrink: 0 }}
-              >
+              <button className="vc-icon-btn" onClick={() => setSelected(null)}>
                 <Icon icon={closeIcon} width={16} />
               </button>
             </div>
 
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: 16, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div style={{ fontSize: 12, color: colors.error, marginBottom: 6 }}>原文（红底为被替换）</div>
-                <div
-                  style={{
-                    flex: 1,
-                    padding: 12,
-                    background: colors.bg,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 8,
-                    fontFamily: "'JetBrains Mono', Consolas, monospace",
-                    fontSize: 12,
-                    lineHeight: 1.8,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    overflow: 'auto',
-                  }}
-                >
-                  {highlightOccurrences(selected.source, selected.find, selected.useRegex, colors.error + '22', colors.error)}
+            <div className="vc-floating-dialog__body">
+              <div className="vc-floating-dialog__pane">
+                <div className="vc-floating-dialog__label" style={{ color: 'var(--color-error)' }}>原文（高亮为被替换）</div>
+                <div className="vc-diff-box">
+                  {highlightOccurrences(selected.source, selected.find, selected.useRegex, 'del')}
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div style={{ fontSize: 12, color: colors.primary, marginBottom: 6 }}>替换后（蓝底为新内容）</div>
-                <div
-                  style={{
-                    flex: 1,
-                    padding: 12,
-                    background: colors.bg,
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 8,
-                    fontFamily: "'JetBrains Mono', Consolas, monospace",
-                    fontSize: 12,
-                    lineHeight: 1.8,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    overflow: 'auto',
-                  }}
-                >
-                  {highlightOccurrences(selected.resultText, selected.replacement, false, colors.primary15, colors.primary)}
+              <div className="vc-floating-dialog__pane">
+                <div className="vc-floating-dialog__label" style={{ color: 'var(--color-primary)' }}>替换后（高亮为新内容）</div>
+                <div className="vc-diff-box">
+                  {highlightOccurrences(selected.resultText, selected.replacement, false, 'add')}
                 </div>
               </div>
             </div>
 
-            <div
-              onMouseDown={(e) => startDrag(e, 'resize')}
-              style={{
-                position: 'absolute',
-                right: 0,
-                bottom: 0,
-                width: 16,
-                height: 16,
-                cursor: 'nwse-resize',
-                background: `linear-gradient(135deg, transparent 50%, ${colors.border} 50%)`,
-                borderTopLeftRadius: 8,
-              }}
-            />
+            <div className="vc-floating-dialog__resize" onMouseDown={(e) => startDrag(e, 'resize')} />
           </div>
         </>
       )}

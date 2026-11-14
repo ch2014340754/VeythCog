@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Input } from 'antd';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
+import JsonHighlight from '../components/JsonHighlight';
 
 function decodeJwtSegment(seg: string): string {
   const b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
@@ -14,7 +14,6 @@ function decodeJwtSegment(seg: string): string {
 }
 
 const JwtDecode: React.FC = () => {
-  const { colors } = useTheme();
   const [token, setToken] = useState('');
 
   const parts = token.trim().split('.');
@@ -22,35 +21,42 @@ const JwtDecode: React.FC = () => {
   const payload = parts.length === 3 ? decodeJwtSegment(parts[1]) : '';
 
   return (
-    <ToolShell title="JWT 解码" description="只解析 header / payload，不验签。别粘贴生产环境密钥"
+    <ToolShell
+      title="JWT 解码"
+      description="只解析 header / payload，不验签。别粘贴生产环境密钥"
       fillHeight
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>JWT Token</div>
-          <Input.TextArea
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-            style={{ flex: 1, minHeight: 0, fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
-          />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, gap: 12 }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>Header</div>
+      <div className="vc-tool-split">
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">JWT Token</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{parts.length === 3 ? '3 段' : '等待输入'}</span>
+            </div>
+          </div>
+          <div className="vc-tool-pane__body">
             <Input.TextArea
-              value={header}
-              readOnly
-              style={{ flex: 1, minHeight: 0, fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
+              className="vc-mono-input"
+              variant="borderless"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
             />
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>Payload</div>
-            <Input.TextArea
-              value={payload}
-              readOnly
-              style={{ flex: 1, minHeight: 0, fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
-            />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', minHeight: 0 }}>
+          <div className="vc-tool-pane" style={{ flex: 1 }}>
+            <div className="vc-tool-pane__head">
+              <span className="vc-tool-pane__label">Header</span>
+            </div>
+            <JsonHighlight code={header} style={{ flex: 1, minHeight: 0 }} />
+          </div>
+          <div className="vc-tool-pane" style={{ flex: 1 }}>
+            <div className="vc-tool-pane__head">
+              <span className="vc-tool-pane__label">Payload</span>
+            </div>
+            <JsonHighlight code={payload} style={{ flex: 1, minHeight: 0 }} />
           </div>
         </div>
       </div>

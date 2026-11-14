@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Input } from 'antd';
+import { Input, message } from 'antd';
+import { Icon } from '@iconify/react';
+import copyIcon from '@iconify-icons/lucide/copy';
 import ToolShell from '../ToolShell';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -31,39 +33,65 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
 
 const ColorTool: React.FC = () => {
   const { colors } = useTheme();
-  const [hex, setHex] = useState('#7C3AED');
+  const [hex, setHex] = useState<string>(colors.primary);
 
   const rgb = hexToRgb(hex);
   const hsl = rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null;
+  const rgbText = rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : '';
+  const hslText = hsl ? `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)` : '';
+
+  const copy = (value: string) => {
+    if (!value) return;
+    navigator.clipboard.writeText(value);
+    message.success('已复制');
+  };
 
   return (
     <ToolShell title="颜色转换" description="HEX / RGB / HSL 互转，带取色器">
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-        <div style={{ flexShrink: 0 }}>
-          <div
-            style={{
-              width: 160,
-              height: 160,
-              borderRadius: 'var(--radius-lg)',
-              background: rgb ? hex : colors.surface,
-              border: `1px solid ${colors.border}`,
-              marginBottom: 12,
-            }}
-          />
-          <input
-            type="color"
-            value={rgb ? hex : '#000000'}
-            onChange={(e) => setHex(e.target.value)}
-            style={{ width: 160, height: 40, border: 'none', cursor: 'pointer', borderRadius: 8 }}
-          />
-        </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 12, color: colors.textSecondary }}>HEX</div>
-          <Input value={hex} onChange={(e) => setHex(e.target.value)} style={{ fontFamily: 'monospace' }} />
-          <div style={{ fontSize: 12, color: colors.textSecondary, marginTop: 8 }}>RGB</div>
-          <Input readOnly value={rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : ''} style={{ fontFamily: 'monospace' }} />
-          <div style={{ fontSize: 12, color: colors.textSecondary, marginTop: 8 }}>HSL</div>
-          <Input readOnly value={hsl ? `hsl(${hsl.h}, ${hsl.s}%, ${hsl.l}%)` : ''} style={{ fontFamily: 'monospace' }} />
+      <div className="vc-panel">
+        <div className="vc-tool-split" style={{ minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+            <div
+              className="vc-color-preview"
+              style={{ background: rgb ? hex : 'var(--color-surface-elevated)' }}
+            />
+            <input
+              className="vc-color-input"
+              type="color"
+              value={rgb ? hex : '#000000'}
+              onChange={(e) => setHex(e.target.value)}
+            />
+          </div>
+
+          <div className="vc-stack vc-stack--tight">
+            <div>
+              <div className="vc-field-label">HEX</div>
+              <div className="vc-field-row">
+                <Input className="vc-mono-input" value={hex} onChange={(e) => setHex(e.target.value)} placeholder="#7C3AED" />
+                <button className="vc-icon-btn" onClick={() => copy(hex)} aria-label="复制 HEX">
+                  <Icon icon={copyIcon} width={16} />
+                </button>
+              </div>
+            </div>
+            <div>
+              <div className="vc-field-label">RGB</div>
+              <div className="vc-field-row">
+                <Input className="vc-mono-input" readOnly value={rgbText} />
+                <button className="vc-icon-btn" onClick={() => copy(rgbText)} aria-label="复制 RGB">
+                  <Icon icon={copyIcon} width={16} />
+                </button>
+              </div>
+            </div>
+            <div>
+              <div className="vc-field-label">HSL</div>
+              <div className="vc-field-row">
+                <Input className="vc-mono-input" readOnly value={hslText} />
+                <button className="vc-icon-btn" onClick={() => copy(hslText)} aria-label="复制 HSL">
+                  <Icon icon={copyIcon} width={16} />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </ToolShell>

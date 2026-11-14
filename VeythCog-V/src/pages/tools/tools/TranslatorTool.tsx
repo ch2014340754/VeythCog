@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Input, Button, Radio, Tooltip, Popover, Segmented, message } from 'antd';
+import { Input, Button, Tooltip, Popover, Segmented, message } from 'antd';
 import { Icon } from '@iconify/react';
 import volumeIcon from '@iconify-icons/lucide/volume-2';
 import copyIcon from '@iconify-icons/lucide/copy';
@@ -8,7 +8,6 @@ import historyIcon from '@iconify-icons/lucide/history';
 import trashIcon from '@iconify-icons/lucide/trash-2';
 import { pinyin } from 'pinyin-pro';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 import { storage } from '@/utils/storage';
 import engDict from './data/engDict.json';
 
@@ -140,7 +139,6 @@ const HIST_KEY = 'tools:translate:history';
 const HIST_MAX = 50;
 
 const TranslatorTool: React.FC = () => {
-  const { colors } = useTheme();
   const [mode, setMode] = useState<Direction>('auto');
   const [caseMode, setCaseMode] = useState<CaseMode>('original');
   const [input, setInput] = useState('');
@@ -197,66 +195,10 @@ const TranslatorTool: React.FC = () => {
     setOutput(input);
   };
 
-  const copy = () => {
-    if (!displayOutput) return;
-    navigator.clipboard.writeText(displayOutput);
-    message.success('已复制');
-  };
-
   const clearHistory = () => {
     saveHistory([]);
     message.success('历史已清空');
   };
-
-  /** 历史弹层内容 */
-  const historyContent = (
-    <div style={{ width: 300 }}>
-      {history.length === 0 ? (
-        <div style={{ padding: '12px 0', textAlign: 'center', color: colors.textSecondary, fontSize: 13 }}>
-          暂无翻译历史
-        </div>
-      ) : (
-        <>
-          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-            {history.map((h, i) => (
-              <div
-                key={i}
-                onClick={() => {
-                  setInput(h.src);
-                  setOutput(h.dst);
-                }}
-                title="点击恢复该条记录"
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 'var(--radius-sm)',
-                  cursor: 'pointer',
-                  borderBottom: `1px solid ${colors.border}`,
-                }}
-              >
-                <div style={{ fontSize: 13, color: colors.text }}>{h.src}</div>
-                <div style={{ fontSize: 12, color: colors.textSecondary }}>{h.dst}</div>
-                <div style={{ fontSize: 11, color: colors.textSecondary, opacity: 0.7, marginTop: 2 }}>
-                  {h.dir} ·{' '}
-                  {new Date(h.t).toLocaleString('zh-CN', {
-                    month: 'numeric',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <span style={{ fontSize: 12, color: colors.textSecondary }}>共 {history.length} 条</span>
-            <Button size="small" danger icon={<Icon icon={trashIcon} width={12} />} onClick={clearHistory}>
-              清空
-            </Button>
-          </div>
-        </>
-      )}
-    </div>
-  );
 
   const inputLang = isChinese(input) ? 'zh-CN' : 'en-US';
   const outputLang = output ? (isChinese(output) ? 'zh-CN' : 'en-US') : '';
@@ -277,6 +219,12 @@ const TranslatorTool: React.FC = () => {
     }
   }, [output, caseMode]);
 
+  const copy = () => {
+    if (!displayOutput) return;
+    navigator.clipboard.writeText(displayOutput);
+    message.success('已复制');
+  };
+
   /** 译文是单个英文单词时查离线词典 */
   const dictWord = useMemo(() => {
     const word = output.trim().toLowerCase();
@@ -286,15 +234,53 @@ const TranslatorTool: React.FC = () => {
   const dictEntry: DictEntry | null = dictWord ? (DICT[dictWord] ?? null) : null;
   const dictMissing = dictWord !== null && !dictEntry;
 
-  const renderToolbar = (label: string, lang: string, onSpeak: () => void, extra?: React.ReactNode) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-      <span style={{ fontSize: 12, color: colors.textSecondary }}>{label}</span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {extra}
-        <Tooltip title="朗读发音">
-          <Button size="small" type="text" icon={<Icon icon={volumeIcon} width={14} />} onClick={onSpeak} />
-        </Tooltip>
-      </div>
+  /** 历史弹层内容 */
+  const historyContent = (
+    <div style={{ width: 300 }}>
+      {history.length === 0 ? (
+        <div className="vc-meta" style={{ padding: '12px 0', textAlign: 'center' }}>
+          暂无翻译历史
+        </div>
+      ) : (
+        <>
+          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+            {history.map((h, i) => (
+              <div
+                key={i}
+                onClick={() => {
+                  setInput(h.src);
+                  setOutput(h.dst);
+                }}
+                title="点击恢复该条记录"
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid var(--color-divider)',
+                }}
+              >
+                <div style={{ fontSize: 13, color: 'var(--color-text)' }}>{h.src}</div>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{h.dst}</div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                  {h.dir} ·{' '}
+                  {new Date(h.t).toLocaleString('zh-CN', {
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <span className="vc-meta">共 {history.length} 条</span>
+            <Button size="small" danger icon={<Icon icon={trashIcon} width={12} />} onClick={clearHistory}>
+              清空
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -304,120 +290,130 @@ const TranslatorTool: React.FC = () => {
       description="中英互译，带拼音、词典释义与历史记录，支持发音朗读与大小写切换"
       fillHeight
       actions={
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Radio.Group size="small" value={mode} onChange={(e) => setMode(e.target.value)}>
-            <Radio.Button value="auto">自动</Radio.Button>
-            <Radio.Button value="zh2en">中→英</Radio.Button>
-            <Radio.Button value="en2zh">英→中</Radio.Button>
-          </Radio.Group>
+        <div className="vc-toolbar" style={{ padding: 0, border: 'none', background: 'transparent' }}>
+          <Segmented
+            className="vc-segmented"
+            value={mode}
+            onChange={(v) => setMode(v as Direction)}
+            options={[
+              { label: '自动', value: 'auto' },
+              { label: '中→英', value: 'zh2en' },
+              { label: '英→中', value: 'en2zh' },
+            ]}
+          />
           <Tooltip title={mode === 'auto' ? '自动模式无需切换' : '交换源/结果并反转方向'}>
-            <Button size="small" icon={<Icon icon={swapIcon} width={14} />} onClick={swap} disabled={mode === 'auto'} />
+            <button className="vc-icon-btn" onClick={swap} disabled={mode === 'auto'}>
+              <Icon icon={swapIcon} width={15} />
+            </button>
           </Tooltip>
           <Popover content={historyContent} title="翻译历史" trigger="click" placement="bottomRight">
-            <Button size="small" icon={<Icon icon={historyIcon} width={14} />}>
-              {history.length > 0 ? `历史(${history.length})` : '历史'}
+            <Button icon={<Icon icon={historyIcon} width={14} />}>
+              {history.length > 0 ? `历史 ${history.length}` : '历史'}
             </Button>
           </Popover>
-          <Button size="small" type="primary" onClick={() => run()} loading={loading} disabled={!input.trim()}>
+          <Button type="primary" onClick={() => run()} loading={loading} disabled={!input.trim()}>
             翻译
           </Button>
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 180 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {renderToolbar('原文', inputLang, () => input && speak(input, inputLang))}
+      <div className="vc-tool-split">
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">原文</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{input.length.toLocaleString()} 字符</span>
+              <Tooltip title="朗读发音">
+                <button className="vc-icon-btn" onClick={() => input && speak(input, inputLang)}>
+                  <Icon icon={volumeIcon} width={14} />
+                </button>
+              </Tooltip>
+            </div>
+          </div>
+          <div className="vc-tool-pane__body">
             <Input.TextArea
+              variant="borderless"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="输入要翻译的中文或英文"
-              style={{ flex: 1, minHeight: 0, fontSize: 14, resize: 'none' }}
+              style={{ fontSize: 14 }}
             />
-            {pinyinText && (
-              <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 6 }}>{pinyinText}</div>
-            )}
+            {pinyinText && <div className="vc-tool-note">{pinyinText}</div>}
           </div>
+        </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {renderToolbar('译文', outputLang, () => displayOutput && speak(displayOutput, isChinese(displayOutput) ? 'zh-CN' : 'en-US'), (
-              <Button size="small" type="text" icon={<Icon icon={copyIcon} width={14} />} onClick={copy} disabled={!displayOutput} />
-            ))}
-            <Input.TextArea
-              value={displayOutput}
-              readOnly
-              placeholder="翻译结果将显示在这里"
-              style={{ flex: 1, minHeight: 0, fontSize: 14, resize: 'none' }}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginTop: 6, gap: 8 }}>
-              <Segmented
-                size="small"
-                value={caseMode}
-                onChange={(v) => setCaseMode(v as CaseMode)}
-                options={[
-                  { label: '原样', value: 'original' },
-                  { label: '小写', value: 'lower' },
-                  { label: '大写', value: 'upper' },
-                  { label: '驼峰', value: 'camel' },
-                ]}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', minHeight: 0 }}>
+          <div className="vc-tool-pane" style={{ flex: 1, minHeight: 0 }}>
+            <div className="vc-tool-pane__head">
+              <span className="vc-tool-pane__label">译文</span>
+              <div className="vc-tool-pane__side">
+                <button className="vc-icon-btn" onClick={copy} disabled={!displayOutput}>
+                  <Icon icon={copyIcon} width={14} />
+                  复制
+                </button>
+                <Tooltip title="朗读发音">
+                  <button
+                    className="vc-icon-btn"
+                    onClick={() => displayOutput && speak(displayOutput, isChinese(displayOutput) ? 'zh-CN' : 'en-US')}
+                  >
+                    <Icon icon={volumeIcon} width={14} />
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+            <div className="vc-tool-pane__body">
+              <Input.TextArea
+                variant="borderless"
+                value={displayOutput}
+                readOnly
+                placeholder="翻译结果将显示在这里"
+                style={{ fontSize: 14 }}
               />
             </div>
-
-            {/* 定义和其他翻译：仅当译文是单个英文单词时显示 */}
-            {dictEntry && (
-              <div
-                style={{
-                  marginTop: 8,
-                  padding: '10px 14px',
-                  background: colors.surface,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: 'var(--radius-sm)',
-                  maxHeight: 200,
-                  overflowY: 'auto',
-                  flexShrink: 0,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>{dictWord}</span>
-                  {dictEntry[0] && <span style={{ fontSize: 12, color: colors.textSecondary }}>/ {dictEntry[0]} /</span>}
-                  <span style={{ fontSize: 12, color: colors.textSecondary, marginLeft: 'auto' }}>定义和其他翻译</span>
-                </div>
-                {dictEntry[1]
-                  .split('\n')
-                  .filter((l) => l.trim())
-                  .map((line, i) => {
-                    const m = line.match(/^([a-z]+\.)\s*(.*)$/i);
-                    return (
-                      <div key={i} style={{ marginBottom: 5 }}>
-                        {m ? (
-                          <>
-                            <span style={{ fontSize: 12, color: colors.textSecondary, marginRight: 4 }}>{m[1]}</span>
-                            <span style={{ fontSize: 13, color: colors.text }}>{m[2]}</span>
-                          </>
-                        ) : (
-                          <span style={{ fontSize: 13, color: colors.text }}>{line}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-            {dictMissing && (
-              <div
-                style={{
-                  marginTop: 8,
-                  padding: '8px 12px',
-                  fontSize: 12,
-                  color: colors.textSecondary,
-                  border: `1px dashed ${colors.border}`,
-                  borderRadius: 'var(--radius-sm)',
-                  flexShrink: 0,
-                }}
-              >
-                离线词典未收录 “{dictWord}”
-              </div>
-            )}
           </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+            <Segmented
+              className="vc-segmented"
+              value={caseMode}
+              onChange={(v) => setCaseMode(v as CaseMode)}
+              options={[
+                { label: '原样', value: 'original' },
+                { label: '小写', value: 'lower' },
+                { label: '大写', value: 'upper' },
+                { label: '驼峰', value: 'camel' },
+              ]}
+            />
+          </div>
+
+          {dictEntry && (
+            <div className="vc-dict">
+              <div className="vc-dict__head">
+                <span className="vc-dict__word">{dictWord}</span>
+                {dictEntry[0] && <span className="vc-dict__phonetic">/ {dictEntry[0]} /</span>}
+                <span className="vc-dict__tag">定义和其他翻译</span>
+              </div>
+              {dictEntry[1]
+                .split('\n')
+                .filter((l) => l.trim())
+                .map((line, i) => {
+                  const m = line.match(/^([a-z]+\.)\s*(.*)$/i);
+                  return (
+                    <div key={i} className="vc-dict__line">
+                      {m ? (
+                        <>
+                          <span className="vc-dict__pos">{m[1]}</span>
+                          <span>{m[2]}</span>
+                        </>
+                      ) : (
+                        <span>{line}</span>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+          {dictMissing && <div className="vc-dict vc-dict--empty">离线词典未收录 “{dictWord}”</div>}
         </div>
       </div>
     </ToolShell>

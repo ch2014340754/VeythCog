@@ -1,6 +1,5 @@
 import type { NavBookmark, NavIcon } from '@/api/nav';
 import { getBookmarkIcon } from '@/api/nav';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { glassBlur, whiteGlass } from '@/styles/homeSurface';
@@ -43,9 +42,10 @@ function readableTextColor(hex?: string | null): string {
 /**
  * 图标渲染原子组件：图片图标优先，失败 / 缺失时回退书名前 3 字。
  * 弹窗预览与首页书签共用同一套渲染规则，避免两处观感不一致。
+ * 玻璃底/描边由 .vc-iconpreview（含 body.has-bg 白色玻璃变体）提供；
+ * 壁纸模式下白色玻璃的透明度仍由 homeSurface.whiteGlass 统一计算，避免另造一套。
  */
 export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, plain = false }) => {
-  const { colors } = useTheme();
   const wallpaper = useWallpaperStore((s) => s.active);
   const glassOpacity = useSettingsStore((s) => s.glassOpacity);
   const [imgError, setImgError] = React.useState(false);
@@ -55,56 +55,56 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
   React.useEffect(() => setImgError(false), [imageUrl]);
 
   const isTextIcon = !!icon && icon.type === 'text';
-  const iconBg = isWallpaperMode ? whiteGlass(glassOpacity, 0.1, 0.3) : colors.glassBg;
-  const iconBorder = isWallpaperMode ? 'rgba(255,255,255,0.28)' : colors.glassBorder;
-  const fallbackBg = isWallpaperMode ? 'rgba(0,0,0,0.3)' : colors.surfaceElevated;
-  const fallbackColor = isWallpaperMode ? '#fff' : colors.text;
-
+  const isFallback = !isTextIcon && (imgError || !imageUrl);
   const imgSize = Math.round(size * 0.9);
+
+  const cls = [
+    'vc-iconpreview',
+    isTextIcon ? 'vc-iconpreview--text' : '',
+    plain && !isTextIcon ? 'vc-iconpreview--plain' : '',
+    isFallback ? 'vc-iconpreview--fallback' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  // 壁纸模式：白色玻璃图标底（透明度随全局玻璃强度变化）
+  const wallpaperStyle: React.CSSProperties =
+    isWallpaperMode && !isTextIcon && !isFallback
+      ? {
+          backgroundColor: whiteGlass(glassOpacity, 0.1, 0.3),
+          borderColor: 'rgba(255,255,255,0.28)',
+          backdropFilter: glassBlur(glassOpacity),
+          WebkitBackdropFilter: glassBlur(glassOpacity),
+        }
+      : {};
 
   return (
     <div
+      className={cls}
       style={{
         width: size,
         height: size,
         borderRadius: Math.round(size * 0.15),
-        overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: isTextIcon ? icon.color || '#3B82F6' : imgError || !imageUrl ? fallbackBg : iconBg,
-        ...(isTextIcon || plain
-          ? {}
-          : {
-              backdropFilter: glassBlur(glassOpacity),
-              WebkitBackdropFilter: glassBlur(glassOpacity),
-              border: `1px solid ${iconBorder}`,
-            }),
-        flexShrink: 0,
+        // 文字图标用书签自带底色，颜色按底色亮度自动取黑/白
+        ...(isTextIcon
+          ? { backgroundColor: icon?.color || '#3B82F6', color: readableTextColor(icon?.color) }
+          : wallpaperStyle),
       }}
     >
       {isTextIcon ? (
-        <span
-          style={{
-            color: readableTextColor(icon.color),
-            fontSize: Math.round(size * 0.3),
-            fontWeight: 400,
-            lineHeight: 1,
-            userSelect: 'none',
-          }}
-        >
-          {(icon.text || '').slice(0, 3) || initials(title)}
+        <span className="vc-iconpreview__text" style={{ fontSize: Math.round(size * 0.3) }}>
+          {(icon?.text || '').slice(0, 3) || initials(title)}
         </span>
       ) : imageUrl && !imgError ? (
         <img
           src={imageUrl}
           alt={title}
           onError={() => setImgError(true)}
-          style={{ width: imgSize, height: imgSize, objectFit: 'contain' }}
+          style={{ width: imgSize, height: imgSize }}
           loading="lazy"
         />
       ) : (
-        <span style={{ color: fallbackColor, fontSize: Math.round(size * 0.28), fontWeight: 500 }}>
+        <span className="vc-iconpreview__fallback" style={{ fontSize: Math.round(size * 0.28) }}>
           {initials(title)}
         </span>
       )}
@@ -118,18 +118,6 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
  * 右键菜单由 Home 页面全局统一管理（避免多个菜单同时弹出）。
  */
 const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMenu }) => {
-  const { colors } = useTheme();
-  const wallpaper = useWallpaperStore((s) => s.active);
-  const glassOpacity = useSettingsStore((s) => s.glassOpacity);
-
-  const isWallpaperMode = !!wallpaper?.url;
-  const nameColor = isWallpaperMode ? '#fff' : colors.text;
-  const nameShadow = isWallpaperMode ? '0 1px 4px rgba(0,0,0,0.4)' : 'none';
-  const hoverBg = isWallpaperMode ? 'rgba(255,255,255,0.12)' : colors.primary10;
-  const actionBg = isWallpaperMode ? 'rgba(0,0,0,0.6)' : colors.surfaceOverlay;
-  const actionColor = isWallpaperMode ? '#fff' : colors.text;
-  const deleteColor = '#ff6b6b';
-
   const signature = iconSignature(bookmark);
   const [icon, setIcon] = React.useState<NavIcon | null>(() => getCachedIcon(bookmark));
 
@@ -183,86 +171,45 @@ const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMe
 
   return (
     <div
+      className="vc-bookmark"
+      role="link"
+      tabIndex={0}
+      title={bookmark.title}
       onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
         onContextMenu?.(bookmark, e);
       }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        cursor: 'pointer',
-        padding: 8,
-        borderRadius: 12,
-        transition: 'background 0.2s',
-        position: 'relative',
-        height: '100%',
-        boxSizing: 'border-box',
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
     >
       <IconPreview icon={icon} title={bookmark.title} size={58} />
-      {/* 名称 */}
-      <span
-        style={{
-          color: nameColor,
-          fontSize: 13,
-          textShadow: nameShadow,
-          maxWidth: 80,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {bookmark.title}
-      </span>
-      {/* hover 操作按钮 */}
+      <span className="vc-bookmark__label">{bookmark.title}</span>
       {(onEdit || onDelete) && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            display: 'none',
-            gap: 4,
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="vc-bookmark__actions" onClick={(e) => e.stopPropagation()}>
           {onEdit && (
             <button
+              type="button"
+              className="vc-bookmark__action"
+              title="编辑图标"
+              aria-label="编辑图标"
               onClick={() => onEdit(bookmark)}
-              style={{
-                background: actionBg,
-                border: 'none',
-                color: actionColor,
-                borderRadius: 4,
-                width: 20,
-                height: 20,
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
             >
               ✎
             </button>
           )}
           {onDelete && (
             <button
+              type="button"
+              className="vc-bookmark__action is-danger"
+              title="删除书签"
+              aria-label="删除书签"
               onClick={() => onDelete(bookmark)}
-              style={{
-                background: actionBg,
-                border: 'none',
-                color: deleteColor,
-                borderRadius: 4,
-                width: 20,
-                height: 20,
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
             >
               ✕
             </button>

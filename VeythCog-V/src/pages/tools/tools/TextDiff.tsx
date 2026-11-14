@@ -2,64 +2,61 @@ import React, { useState } from 'react';
 import { Input } from 'antd';
 import { diffLines } from 'diff';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 const TextDiff: React.FC = () => {
-  const { colors } = useTheme();
   const [left, setLeft] = useState('');
   const [right, setRight] = useState('');
 
   const parts = diffLines(left, right);
 
+  const pane = (value: string, onChange: (v: string) => void, label: string, placeholder: string) => (
+    <div className="vc-tool-pane">
+      <div className="vc-tool-pane__head">
+        <span className="vc-tool-pane__label">{label}</span>
+        <div className="vc-tool-pane__side">
+          <span className="vc-meta">{value.length.toLocaleString()} 字符</span>
+        </div>
+      </div>
+      <div className="vc-tool-pane__body">
+        <Input.TextArea
+          className="vc-mono-input"
+          variant="borderless"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <ToolShell title="文本 Diff" description="左右双栏对比，红绿标增删" fillHeight>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flexShrink: 0 }}>
-          <Input.TextArea
-            value={left}
-            onChange={(e) => setLeft(e.target.value)}
-            placeholder="左侧文本（原始）"
-            style={{ height: 120, fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
-          />
-          <Input.TextArea
-            value={right}
-            onChange={(e) => setRight(e.target.value)}
-            placeholder="右侧文本（新）"
-            style={{ height: 120, fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
-          />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', flex: 1, minHeight: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)', height: 150, flexShrink: 0 }}>
+          {pane(left, setLeft, '原始文本', '粘贴原始文本')}
+          {pane(right, setRight, '新文本', '粘贴新文本')}
         </div>
-        <div
-          style={{
-            flex: 1,
-            padding: 12,
-            background: colors.surface,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 'var(--radius-md)',
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 13,
-            lineHeight: 1.6,
-            whiteSpace: 'pre-wrap',
-            overflow: 'auto',
-          }}
-        >
-          {parts.map((part, i) => (
-            <div
-              key={i}
-              style={{
-                background: part.added
-                  ? 'rgba(16,185,129,0.12)'
-                  : part.removed
-                    ? 'rgba(239,68,68,0.12)'
-                    : 'transparent',
-                color: part.added ? '#065f46' : part.removed ? '#991b1b' : colors.text,
-                padding: '1px 8px',
-                borderRadius: 2,
-              }}
-            >
-              {part.added ? '+ ' : part.removed ? '- ' : '  '}
-              {part.value}
+
+        <div className="vc-tool-pane" style={{ flex: 1, minHeight: 0 }}>
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">差异结果</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">
+                +{parts.filter((p) => p.added).length} / −{parts.filter((p) => p.removed).length} 块
+              </span>
             </div>
-          ))}
+          </div>
+          <div
+            className="vc-tool-pane__body"
+            style={{ overflow: 'auto', display: 'block', fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13, lineHeight: 1.6 }}
+          >
+            {parts.map((part, i) => (
+              <div key={i} className={`vc-diff-line${part.added ? ' is-add' : part.removed ? ' is-del' : ''}`}>
+                {part.added ? '+ ' : part.removed ? '- ' : '  '}
+                {part.value}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </ToolShell>

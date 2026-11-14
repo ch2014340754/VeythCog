@@ -65,7 +65,7 @@ export function generateAntDTheme(preset: ColorPreset, isDark: boolean): ThemeCo
         colorBorder: preset.border,
         colorBgContainerDisabled: isDark ? `${preset.secondary}55` : '#f5f5f5',
         borderRadius: 10,
-        controlHeight: 40,
+        controlHeight: 44,
       },
       Card: {
         colorBgContainer: surface,

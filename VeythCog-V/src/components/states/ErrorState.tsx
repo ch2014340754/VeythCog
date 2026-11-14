@@ -1,5 +1,5 @@
 /**
- * 错误状态组件（业务错误，非崩溃）
+ * 错误状态组件（业务错误，非崩溃）：与全站 .vc-state 视觉一致
  */
 import React from 'react';
 import { Button } from 'antd';
@@ -13,10 +13,12 @@ interface Props {
 }
 
 const ErrorState: React.FC<Props> = ({ title = '加载失败', message, onRetry }) => (
-  <div style={{ padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-    <Icon icon={alertIcon} width={32} style={{ color: '#ff4d4f' }} />
-    <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
-    {message && <div style={{ fontSize: 12, color: '#999' }}>{message}</div>}
+  <div className="vc-state">
+    <div className="vc-state__icon vc-state__icon--error">
+      <Icon icon={alertIcon} width={24} />
+    </div>
+    <div className="vc-state__title">{title}</div>
+    {message && <div className="vc-state__desc">{message}</div>}
     {onRetry && (
       <Button size="small" onClick={onRetry}>
         重试

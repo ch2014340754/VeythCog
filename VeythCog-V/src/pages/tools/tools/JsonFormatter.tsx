@@ -1,4 +1,3 @@
-import { useTheme } from '@/contexts/ThemeContext';
 import checkIcon from '@iconify-icons/lucide/check';
 import collapseAllIcon from '@iconify-icons/lucide/chevrons-down-up';
 import expandAllIcon from '@iconify-icons/lucide/chevrons-up-down';
@@ -10,7 +9,6 @@ import ToolShell from '../ToolShell';
 import JsonTreeView, { JsonTreeHandle } from '../components/JsonTreeView';
 
 const JsonFormatter: React.FC = () => {
-  const { colors } = useTheme();
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [error, setError] = useState('');
@@ -74,94 +72,70 @@ const JsonFormatter: React.FC = () => {
       description="格式化、压缩、转义 JSON，错误会定位到具体信息"
       fillHeight
     >
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>输入</div>
+      <div className="vc-tool-split">
+        <div className={`vc-tool-pane${error ? ' has-error' : ''}`}>
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">输入</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{input.length.toLocaleString()} 字符</span>
+            </div>
+          </div>
+          <div className="vc-tool-pane__body">
             <Input.TextArea
+              className="vc-mono-input"
+              variant="borderless"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder='{"hello":"world","nested":[1,2,3]}'
-              style={{
-                flex: 1,
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
-                fontSize: 13,
-                minHeight: 0,
-                background: error ? 'rgba(248,113,113,0.08)' : undefined,
-              }}
             />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
-              <span>输出</span>
-              <div style={{ flex: 1 }} />
+        </div>
+
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">输出</span>
+            <div className="vc-tool-pane__side">
               <Tooltip title="展开全部">
                 <Button
-                  size="small"
                   type="text"
-                  icon={<Icon icon={expandAllIcon} width={14} />}
+                  icon={<Icon icon={expandAllIcon} width={16} />}
                   onClick={() => treeRef.current?.expandAll()}
                   disabled={!output}
-                  style={{ height: 15 }}
                 />
               </Tooltip>
               <Tooltip title="折叠全部">
                 <Button
-                  size="small"
                   type="text"
-                  icon={<Icon icon={collapseAllIcon} width={14} />}
+                  icon={<Icon icon={collapseAllIcon} width={16} />}
                   onClick={() => treeRef.current?.collapseAll()}
                   disabled={!output}
-                  style={{ height: 15 }}
                 />
               </Tooltip>
             </div>
-            {error ? (
-              <div
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  color: colors.error,
-                  fontSize: 13,
-                  background: 'rgba(248,113,113,0.08)',
-                  border: `1px solid ${colors.error}`,
-                  borderRadius: 'var(--radius-md)',
-                  overflow: 'auto',
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {error}
-              </div>
-            ) : (
-              <JsonTreeView ref={treeRef} code={output} style={{ flex: 1, minHeight: 0 }} />
-            )}
           </div>
+          {error ? (
+            <div className="vc-tool-error" style={{ margin: 0, border: 'none', borderRadius: 0, background: 'transparent' }}>
+              {error}
+            </div>
+          ) : (
+            <JsonTreeView ref={treeRef} code={output} style={{ flex: 1, minHeight: 0 }} />
+          )}
         </div>
-        {/* 底部工具栏 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 12,
-            flexShrink: 0,
-            paddingTop: 12,
-            borderTop: `1px solid ${colors.border}`,
-          }}
-        >
-          <Button size="small" type="primary" onClick={handleFormat} disabled={!input.trim()}>格式化</Button>
-          <Button size="small" onClick={handleMinify} disabled={!input.trim()}>压缩</Button>
-          <Button size="small" onClick={handleEscape} disabled={!input.trim()}>转义</Button>
-          <Button size="small" onClick={handleUnescape} disabled={!input.trim()}>反转义</Button>
-          <Radio.Group size="small" value={indent} onChange={(e) => setIndent(e.target.value)} style={{ marginLeft: 8 }}>
-            <Radio.Button value={2}>2 空格</Radio.Button>
-            <Radio.Button value={4}>4 空格</Radio.Button>
-          </Radio.Group>
-          <div style={{ flex: 1 }} />
-          <Button size="small" onClick={handleCopy} disabled={!output}>
-            <Icon icon={copied ? checkIcon : copyIcon} width={14} />
-          </Button>
-        </div>
+      </div>
+
+      <div className="vc-tool-bar">
+        <Button type="primary" onClick={handleFormat} disabled={!input.trim()}>格式化</Button>
+        <Button onClick={handleMinify} disabled={!input.trim()}>压缩</Button>
+        <Button onClick={handleEscape} disabled={!input.trim()}>转义</Button>
+        <Button onClick={handleUnescape} disabled={!input.trim()}>反转义</Button>
+        <Radio.Group value={indent} onChange={(e) => setIndent(e.target.value)} style={{ marginLeft: 8 }}>
+          <Radio.Button value={2}>2 空格</Radio.Button>
+          <Radio.Button value={4}>4 空格</Radio.Button>
+        </Radio.Group>
+        <div className="vc-tool-bar__spacer" />
+        <Button onClick={handleCopy} disabled={!output} icon={<Icon icon={copied ? checkIcon : copyIcon} width={16} />}>
+          复制
+        </Button>
       </div>
     </ToolShell>
   );

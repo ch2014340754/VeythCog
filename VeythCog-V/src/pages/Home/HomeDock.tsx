@@ -9,8 +9,6 @@ import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
 import settingsIcon from '@iconify-icons/lucide/settings';
 import { message } from 'antd';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { useMusicStore } from '@/stores/musicStore';
 
 interface DockAction {
@@ -24,16 +22,15 @@ interface DockAction {
 
 /**
  * 首页底部工具条：毛玻璃居中长条。
- * - 第一个：切换书签图标版块的显示 / 隐藏（带动画，动画在 Home 容器上）
+ * - 第一个：切换书签图标版块的显示 / 隐藏（动画在 Home 容器上）
  * - 其余：音乐、邮箱（占位）、工具集、知识库、对话、设置等常用入口
+ * 视觉全部由 .vc-dock / .vc-dock__item 提供（含 body.has-bg 壁纸白玻璃变体）。
  */
 const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = ({
   gridVisible,
   onToggleGrid,
 }) => {
   const navigate = useNavigate();
-  const { colors } = useTheme();
-  const hasWallpaper = useWallpaperStore((s) => s.active !== null);
   const openMusic = useMusicStore((s) => s.open);
 
   /** 空闲渐隐：与首页搜索框一致，鼠标未悬停 3 分钟后淡化为淡轮廓，进入即恢复 */
@@ -93,10 +90,9 @@ const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = (
     { key: 'settings', label: '设置', icon: settingsIcon, onClick: () => navigate('/settings') },
   ];
 
-  const idleColor = hasWallpaper ? 'rgba(255,255,255,0.88)' : colors.textSecondary;
-
   return (
     <div
+      className={`vc-dock${dimmed ? ' is-dimmed' : ''}`}
       onMouseEnter={() => {
         hoverRef.current = true;
         wake();
@@ -105,64 +101,20 @@ const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = (
         hoverRef.current = false;
         scheduleFade();
       }}
-      style={{
-        position: 'fixed',
-        bottom: 58,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 90,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 24,
-        opacity: dimmed ? 0.16 : 1,
-        transition: 'opacity 0.6s ease',
-      }}
     >
-      {actions.map((action) => {
-        const active = !!action.active;
-        return (
-          <div
-            key={action.key}
-            role="button"
-            tabIndex={0}
-            title={action.label}
-            onClick={action.onClick}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                action.onClick();
-              }
-            }}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              background: active ? colors.primary10 : hasWallpaper ? 'rgba(255,255,255,0.14)' : colors.surface,
-              color: active ? colors.primary : idleColor,
-              transition: `all 0.2s var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1))`,
-              outline: 'none',
-            }}
-            onMouseEnter={(e) => {
-              if (!active) e.currentTarget.style.background = colors.primary10;
-              e.currentTarget.style.color = colors.primary;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = active
-                ? colors.primary10
-                : hasWallpaper
-                  ? 'rgba(255,255,255,0.14)'
-                  : colors.surface;
-              e.currentTarget.style.color = active ? colors.primary : idleColor;
-            }}
-          >
-            <Icon icon={action.icon} width={24} />
-          </div>
-        );
-      })}
+      {actions.map((action) => (
+        <button
+          key={action.key}
+          type="button"
+          className={`vc-dock__item${action.active ? ' is-active' : ''}`}
+          title={action.label}
+          aria-label={action.label}
+          aria-pressed={action.active ? true : undefined}
+          onClick={action.onClick}
+        >
+          <Icon icon={action.icon} width={22} />
+        </button>
+      ))}
     </div>
   );
 };

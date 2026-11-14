@@ -160,7 +160,7 @@ const SearchBar: React.FC = () => {
   const searchEngine = useNavStore((s) => s.searchEngine);
   const setSearchEngine = useNavStore((s) => s.setSearchEngine);
   const wallpaper = useWallpaperStore((s) => s.active);
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const glassOpacity = useSettingsStore((s) => s.glassOpacity);
 
   const [q, setQ] = React.useState('');
@@ -235,28 +235,17 @@ const SearchBar: React.FC = () => {
   }, []);
 
   const isWallpaperMode = !!wallpaper?.url;
-  // 无壁纸：完全用主题玻璃；有壁纸：白色玻璃，厚度与全局「朦胧度」联动
-  const barBg = isWallpaperMode
-    ? `linear-gradient(180deg, ${whiteGlass(glassOpacity, 0.3, 0.55)} 0%, ${whiteGlass(glassOpacity, 0.16, 0.3)} 100%)`
-    : colors.glassBg;
-  const barBorder = isWallpaperMode ? 'rgba(255,255,255,0.55)' : colors.glassBorder;
-  const barShadow = isWallpaperMode
-    ? '0 10px 30px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.65)'
-    : 'inset 0 1px 0 rgba(255,255,255,0.35)';
-  const textColor = isWallpaperMode ? '#fff' : colors.text;
-  const textShadow = isWallpaperMode ? '0 1px 3px rgba(0,0,0,0.4)' : 'none';
-
-  // 浮层配色跟随站点主题（深色/浅色），不因壁纸而固定为深色
-  const menuBg = isDark ? 'rgba(28,28,38,0.94)' : 'rgba(255,255,255,0.94)';
-  const menuBorder = isDark ? 'rgba(255,255,255,0.14)' : colors.border;
-  const menuHoverBg = isDark ? 'rgba(255,255,255,0.12)' : colors.primary10;
-  const menuShadow = isDark
-    ? '0 14px 34px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12)'
-    : '0 14px 34px rgba(31,35,64,0.16), 0 2px 6px rgba(31,35,64,0.08), inset 0 1px 0 rgba(255,255,255,0.9)';
-  const panelText = isDark ? '#F5F6FA' : colors.text;
-  const panelSubText = isDark ? 'rgba(255,255,255,0.62)' : colors.textTertiary;
-  const panelDivider = isDark ? 'rgba(255,255,255,0.10)' : colors.divider;
-  const panelInputBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.035)';
+  // 无壁纸：完全用主题玻璃（.vc-search__bar）；有壁纸：白色玻璃，厚度与全局「朦胧度」联动
+  const barStyle: React.CSSProperties = isWallpaperMode
+    ? {
+        background: `linear-gradient(180deg, ${whiteGlass(glassOpacity, 0.3, 0.55)} 0%, ${whiteGlass(glassOpacity, 0.16, 0.3)} 100%)`,
+        borderColor: 'rgba(255,255,255,0.55)',
+        backdropFilter: glassBlur(glassOpacity),
+        WebkitBackdropFilter: glassBlur(glassOpacity),
+        boxShadow: '0 10px 30px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.65)',
+      }
+    : {};
+  const accent = colors.primary;
 
   const engines: { key: EngineKey; label: string }[] = [
     { key: 'baidu', label: 'Baidu' },
@@ -569,6 +558,7 @@ const SearchBar: React.FC = () => {
     }
   };
 
+
   const aiVisible = ai.status !== 'idle';
   const translationVisible =
     !!translation &&
@@ -578,6 +568,7 @@ const SearchBar: React.FC = () => {
   return (
     <div
       ref={rootRef}
+      className={"vc-search" + (dimmed ? " is-dimmed" : "")}
       onMouseEnter={() => {
         hoverRef.current = true;
         wake();
@@ -586,129 +577,58 @@ const SearchBar: React.FC = () => {
         hoverRef.current = false;
         scheduleFade();
       }}
-      style={{
-        position: 'relative',
-        zIndex: 60,
-        width: '100%',
-        maxWidth: 640,
-        margin: '0 auto 32px',
-        opacity: dimmed ? 0.16 : 1,
-        transition: 'opacity 0.6s ease',
-      }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          height: 54,
-          background: barBg,
-          backdropFilter: glassBlur(glassOpacity),
-          WebkitBackdropFilter: glassBlur(glassOpacity),
-          borderRadius: 18,
-          padding: '0 8px',
-          border: `1px solid ${barBorder}`,
-          boxShadow: barShadow,
-        }}
-      >
+      <div className="vc-search__bar" style={barStyle}>
         {/* 搜索引擎：主题化下拉，替换原生 select */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
+        <div className="vc-search__engine">
           <button
             type="button"
+            className="vc-search__engine-btn"
             onClick={() => {
               setEngineOpen((o) => !o);
               setPanelOpen(false);
             }}
             title={currentEngine.label}
-            aria-label={`Search engine: ${currentEngine.label}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'transparent',
-              border: 'none',
-              color: textColor,
-              textShadow,
-              padding: '10px 12px',
-              cursor: 'pointer',
-              fontSize: 14,
-              outline: 'none',
-            }}
+            aria-label={"Search engine: " + currentEngine.label}
+            aria-expanded={engineOpen}
           >
-            <EngineLogo engine={currentEngine.key} size={18} color={textColor} />
-            <Icon
-              icon={chevronIcon}
-              width={14}
-              color={textColor}
-              style={{
-                opacity: 0.7,
-                transform: engineOpen ? 'rotate(180deg)' : 'none',
-                transition: 'transform 0.18s ease',
-              }}
-            />
+            <EngineLogo engine={currentEngine.key} size={18} color={isWallpaperMode ? '#fff' : colors.text} />
+            <span className={"vc-search__chevron" + (engineOpen ? " is-open" : "")}>
+              <Icon icon={chevronIcon} width={14} />
+            </span>
           </button>
 
           {engineOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 'calc(100% + 8px)',
-                left: 0,
-                minWidth: 136,
-                zIndex: 90,
-                background: menuBg,
-                backdropFilter: 'blur(22px) saturate(170%)',
-                WebkitBackdropFilter: 'blur(22px) saturate(170%)',
-                border: `1px solid ${menuBorder}`,
-                borderRadius: 14,
-                padding: 6,
-                boxShadow: menuShadow,
-              }}
-            >
+            <div className="vc-search__menu" role="listbox">
               {engines.map((e) => {
                 const active = e.key === searchEngine;
                 return (
                   <div
                     key={e.key}
+                    role="option"
+                    aria-selected={active}
+                    tabIndex={0}
+                    className={"vc-search__menu-item" + (active ? " is-active" : "")}
                     onClick={() => {
                       setSearchEngine(e.key);
                       setEngineOpen(false);
                     }}
-                    onMouseEnter={(ev) => (ev.currentTarget.style.background = menuHoverBg)}
-                    onMouseLeave={(ev) => {
-                      ev.currentTarget.style.background = active ? menuHoverBg : 'transparent';
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      padding: '9px 12px',
-                      borderRadius: 9,
-                      fontSize: 13,
-                      fontWeight: active ? 600 : 400,
-                      letterSpacing: 0.2,
-                      cursor: 'pointer',
-                      color: panelText,
-                      background: active ? menuHoverBg : 'transparent',
-                      userSelect: 'none',
-                      transition: 'background 0.12s ease',
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault();
+                        setSearchEngine(e.key);
+                        setEngineOpen(false);
+                      }
                     }}
                   >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                      <EngineLogo
-                        engine={e.key}
-                        size={16}
-                        color={active ? colors.primary : panelText}
-                      />
+                    <span className="vc-search__menu-label">
+                      <EngineLogo engine={e.key} size={16} color={active ? accent : 'currentColor'} />
                       {e.label}
                     </span>
                     {active && (
-                      <Icon
-                        icon={chevronIcon}
-                        width={12}
-                        color={panelText}
-                        style={{ opacity: 0.6, transform: 'rotate(-90deg)' }}
-                      />
+                      <span className="vc-search__menu-check">
+                        <Icon icon={chevronIcon} width={12} />
+                      </span>
                     )}
                   </div>
                 );
@@ -719,7 +639,7 @@ const SearchBar: React.FC = () => {
 
         <input
           ref={inputRef}
-          className={`nav-search-input${isWallpaperMode ? ' is-white' : ''}`}
+          className="vc-search__input"
           value={q}
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => {
@@ -738,112 +658,37 @@ const SearchBar: React.FC = () => {
           aria-label="搜索"
           aria-expanded={panelOpen}
           aria-controls="search-suggest-panel"
-          style={{
-            flex: 1,
-            minWidth: 0,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            color: textColor,
-            textShadow,
-            fontSize: 16,
-            padding: '10px 12px',
-          }}
         />
 
         {/* AI 回答：显式按钮，Enter 仍然只做网页搜索 */}
         <button
           type="button"
+          className="vc-search__icon-btn"
           onClick={startAi}
           title="AI 回答（Ctrl/Cmd+Enter）"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 5,
-            background: 'transparent',
-            border: 'none',
-            padding: '10px 8px',
-            cursor: 'pointer',
-            flexShrink: 0,
-            color: textColor,
-            textShadow,
-            fontSize: 12,
-            opacity: 0.82,
-            transition: 'opacity 0.15s ease',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.82')}
+          aria-label="AI 回答"
         >
-          <Icon icon={sparklesIcon} width={17} color={textColor} />
+          <Icon icon={sparklesIcon} width={17} />
         </button>
 
         {/* 放大镜：纯色字符图标，无按钮底色，颜色与框内文字一致 */}
-        <button
-          type="button"
-          onClick={() => doSearch()}
-          title="搜索"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'transparent',
-            border: 'none',
-            padding: '10px 12px',
-            cursor: 'pointer',
-            flexShrink: 0,
-            opacity: 0.85,
-            transition: 'opacity 0.15s ease',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.85')}
-        >
-          <Icon icon={searchIcon} width={20} color={textColor} />
+        <button type="button" className="vc-search__icon-btn" onClick={() => doSearch()} title="搜索" aria-label="搜索">
+          <Icon icon={searchIcon} width={20} />
         </button>
       </div>
 
       {panelOpen && (
-        <div
-          id="search-suggest-panel"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 8px)',
-            left: 0,
-            right: 0,
-            zIndex: 80,
-            maxHeight: 'min(460px, 62vh)',
-            overflowY: 'auto',
-            background: menuBg,
-            backdropFilter: 'blur(22px) saturate(170%)',
-            WebkitBackdropFilter: 'blur(22px) saturate(170%)',
-            border: `1px solid ${menuBorder}`,
-            borderRadius: 16,
-            boxShadow: menuShadow,
-            padding: 6,
-          }}
-        >
+        <div id="search-suggest-panel" className="vc-search__panel">
           {aiVisible ? (
-            <div style={{ padding: '2px 0 0' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 10px 10px',
-                  borderBottom: `1px solid ${panelDivider}`,
-                }}
-              >
-                <Icon icon={sparklesIcon} width={17} color={colors.primary} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ color: panelText, fontSize: 13, fontWeight: 600 }}>
+            <>
+              <div className="vc-search__panel-head">
+                <Icon icon={sparklesIcon} width={17} color={accent} />
+                <div className="vc-search__panel-main">
+                  <div className="vc-search__panel-title">
                     AI 回答
-                    {ai.meta?.modelName ? (
-                      <span style={{ marginLeft: 8, color: panelSubText, fontSize: 11, fontWeight: 400 }}>
-                        {ai.meta.modelName}
-                      </span>
-                    ) : null}
+                    {ai.meta?.modelName ? <span className="vc-search__panel-model">{ai.meta.modelName}</span> : null}
                   </div>
-                  <div style={{ color: panelSubText, fontSize: 11, marginTop: 2 }}>
+                  <div className="vc-search__panel-sub">
                     {ai.status === 'loading'
                       ? effectiveKnowledgeFirst
                         ? '正在检索全库知识库并生成回答…'
@@ -857,242 +702,115 @@ const SearchBar: React.FC = () => {
                 </div>
                 <button
                   type="button"
+                  className={"vc-search__kb" + (effectiveKnowledgeFirst ? " is-on" : "")}
                   onClick={toggleKnowledgeFirst}
                   disabled={!knowledgeAvailable}
+                  aria-pressed={effectiveKnowledgeFirst}
                   title={knowledgeAvailable ? '优先查询当前账号全部已向量化文档' : '知识库暂无已向量化文档'}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    background: panelInputBg,
-                    border: `1px solid ${panelDivider}`,
-                    borderRadius: 999,
-                    padding: '4px 8px',
-                    color: panelText,
-                    cursor: knowledgeAvailable ? 'pointer' : 'not-allowed',
-                    opacity: knowledgeAvailable ? 1 : 0.52,
-                    fontSize: 11,
-                  }}
                 >
-                  <Icon icon={bookOpenIcon} width={13} color={panelText} />
+                  <Icon icon={bookOpenIcon} width={13} />
                   知识库
-                  <span
-                    style={{
-                      width: 26,
-                      height: 14,
-                      borderRadius: 999,
-                      background: effectiveKnowledgeFirst ? colors.primary : panelDivider,
-                      position: 'relative',
-                      transition: 'background 0.15s ease',
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: 2,
-                        left: effectiveKnowledgeFirst ? 14 : 2,
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: '#fff',
-                        transition: 'left 0.15s ease',
-                      }}
-                    />
+                  <span className="vc-search__kb-track">
+                    <span className="vc-search__kb-thumb" />
                   </span>
                 </button>
                 <button
                   type="button"
+                  className="vc-search__ghost"
                   onClick={closePanel}
                   title="关闭 AI 回答"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 4,
-                    cursor: 'pointer',
-                    color: panelSubText,
-                  }}
+                  aria-label="关闭 AI 回答"
                 >
-                  <Icon icon={xIcon} width={16} color={panelSubText} />
+                  <Icon icon={xIcon} width={16} />
                 </button>
               </div>
 
               {(ai.status === 'loading' || ai.status === 'streaming') && !ai.answer && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 12px', color: panelSubText, fontSize: 13 }}>
-                  <Icon icon={loaderIcon} width={16} color={panelSubText} style={{ animation: 'spin 1s linear infinite' }} />
+                <div className="vc-search__nudge">
+                  <Icon icon={loaderIcon} width={16} className="vc-spin" />
                   正在生成…
                 </div>
               )}
 
               {ai.answer && (
-                <div
-                  className="md-body"
-                  style={{
-                    color: panelText,
-                    fontSize: 14,
-                    lineHeight: 1.75,
-                    padding: '12px 12px 6px',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
+                <div className="vc-search__answer md-body">
                   {ai.answer}
-                  {ai.status === 'streaming' && <span style={{ opacity: 0.6 }}>▍</span>}
+                  {ai.status === 'streaming' && <span className="vc-search__caret">▍</span>}
                 </div>
               )}
 
-              {ai.status === 'error' && (
-                <div style={{ margin: '10px 12px', padding: '10px 12px', borderRadius: 10, background: 'rgba(248,113,113,0.12)', color: colors.error, fontSize: 12 }}>
-                  {ai.error || '搜索回答失败'}
-                </div>
-              )}
+              {ai.status === 'error' && <div className="vc-search__error">{ai.error || '搜索回答失败'}</div>}
 
               {sourceGroups.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 12px 8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: panelSubText }}>
+                <div className="vc-search__sources">
+                  <div className="vc-search__sources-head">
                     <Icon icon={bookOpenIcon} width={12} />
                     参考来源 · 知识库文档（{sourceGroups.length} 篇）
                   </div>
                   {sourceGroups.map((group) => (
-                    <div
-                      key={group.docId}
-                      title={group.preview}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '6px 10px',
-                        borderRadius: 10,
-                        background: panelInputBg,
-                        border: `1px solid ${panelDivider}`,
-                        fontSize: 12,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          color: panelText,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        《{group.title || '未命名文档'}》
-                      </span>
-                      <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 10, color: panelSubText }}>
-                        分片 {group.chunks.map((c) => `#${c}`).join('、')}
+                    <div key={group.docId} className="vc-search__source" title={group.preview}>
+                      <span className="vc-search__source-title">《{group.title || '未命名文档'}》</span>
+                      <span className="vc-search__source-meta">
+                        分片 {group.chunks.map((c) => "#" + c).join('、')}
                       </span>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 10px 6px',
-                  borderTop: `1px solid ${panelDivider}`,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={copyAnswer}
-                  disabled={!ai.answer}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    background: 'transparent',
-                    border: 'none',
-                    color: ai.answer ? panelSubText : panelDivider,
-                    fontSize: 12,
-                    cursor: ai.answer ? 'pointer' : 'not-allowed',
-                    padding: '4px 6px',
-                  }}
-                >
-                  <Icon icon={copyIcon} width={13} color={ai.answer ? panelSubText : panelDivider} />
+              <div className="vc-search__foot">
+                <button type="button" className="vc-search__ghost" onClick={copyAnswer} disabled={!ai.answer}>
+                  <Icon icon={copyIcon} width={13} />
                   复制
                 </button>
                 {(ai.status === 'done' || ai.status === 'error') && (
                   <>
-                    <button
-                      type="button"
-                      onClick={startAi}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        background: 'transparent',
-                        border: 'none',
-                        color: panelSubText,
-                        fontSize: 12,
-                        cursor: 'pointer',
-                        padding: '4px 6px',
-                      }}
-                    >
-                      <Icon icon={rotateIcon} width={13} color={panelSubText} />
+                    <button type="button" className="vc-search__ghost" onClick={startAi}>
+                      <Icon icon={rotateIcon} width={13} />
                       重新回答
                     </button>
                     <button
                       type="button"
+                      className="vc-search__ghost vc-search__ghost--primary vc-search__ghost--end"
                       onClick={continueChat}
-                      style={{
-                        marginLeft: 'auto',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        background: 'transparent',
-                        border: 'none',
-                        color: colors.primary,
-                        fontSize: 12,
-                        cursor: 'pointer',
-                        padding: '4px 6px',
-                      }}
                     >
                       继续追问
-                      <Icon icon={externalLinkIcon} width={13} color={colors.primary} />
+                      <Icon icon={externalLinkIcon} width={13} />
                     </button>
                   </>
                 )}
               </div>
-            </div>
+            </>
           ) : (
             <>
               {translationLoading && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', color: panelSubText, fontSize: 12 }}>
-                  <Icon icon={loaderIcon} width={14} color={panelSubText} style={{ animation: 'spin 1s linear infinite' }} />
+                <div className="vc-search__nudge">
+                  <Icon icon={loaderIcon} width={14} className="vc-spin" />
                   正在翻译…
                 </div>
               )}
               {translationVisible && translation && (
                 <div
+                  className="vc-search__translate"
                   onClick={copyTranslation}
                   title="点击复制译文"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 10,
-                    padding: '10px 12px',
-                    borderBottom: `1px solid ${panelDivider}`,
-                    cursor: 'pointer',
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter') {
+                      ev.preventDefault();
+                      copyTranslation();
+                    }
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = menuHoverBg)}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <Icon icon={languagesIcon} width={16} color={colors.primary} style={{ marginTop: 2, flexShrink: 0 }} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ color: panelSubText, fontSize: 11, marginBottom: 3 }}>
+                  <Icon icon={languagesIcon} width={16} color={accent} className="vc-search__translate-icon" />
+                  <div className="vc-search__translate-body">
+                    <div className="vc-search__translate-label">
                       {translation.targetLang === 'en' ? '译成英文' : '译成中文'}
                     </div>
-                    <div style={{ color: panelText, fontSize: 14, lineHeight: 1.55, wordBreak: 'break-word' }}>
-                      {translation.translatedText}
-                    </div>
+                    <div className="vc-search__translate-text">{translation.translatedText}</div>
                   </div>
-                  <Icon icon={copyIcon} width={13} color={panelSubText} style={{ marginTop: 3, flexShrink: 0 }} />
+                  <Icon icon={copyIcon} width={13} className="vc-search__translate-copy" />
                 </div>
               )}
 
@@ -1104,83 +822,53 @@ const SearchBar: React.FC = () => {
                     const icon = isBookmark ? bookmarkIcon : item.type === 'history' ? historyIcon : searchIcon;
                     return (
                       <div
-                        key={`${item.type}-${item.text}-${index}`}
+                        key={item.type + "-" + item.text + "-" + index}
+                        role="button"
+                        tabIndex={0}
+                        className={"vc-suggest" + (active ? " is-active" : "")}
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => chooseSuggestion(item)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          padding: '9px 12px',
-                          borderRadius: 9,
-                          cursor: 'pointer',
-                          background: active ? menuHoverBg : 'transparent',
-                          color: panelText,
+                        onKeyDown={(ev) => {
+                          if (ev.key === 'Enter') {
+                            ev.preventDefault();
+                            chooseSuggestion(item);
+                          }
                         }}
                       >
-                        <Icon icon={icon} width={15} color={isBookmark ? colors.primary : panelSubText} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {item.text}
-                          </div>
-                          {isBookmark && item.url && (
-                            <div style={{ color: panelSubText, fontSize: 11, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {bookmarkHost(item.url)}
-                            </div>
-                          )}
+                        <Icon icon={icon} width={15} color={isBookmark ? accent : undefined} className="vc-suggest__icon" />
+                        <div className="vc-suggest__main">
+                          <div className="vc-suggest__label">{item.text}</div>
+                          {isBookmark && item.url && <div className="vc-suggest__meta">{bookmarkHost(item.url)}</div>}
                         </div>
                         {isBookmark ? (
-                          <Icon icon={externalLinkIcon} width={13} color={panelSubText} />
+                          <Icon icon={externalLinkIcon} width={13} className="vc-suggest__tail" />
                         ) : (
-                          <span style={{ color: panelSubText, fontSize: 11 }}>{item.type === 'history' ? '最近搜索' : '搜索'}</span>
+                          <span className="vc-suggest__tail">{item.type === 'history' ? '最近搜索' : '搜索'}</span>
                         )}
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                !translationLoading && (
-                  <div style={{ padding: '14px 12px 10px', color: panelSubText, fontSize: 12 }}>
-                    按 Enter 搜索「{q.trim()}」
-                  </div>
-                )
+                !translationLoading && <div className="vc-search__nudge">按 Enter 搜索「{q.trim()}」</div>
               )}
 
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '8px 12px 6px',
-                  marginTop: 2,
-                  borderTop: `1px solid ${panelDivider}`,
-                  color: panelSubText,
-                  fontSize: 11,
-                }}
-              >
+              <div className="vc-search__hint">
                 <span>Enter 搜索</span>
                 <span>Ctrl/Cmd+Enter AI 回答</span>
                 {remoteLoading && (
-                  <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Icon icon={loaderIcon} width={12} color={panelSubText} style={{ animation: 'spin 1s linear infinite' }} />
+                  <span className="vc-search__hint-tail">
+                    <Icon icon={loaderIcon} width={12} className="vc-spin" />
                     联想中
                   </span>
                 )}
                 {!remoteLoading && history.length > 0 && (
                   <button
                     type="button"
+                    className="vc-search__ghost vc-search__ghost--end"
                     onClick={() => {
                       clearSearchHistory();
                       setHistory([]);
-                    }}
-                    style={{
-                      marginLeft: 'auto',
-                      background: 'transparent',
-                      border: 'none',
-                      color: panelSubText,
-                      fontSize: 11,
-                      cursor: 'pointer',
-                      padding: 0,
                     }}
                   >
                     清空最近搜索

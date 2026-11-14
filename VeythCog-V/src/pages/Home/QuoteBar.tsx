@@ -1,10 +1,8 @@
 import React from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useWallpaperStore } from '@/stores/wallpaperStore';
 
 /**
  * 底部文案栏：写死 5 条，5s 轮播。
- * 有壁纸时白色+阴影；无壁纸时跟随主题色。
+ * 配色/阴影交给 .vc-quote（含 body.has-bg 壁纸白字变体）。
  */
 const QUOTES = [
   '「岁至立冬，万物开始一场静默的修行。」',
@@ -16,36 +14,13 @@ const QUOTES = [
 
 const QuoteBar: React.FC = () => {
   const [idx, setIdx] = React.useState(0);
-  const { colors } = useTheme();
-  const wallpaper = useWallpaperStore((s) => s.active);
 
   React.useEffect(() => {
     const timer = setInterval(() => setIdx((i) => (i + 1) % QUOTES.length), 5000);
     return () => clearInterval(timer);
   }, []);
 
-  const isWallpaperMode = !!wallpaper?.url;
-  const textColor = isWallpaperMode ? 'rgba(255,255,255,0.7)' : colors.textSecondary;
-  const textShadow = isWallpaperMode ? '0 2px 8px rgba(0,0,0,0.4)' : 'none';
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: 24,
-        left: 0,
-        right: 0,
-        textAlign: 'center',
-        color: textColor,
-        fontSize: 14,
-        opacity: 0.8,
-        textShadow: textShadow,
-        zIndex: 1,
-      }}
-    >
-      {QUOTES[idx]}
-    </div>
-  );
+  return <div className="vc-quote">{QUOTES[idx]}</div>;
 };
 
 export default QuoteBar;

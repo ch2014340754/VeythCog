@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Input, Button, message } from 'antd';
+import { Input, message } from 'antd';
+import { Icon } from '@iconify/react';
+import copyIcon from '@iconify-icons/lucide/copy';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 const TimestampTool: React.FC = () => {
-  const { colors } = useTheme();
   const [input, setInput] = useState('');
   const [now] = useState(() => Math.floor(Date.now() / 1000));
 
@@ -27,46 +27,71 @@ const TimestampTool: React.FC = () => {
     message.success('已复制');
   };
 
+  const rows = result
+    ? [
+        { label: '本地时间', value: result.date.toLocaleString('zh-CN') },
+        { label: 'UTC', value: result.date.toUTCString() },
+        { label: 'ISO', value: result.date.toISOString() },
+        { label: '秒级', value: String(Math.floor(result.ms / 1000)) },
+        { label: '毫秒级', value: String(result.ms) },
+        {
+          label: '日期',
+          value: new Date(result.ms).toLocaleDateString('zh-CN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long',
+          }),
+        },
+      ]
+    : [];
+
   return (
     <ToolShell title="Unix 时间戳转换" description="支持秒级（10 位）和毫秒级（13 位）">
-      <div style={{ marginBottom: 16, padding: 12, background: colors.primary10, borderRadius: 'var(--radius-md)' }}>
-        <span style={{ color: colors.textSecondary, fontSize: 12 }}>当前时间戳：</span>
-        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: colors.primary }}>{now}</span>
-        <span style={{ color: colors.textTertiary, margin: '0 8px' }}>|</span>
-        <button onClick={() => copy(String(now))} style={{ border: 'none', background: 'transparent', color: colors.primary, cursor: 'pointer', fontSize: 12 }}>复制秒级</button>
-        <span style={{ color: colors.textTertiary, margin: '0 8px' }}>|</span>
-        <button onClick={() => copy(String(now * 1000))} style={{ border: 'none', background: 'transparent', color: colors.primary, cursor: 'pointer', fontSize: 12 }}>复制毫秒</button>
+      <div className="vc-panel" style={{ marginBottom: 'var(--space-md)' }}>
+        <div className="vc-panel__head">
+          <div>
+            <h2 className="vc-panel__title">当前时间戳</h2>
+            <p className="vc-panel__desc">秒级与毫秒级都从这里取。</p>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button className="vc-icon-btn" onClick={() => copy(String(now))}>
+              <Icon icon={copyIcon} width={13} /> 复制秒级
+            </button>
+            <button className="vc-icon-btn" onClick={() => copy(String(now * 1000))}>
+              <Icon icon={copyIcon} width={13} /> 复制毫秒
+            </button>
+          </div>
+        </div>
+        <div className="vc-clock-value">{now}</div>
       </div>
-      <Input
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="输入时间戳，如 1700000000 或 1700000000000"
-        style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", marginBottom: 16 }}
-      />
-      {result && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {[
-            { label: '本地时间', value: result.date.toLocaleString('zh-CN') },
-            { label: 'UTC', value: result.date.toUTCString() },
-            { label: 'ISO', value: result.date.toISOString() },
-            { label: '秒级', value: String(Math.floor(result.ms / 1000)) },
-            { label: '毫秒级', value: String(result.ms) },
-            { label: '相对', value: new Date(result.ms).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }) },
-          ].map((r) => (
-            <div
-              key={r.label}
-              style={{
-                padding: 12,
-                background: colors.surface,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 'var(--radius-md)',
-              }}
-            >
-              <div style={{ fontSize: 11, color: colors.textTertiary }}>{r.label}</div>
-              <div style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13, marginTop: 2 }}>{r.value}</div>
+
+      <div style={{ marginBottom: 'var(--space-md)' }}>
+        <div className="vc-field-label">时间戳</div>
+        <Input
+          className="vc-mono-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="输入时间戳，如 1700000000 或 1700000000000"
+        />
+      </div>
+
+      {result ? (
+        <div className="vc-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+          {rows.map((r) => (
+            <div key={r.label} className="vc-card">
+              <div className="vc-result-card__label">{r.label}</div>
+              <div className="vc-result-card__value">{r.value}</div>
+              <div className="vc-result-card__foot">
+                <button className="vc-icon-btn" onClick={() => copy(r.value)}>
+                  <Icon icon={copyIcon} width={12} /> 复制
+                </button>
+              </div>
             </div>
           ))}
         </div>
+      ) : (
+        <div className="vc-meta">输入时间戳后自动换算。</div>
       )}
     </ToolShell>
   );

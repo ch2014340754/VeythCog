@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Input, Button, Radio, Switch, message } from 'antd';
+import { Input, Button, Segmented, Switch, message } from 'antd';
 import { Icon } from '@iconify/react';
 import copyIcon from '@iconify-icons/lucide/copy';
 import checkIcon from '@iconify-icons/lucide/check';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 type ShellType = 'bash' | 'powershell' | 'cmd';
 type Direction = 'merge' | 'wrap';
@@ -23,7 +22,7 @@ const CONT_ESC: Record<ShellType, string> = {
   cmd: '\\^',
 };
 
-/** 去除一行开头的 shell 提示符前缀（$ / # / PS> / C:\> 等） */
+/** 去除一行开头的 shell 提示符前缀（$ / # / PS> / C:\\> 等） */
 function stripPrompt(line: string, shell: ShellType): string {
   const leading = line.match(/^\s*/)?.[0] ?? '';
   let rest = line.slice(leading.length);
@@ -98,7 +97,6 @@ function wrapCmd(input: string, shell: ShellType, width: number, strip: boolean)
 }
 
 const CommandLineWrap: React.FC = () => {
-  const { colors } = useTheme();
   const [shell, setShell] = useState<ShellType>('bash');
   const [direction, setDirection] = useState<Direction>('merge');
   const [strip, setStrip] = useState(true);
@@ -140,108 +138,98 @@ const CommandLineWrap: React.FC = () => {
       description="多行命令合并为单行，或长命令按续行符排版，解决粘贴触发多行警告的问题"
       fillHeight
       actions={
-        <>
-          <Radio.Group size="small" value={shell} onChange={(e) => setShell(e.target.value)}>
-            <Radio.Button value="bash">Bash/zsh</Radio.Button>
-            <Radio.Button value="powershell">PowerShell</Radio.Button>
-            <Radio.Button value="cmd">CMD</Radio.Button>
-          </Radio.Group>
-          <Radio.Group size="small" value={direction} onChange={(e) => setDirection(e.target.value)}>
-            <Radio.Button value="merge">合并为单行</Radio.Button>
-            <Radio.Button value="wrap">拆分为多行</Radio.Button>
-          </Radio.Group>
-          <Button size="small" type="primary" onClick={run} disabled={!input.trim()}>
+        <div className="vc-toolbar" style={{ padding: 0, border: 'none', background: 'transparent' }}>
+          <Segmented
+            className="vc-segmented"
+            value={shell}
+            onChange={(v) => setShell(v as ShellType)}
+            options={[
+              { label: 'Bash/zsh', value: 'bash' },
+              { label: 'PowerShell', value: 'powershell' },
+              { label: 'CMD', value: 'cmd' },
+            ]}
+          />
+          <Segmented
+            className="vc-segmented"
+            value={direction}
+            onChange={(v) => setDirection(v as Direction)}
+            options={[
+              { label: '合并为单行', value: 'merge' },
+              { label: '拆分为多行', value: 'wrap' },
+            ]}
+          />
+          <Button type="primary" onClick={run} disabled={!input.trim()}>
             转换
           </Button>
-          <Button
-            size="small"
-            onClick={copy}
-            disabled={!output}
-            icon={<Icon icon={copied ? checkIcon : copyIcon} width={14} />}
-          >
+          <Button onClick={copy} disabled={!output} icon={<Icon icon={copied ? checkIcon : copyIcon} width={14} />}>
             {copied ? '已复制' : '复制结果'}
           </Button>
-        </>
+        </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
-        {/* 选项行 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-          <label
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 13,
-              color: colors.textSecondary,
-              cursor: 'pointer',
-            }}
-          >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', flex: 1, minHeight: 0 }}>
+        <div className="vc-toolbar" style={{ flexShrink: 0 }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
             <Switch size="small" checked={strip} onChange={setStrip} />
             去除提示符前缀
           </label>
           {direction === 'wrap' && (
-            <label
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 13,
-                color: colors.textSecondary,
-              }}
-            >
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
               每行宽度
               <Input
+                className="vc-mono-input"
                 type="number"
-                size="small"
                 min={20}
                 max={500}
                 value={width}
                 onChange={(e) => setWidth(Number(e.target.value) || 80)}
-                style={{ width: 90, fontFamily: "'JetBrains Mono', Consolas, monospace" }}
+                style={{ width: 96 }}
               />
             </label>
           )}
           {output && (
-            <span style={{ fontSize: 12, color: colors.textTertiary }}>
+            <span className="vc-meta">
               {inLines} 行 → {outLines} 行
             </span>
           )}
         </div>
 
-        {/* 输入输出 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
-              {direction === 'merge' ? '多行命令（带续行符）' : '长命令（单行）'}
+        <div className="vc-tool-split">
+          <div className="vc-tool-pane">
+            <div className="vc-tool-pane__head">
+              <span className="vc-tool-pane__label">
+                {direction === 'merge' ? '多行命令（带续行符）' : '长命令（单行）'}
+              </span>
             </div>
-            <Input.TextArea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                direction === 'merge'
-                  ? 'podman run -d \\\n--name pg-vector \\\n-p 127.0.0.1:5432:5432 \\\n-e POSTGRES_PASSWORD=123456'
-                  : 'podman run -d --name pg-vector -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD=123456'
-              }
-              style={{ flex: 1, minHeight: 0, fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
-            />
+            <div className="vc-tool-pane__body">
+              <Input.TextArea
+                className="vc-mono-input"
+                variant="borderless"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={
+                  direction === 'merge'
+                    ? 'podman run -d \\\n--name pg-vector \\\n-p 127.0.0.1:5432:5432 \\\n-e POSTGRES_PASSWORD=123456'
+                    : 'podman run -d --name pg-vector -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD=123456'
+                }
+              />
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
-              {direction === 'merge' ? '合并后（单行，可安全粘贴）' : '排版后（多行）'}
+          <div className="vc-tool-pane">
+            <div className="vc-tool-pane__head">
+              <span className="vc-tool-pane__label">
+                {direction === 'merge' ? '合并后（单行，可安全粘贴）' : '排版后（多行）'}
+              </span>
             </div>
-            <Input.TextArea
-              value={output}
-              readOnly
-              placeholder="点击「转换」生成结果"
-              style={{
-                flex: 1,
-                minHeight: 0,
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
-                fontSize: 13,
-                color: colors.text,
-              }}
-            />
+            <div className="vc-tool-pane__body">
+              <Input.TextArea
+                className="vc-mono-input"
+                variant="borderless"
+                value={output}
+                readOnly
+                placeholder="点击「转换」生成结果"
+              />
+            </div>
           </div>
         </div>
       </div>

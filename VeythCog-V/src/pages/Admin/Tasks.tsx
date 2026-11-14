@@ -3,21 +3,25 @@ import { Table, Switch, Button, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { Icon } from '@iconify/react';
 import playIcon from '@iconify-icons/lucide/play';
-import { useTheme } from '@/contexts/ThemeContext';
+import PageHeader from '@/components/PageHeader';
+import ListSentinel from '@/components/ListSentinel';
+import useInfiniteRows from '@/hooks/useInfiniteRows';
 import { getTasks, toggleTask, runTaskNow } from '@/api/admin';
 import type { ScheduledTask } from '@/types';
 import { formatRelativeTime } from '@/utils/formatTime';
 
 const TasksPage: React.FC = () => {
-  const { colors } = useTheme();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
-    const data = await getTasks();
-    setTasks(data);
-    setLoading(false);
+    try {
+      const data = await getTasks();
+      setTasks(data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -38,23 +42,32 @@ const TasksPage: React.FC = () => {
   };
 
   const columns: ColumnsType<ScheduledTask> = [
-    { title: '任务', dataIndex: 'name', render: (v: string, r) => (
-      <div>
-        <div style={{ fontWeight: 600 }}>{v}</div>
-        <div style={{ fontSize: 11, color: colors.textTertiary, marginTop: 2 }}>{r.description}</div>
-      </div>
-    )},
-    { title: '调度 (cron)', dataIndex: 'cron', width: 130, render: (v: string) => <code style={{ fontSize: 12 }}>{v}</code> },
+    {
+      title: '任务',
+      dataIndex: 'name',
+      render: (v: string, r) => (
+        <div className="vc-task-cell">
+          <div className="vc-task-cell__name">{v}</div>
+          <div className="vc-task-cell__desc">{r.description}</div>
+        </div>
+      ),
+    },
+    {
+      title: '调度 (cron)',
+      dataIndex: 'cron',
+      width: 140,
+      render: (v: string) => <code className="vc-mono">{v}</code>,
+    },
     {
       title: '上次执行',
       dataIndex: 'lastRunAt',
       width: 140,
-      render: (v?: number) => (v ? formatRelativeTime(v) : '从未'),
+      render: (v?: number) => (v ? formatRelativeTime(v) : <span className="vc-meta">从未</span>),
     },
     {
       title: '状态',
       dataIndex: 'lastStatus',
-      width: 90,
+      width: 110,
       render: (v: string) => {
         if (v === 'success') return <Tag color="success">成功</Tag>;
         if (v === 'failed') return <Tag color="error">失败</Tag>;
@@ -64,12 +77,12 @@ const TasksPage: React.FC = () => {
     {
       title: '启用',
       dataIndex: 'enabled',
-      width: 70,
+      width: 80,
       render: (v: boolean, r) => <Switch checked={v} onChange={(val) => onToggle(r, val)} />,
     },
     {
       title: '操作',
-      width: 100,
+      width: 120,
       render: (_, r) => (
         <Button size="small" type="text" icon={<Icon icon={playIcon} width={14} />} onClick={() => onRunNow(r)}>
           立即执行
@@ -78,15 +91,38 @@ const TasksPage: React.FC = () => {
     },
   ];
 
+  const { visible, hasMore, total, sentinelRef } = useInfiniteRows(tasks, { pageSize: 20 });
+
   return (
-    <div>
-      <div style={{ marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 4px' }}>定时任务</h2>
-        <p style={{ color: colors.textSecondary, fontSize: 13, margin: 0 }}>
-          后台自动清理和统计任务的调度状态
-        </p>
+    <div className="vc-page vc-page--list">
+      <div className="vc-page__body">
+        <PageHeader
+          eyebrow="Admin / Tasks"
+          title="定时任务"
+          description="后台自动清理和统计任务的调度状态，可手动触发一次执行。"
+        />
+
+        <section className="vc-panel vc-panel--flush vc-table-card vc-table-card--fill">
+          <div className="vc-table-card__bar">
+            <span className="vc-table-card__title">调度列表</span>
+            <span className="vc-table-card__side vc-meta">
+              共 <span className="vc-num">{total}</span> 个任务
+            </span>
+          </div>
+          <div className="vc-table-fill">
+            <Table
+              className="admin-table"
+              rowKey="id"
+              columns={columns}
+              dataSource={visible}
+              loading={loading}
+              pagination={false}
+              size="middle"
+            />
+            <ListSentinel total={total} shown={visible.length} hasMore={hasMore} sentinelRef={sentinelRef} />
+          </div>
+        </section>
       </div>
-      <Table className="admin-table" rowKey="id" columns={columns} dataSource={tasks} loading={loading} pagination={false} size="middle" />
     </div>
   );
 };

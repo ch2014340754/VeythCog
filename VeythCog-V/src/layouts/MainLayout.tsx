@@ -2,8 +2,6 @@ import UserMenu from '@/components/UserMenu';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useWallpaperStore } from '@/stores/wallpaperStore';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
 import shieldIcon from '@iconify-icons/lucide/shield-check';
@@ -18,168 +16,65 @@ const NAV_ITEMS = [
   { path: '/tools', icon: wrenchIcon, label: '工具集' },
 ] as const;
 
+/**
+ * 全站主框架：左侧 72px 浮动导航 rail + 右侧玻璃内容卡。
+ * 视觉参数全部来自 page.css 的 .vc-shell / .vc-rail（与 Home 页滑入导航复用同一套类），
+ * 壁纸模式下的图标配色由 body.has-bg 变体接管，不再在组件里判断主题。
+ */
 const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { colors } = useTheme();
-  const glassEnabled = useSettingsStore((s) => s.glassEnabled);
-  const glassOpacity = useSettingsStore((s) => s.glassOpacity);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
-  // 有壁纸时导航图标不再用主题灰（半透明毛玻璃 + 深色壁纸下会糊成一片），改用近白色
-  const hasWallpaper = useWallpaperStore((s) => s.active !== null);
-  const idleIconColor = hasWallpaper ? 'rgba(255,255,255,0.88)' : colors.textSecondary;
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        // 外层容器透明，让 body 上的背景（含自定义背景图）透出；无背景时由 body 的 --color-bg 兜底
-        background: 'transparent',
-      }}
-    >
+    <div className="vc-shell">
       {/* 左侧图标导航栏 - 浮动毛玻璃样式 */}
-      <nav
-        className="glass-effect"
-        style={{
-          position: 'fixed',
-          top: 10,
-          left: 10,
-          bottom: 10,
-          width: 72,
-          borderRadius: 'var(--radius-xl)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: '16px 0',
-          zIndex: 'var(--z-fixed)',
-          gap: 4,
-        }}
-      >
-        {/* Logo 区域 - 点击回 /home，丝滑 hover */}
-        <div
-          role="button"
-          tabIndex={0}
+      <nav className="vc-rail" aria-label="主导航">
+        {/* Logo 区域 - 点击回 /home */}
+        <button
+          type="button"
+          className="vc-rail__logo"
           onClick={() => navigate('/home')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              navigate('/home');
-            }
-          }}
-          style={{
-            width: 48,
-            height: 48,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 12,
-            cursor: 'pointer',
-            borderRadius: 'var(--radius-md)',
-            transition: `all 0.2s var(--spring)`,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = colors.primary10;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-          }}
           title="回到导航首页"
         >
           <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} />
-        </div>
+        </button>
 
-        {/* 导航项：透明底 + 左侧指示条 + primary 字，去掉实心背景避免与主题按钮撞色 */}
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.path);
           return (
-            <div
+            <button
               key={item.path}
-              role="button"
-              tabIndex={0}
+              type="button"
+              className={`vc-rail__btn${active ? ' is-active' : ''}`}
               onClick={() => navigate(item.path)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  navigate(item.path);
-                }
-              }}
-              style={{
-                width: 48,
-                height: 48,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                background: active ? colors.primary10 : 'transparent',
-                color: active ? colors.primary : idleIconColor,
-                transition: `all 0.2s var(--spring)`,
-                position: 'relative',
-                outline: 'none',
-                backdropFilter: active && glassEnabled ? 'blur(8px) saturate(160%)' : undefined,
-                WebkitBackdropFilter: active && glassEnabled ? 'blur(8px) saturate(160%)' : undefined,
-              }}
               title={item.label}
+              aria-current={active ? 'page' : undefined}
             >
               <Icon icon={item.icon} width={22} />
-              {/* 活跃指示条 */}
-              {active && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: -12,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 3,
-                    height: 20,
-                    borderRadius: 2,
-                    background: colors.primary,
-                  }}
-                />
-              )}
-            </div>
+              {active && <span className="vc-rail__indicator" aria-hidden />}
+            </button>
           );
         })}
 
-        {/* 底部弹性空间 */}
-        <div style={{ flex: 1 }} />
+        <div className="vc-rail__spacer" />
 
         {/* 管理员入口（仅 admin 可见） */}
         {isAdmin && (
-          <div
-            role="button"
-            tabIndex={0}
+          <button
+            type="button"
+            className={`vc-rail__btn${isActive('/admin') ? ' is-active' : ''}`}
             onClick={() => navigate('/admin')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                navigate('/admin');
-              }
-            }}
-            style={{
-              width: 48,
-              height: 48,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer',
-              marginBottom: 4,
-              background: isActive('/admin') ? colors.primary10 : 'transparent',
-              color: isActive('/admin') ? colors.primary : idleIconColor,
-              transition: `all 0.2s var(--spring)`,
-              outline: 'none',
-            }}
             title="系统管理"
+            aria-current={isActive('/admin') ? 'page' : undefined}
           >
             <Icon icon={shieldIcon} width={22} />
-          </div>
+            {isActive('/admin') && <span className="vc-rail__indicator" aria-hidden />}
+          </button>
         )}
 
         {/* 用户菜单：头像下拉（账号/模型/飞书/外观/退出） */}
@@ -187,28 +82,8 @@ const MainLayout: React.FC = () => {
       </nav>
 
       {/* 右侧内容区 - 留出导航栏空间 */}
-      <main
-        style={{
-          marginLeft: 92, // 72 + 10 + 10 间距
-          flex: 1,
-          height: '100vh',
-          overflow: 'hidden',
-          padding: '10px 10px 10px 0',
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            borderRadius: 'var(--radius-xl)',
-            overflow: 'hidden',
-            background: colors.glassBg,
-            backdropFilter: `blur(${Math.round(2 + (glassOpacity / 100) * 28)}px) saturate(160%)`,
-            WebkitBackdropFilter: `blur(${Math.round(2 + (glassOpacity / 100) * 28)}px) saturate(160%)`,
-            border: `1px solid ${colors.glassBorder}`,
-            boxShadow: 'var(--shadow-md)',
-          }}
-        >
+      <main className="vc-shell__main">
+        <div className="vc-shell__canvas">
           <Outlet />
         </div>
       </main>

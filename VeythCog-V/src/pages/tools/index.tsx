@@ -2,16 +2,17 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import { Input } from 'antd';
-import { useTheme } from '@/contexts/ThemeContext';
+import PageHeader from '@/components/PageHeader';
+import EmptyState from '@/components/states/EmptyState';
 import { tools, groupToolsByCategory } from './registry';
 import { storage } from '@/utils/storage';
 import searchIcon from '@iconify-icons/lucide/search';
 import starIcon from '@iconify-icons/lucide/star';
+import puzzleIcon from '@iconify-icons/lucide/puzzle';
 
 const FAV_KEY = 'tools:favorites';
 
 const ToolsHome: React.FC = () => {
-  const { colors } = useTheme();
   const navigate = useNavigate();
   const [favs, setFavs] = useState<string[]>(() => storage.get<string[]>(FAV_KEY) ?? []);
   const [query, setQuery] = useState('');
@@ -35,157 +36,85 @@ const ToolsHome: React.FC = () => {
     .map((g) => ({ ...g, items: g.items.filter((t) => match(t.name, t.description)) }))
     .filter((g) => g.items.length > 0);
 
-  const noResult = q && groups.length === 0 && favTools.length === 0;
+  const noResult = Boolean(q) && groups.length === 0 && favTools.length === 0;
 
   const renderCard = (tool: (typeof tools)[number]) => {
     const isFav = favSet.has(tool.id);
     return (
       <div
         key={tool.id}
+        className="vc-card vc-card--interactive vc-tool-card"
+        role="button"
+        tabIndex={0}
         onClick={() => navigate(`/tools/${tool.id}`)}
-        style={{
-          position: 'relative',
-          padding: 16,
-          borderRadius: 'var(--radius-lg)',
-          background: colors.surface,
-          border: `1px solid ${colors.border}`,
-          cursor: 'pointer',
-          transition: 'all 0.15s',
-          boxShadow: isFav ? `0 0 0 1px ${colors.primary}, 0 0 16px ${colors.primary30}` : undefined,
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = colors.primary;
-          (e.currentTarget as HTMLDivElement).style.background = colors.primary10;
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = colors.border;
-          (e.currentTarget as HTMLDivElement).style.background = colors.surface;
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') navigate(`/tools/${tool.id}`);
         }}
       >
-        {/* 收藏星标 */}
         <button
+          type="button"
+          className={`vc-tool-card__star${isFav ? ' is-on' : ''}`}
+          title={isFav ? '取消收藏' : '收藏'}
           onClick={(e) => {
             e.stopPropagation();
             toggleFav(tool.id);
-          }}
-          title={isFav ? '取消收藏' : '收藏'}
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            color: isFav ? '#f0a020' : colors.textTertiary,
-            opacity: isFav ? 1 : 0.55,
           }}
         >
           <Icon icon={starIcon} width={16} />
         </button>
 
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 'var(--radius-md)',
-            background: colors.primary10,
-            color: colors.primary,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 10,
-          }}
-        >
-          {tool.icon}
-        </div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{tool.name}</div>
-        <div style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 1.5 }}>{tool.description}</div>
+        <div className="vc-tool-card__icon">{tool.icon}</div>
+        <div className="vc-tool-card__name">{tool.name}</div>
+        <div className="vc-tool-card__desc">{tool.description}</div>
       </div>
     );
   };
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
-      <div style={{ padding: 32, maxWidth: 1200, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ fontSize: 24, margin: '0 0 8px' }}>开发工具集</h1>
-          <p style={{ color: colors.textSecondary, margin: 0, fontSize: 14 }}>
-            常用前端/后端开发工具，全部本地运行，不上传数据。
-          </p>
-        </div>
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          prefix={<Icon icon={searchIcon} width={14} />}
-          placeholder="搜索工具名称…"
-          allowClear
-          style={{ width: 260 }}
+    <div className="vc-page">
+      <div className="vc-page__body vc-page__body--wide">
+        <PageHeader
+          eyebrow="Workspace / Tools"
+          title="开发工具集"
+          description="常用前端/后端开发工具，全部本地运行，不上传数据。"
+          extra={
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              prefix={<Icon icon={searchIcon} width={14} />}
+              placeholder="搜索工具名称…"
+              allowClear
+              style={{ width: 260 }}
+            />
+          }
         />
-      </div>
 
-      {/* 收藏置顶 */}
-      {!q && favTools.length > 0 && (
-        <div style={{ marginTop: 28, marginBottom: 8 }}>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: colors.textTertiary,
-              letterSpacing: 1,
-              marginBottom: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <Icon icon={starIcon} width={14} color="#f0a020" />
-            收藏
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-              gap: 12,
-            }}
-          >
-            {favTools.map(renderCard)}
-          </div>
-        </div>
-      )}
+        <div className="vc-stack vc-stack--loose">
+          {!q && favTools.length > 0 && (
+            <section>
+              <div className="vc-section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon icon={starIcon} width={14} style={{ color: 'var(--color-warning)' }} />
+                收藏
+              </div>
+              <div className="vc-grid">{favTools.map(renderCard)}</div>
+            </section>
+          )}
 
-      {noResult ? (
-        <div style={{ padding: '80px 0', textAlign: 'center', color: colors.textSecondary, fontSize: 14 }}>
-          没有匹配 “{query}” 的工具
+          {noResult ? (
+            <EmptyState
+              icon={puzzleIcon}
+              title={`没有匹配 “${query}” 的工具`}
+              description="换个关键词试试，或清空搜索查看全部工具。"
+            />
+          ) : (
+            groups.map((g) => (
+              <section key={g.category}>
+                <div className="vc-section-title">{g.category}</div>
+                <div className="vc-grid">{g.items.map(renderCard)}</div>
+              </section>
+            ))
+          )}
         </div>
-      ) : (
-        groups.map((g) => (
-          <div key={g.category} style={{ marginTop: q ? 24 : 32 }}>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: colors.textTertiary,
-                letterSpacing: 1,
-                marginBottom: 12,
-              }}
-            >
-              {g.category}
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                gap: 12,
-              }}
-            >
-              {g.items.map(renderCard)}
-            </div>
-          </div>
-        ))
-      )}
       </div>
     </div>
   );

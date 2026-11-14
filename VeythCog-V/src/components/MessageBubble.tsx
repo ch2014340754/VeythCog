@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
-import { Icon } from '@iconify/react';
-import userIcon from '@iconify-icons/lucide/user';
 import botIcon from '@iconify-icons/lucide/bot';
-import copyIcon from '@iconify-icons/lucide/copy';
 import checkIcon from '@iconify-icons/lucide/check';
+import copyIcon from '@iconify-icons/lucide/copy';
 import refreshIcon from '@iconify-icons/lucide/refresh-cw';
-import ReactMarkdown from 'react-markdown';
+import userIcon from '@iconify-icons/lucide/user';
+import { Icon } from '@iconify/react';
 import type { Message } from '@/types';
-import { useTheme } from '@/contexts/ThemeContext';
+import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface MessageBubbleProps {
   message: Message;
@@ -31,10 +30,12 @@ function formatTime(timestamp: number): string {
   return `${dateStr} ${timeStr}`;
 }
 
+/**
+ * 消息气泡：排版与配色全部走 .vc-msg 体系（主题变量 + 玻璃层），
+ * 用户消息右对齐主色气泡，助手消息左对齐玻璃气泡，hover 才显操作按钮。
+ */
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message, showAvatar = true, onRegenerate }) => {
-  const { colors } = useTheme();
   const isUser = message.role === 'user';
-  const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -48,72 +49,24 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, showAvatar = tru
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: isUser ? 'row-reverse' : 'row',
-        alignItems: 'flex-start',
-        gap: 12,
-        marginBottom: 20,
-        animation: 'messageSlideIn 0.3s var(--ease-out)',
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <div className={'vc-msg' + (isUser ? ' is-user' : '')}>
       {/* 头像：连续同角色消息不显示，保持紧凑 */}
       {showAvatar && (
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 'var(--radius-full)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            background: isUser ? colors.primary : colors.glassBg,
-            border: isUser ? 'none' : '1px solid var(--glass-border)',
-            backdropFilter: isUser ? 'none' : 'blur(8px)',
-            color: isUser ? '#ffffff' : colors.primary,
-          }}
-        >
+        <div className={'vc-msg__avatar' + (isUser ? ' vc-msg__avatar--user' : '')}>
           <Icon icon={isUser ? userIcon : botIcon} width={18} />
         </div>
       )}
 
       {/* 消息内容 */}
       <div
-        style={{
-          // 限制最大宽度，长文本一行不超过 ~75ch，阅读更舒服
-          maxWidth: 'min(680px, 72%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: isUser ? 'flex-end' : 'flex-start',
-          // 无头像时，内容与有头像的消息对齐
-          marginLeft: !showAvatar && !isUser ? 48 : 0,
-          marginRight: !showAvatar && isUser ? 48 : 0,
-        }}
+        className={
+          'vc-msg__body' +
+          (!showAvatar ? (isUser ? ' vc-msg__body--indent-end' : ' vc-msg__body--indent') : '')
+        }
       >
-        <div
-          style={{
-            padding: '12px 16px',
-            borderRadius: isUser
-              ? '18px 18px 4px 18px'
-              : '18px 18px 18px 4px',
-            background: isUser ? colors.primary : colors.glassBg,
-            color: isUser ? '#ffffff' : colors.text,
-            border: isUser ? 'none' : `1px solid ${colors.glassBorder}`,
-            backdropFilter: isUser ? 'none' : 'blur(var(--glass-blur))',
-            fontSize: 14,
-            lineHeight: 1.7,
-            wordBreak: 'break-word',
-            boxShadow: isUser
-              ? `0 2px 8px ${colors.primary30}`
-              : 'var(--shadow-sm)',
-          }}
-        >
+        <div className="vc-msg__bubble">
           {isUser ? (
-            <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
+            <div className="vc-msg__text">{message.content}</div>
           ) : (
             <div className="md-body">
               <ReactMarkdown>{message.content}</ReactMarkdown>
@@ -122,51 +75,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, showAvatar = tru
         </div>
 
         {/* 时间戳 + hover 操作 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 4,
-            padding: '0 4px',
-          }}
-        >
-          <span style={{ fontSize: 11, color: colors.textTertiary }}>
-            {formatTime(message.timestamp)}
-          </span>
+        <div className="vc-msg__meta">
+          <span className="vc-msg__time">{formatTime(message.timestamp)}</span>
           <button
+            className={'vc-msg__action' + (copied ? ' is-copied' : '')}
             onClick={handleCopy}
             title="复制"
-            style={{
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              color: colors.textTertiary,
-              display: 'flex',
-              alignItems: 'center',
-              padding: 2,
-              opacity: hovered ? 1 : 0,
-              transition: 'opacity 0.15s',
-            }}
+            aria-label="复制消息"
           >
-            <Icon icon={copied ? checkIcon : copyIcon} width={12} style={{ color: copied ? colors.success : undefined }} />
+            <Icon icon={copied ? checkIcon : copyIcon} width={12} />
           </button>
           {!isUser && onRegenerate && (
-            <button
-              onClick={() => onRegenerate(message.id)}
-              title="重新生成"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                color: colors.textTertiary,
-                display: 'flex',
-                alignItems: 'center',
-                padding: 2,
-                opacity: hovered ? 1 : 0,
-                transition: 'opacity 0.15s',
-              }}
-            >
+            <button className="vc-msg__action" onClick={() => onRegenerate(message.id)} title="重新生成" aria-label="重新生成">
               <Icon icon={refreshIcon} width={12} />
             </button>
           )}

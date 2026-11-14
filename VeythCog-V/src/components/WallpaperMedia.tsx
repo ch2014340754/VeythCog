@@ -43,17 +43,7 @@ const WallpaperMedia: React.FC<Props> = ({
 
   if (failed) {
     return (
-      <div
-        style={{
-          ...mediaStyle,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 12,
-          color: 'rgba(140,140,150,0.9)',
-          background: 'rgba(130,130,150,0.12)',
-        }}
-      >
+      <div className="vc-media-fallback" style={{ ...mediaStyle }}>
         {fallbackText}
       </div>
     );

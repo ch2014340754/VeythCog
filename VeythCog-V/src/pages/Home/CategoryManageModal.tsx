@@ -16,6 +16,7 @@ interface Props {
 /**
  * 分类管理弹窗：重命名 / 新增 / 删除分类。
  * 分类下有书签时禁用删除按钮。
+ * 视觉走 vc-modal / vc-cat-row，颜色全部取主题变量。
  */
 const CategoryManageModal: React.FC<Props> = ({ open, onClose }) => {
   const categories = useNavStore((s) => s.categories);
@@ -78,15 +79,16 @@ const CategoryManageModal: React.FC<Props> = ({ open, onClose }) => {
 
   return (
     <Modal
-      title="分类管理"
+      rootClassName="vc-modal"
+      title={<div className="vc-modal-head__title">分类管理</div>}
       open={open}
       onCancel={onClose}
       footer={null}
       width={480}
     >
-      <div style={{ marginTop: 16 }}>
+      <div className="vc-stack">
         {/* 新增分类 */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div className="vc-toolbar">
           <Input
             placeholder="分类名（如 设计）"
             value={newName}
@@ -105,33 +107,25 @@ const CategoryManageModal: React.FC<Props> = ({ open, onClose }) => {
           </Button>
         </div>
         {/* 分类列表 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="vc-stack vc-stack--tight">
           {categories.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '8px 12px',
-                background: '#f5f5f5',
-                borderRadius: 8,
-              }}
-            >
-              <span style={{ fontSize: 20 }}>{c.icon || '📁'}</span>
-              <span style={{ flex: 1 }}>{c.name}</span>
-              <Button size="small" onClick={() => handleRename(c)}>
-                重命名
-              </Button>
-              <Button
-                size="small"
-                danger
-                onClick={() => handleDelete(c)}
-                // 分类下有书签时禁用删除（后端 409 兜底，前端先禁用提示）
-                title="分类下有书签时不可删除，请先清空"
-              >
-                删除
-              </Button>
+            <div key={c.id} className="vc-cat-row">
+              <span className="vc-cat-row__icon">{c.icon || '📁'}</span>
+              <span className="vc-cat-row__name">{c.name}</span>
+              <div className="vc-cat-row__actions">
+                <Button size="small" onClick={() => handleRename(c)}>
+                  重命名
+                </Button>
+                <Button
+                  size="small"
+                  danger
+                  onClick={() => handleDelete(c)}
+                  // 分类下有书签时禁用删除（后端 409 兜底，前端先禁用提示）
+                  title="分类下有书签时不可删除，请先清空"
+                >
+                  删除
+                </Button>
+              </div>
             </div>
           ))}
         </div>

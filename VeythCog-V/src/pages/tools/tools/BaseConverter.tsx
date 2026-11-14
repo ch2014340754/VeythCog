@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { Input } from 'antd';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 const BaseConverter: React.FC = () => {
-  const { colors } = useTheme();
   const [bin, setBin] = useState('');
   const [oct, setOct] = useState('');
   const [dec, setDec] = useState('');
@@ -29,18 +27,26 @@ const BaseConverter: React.FC = () => {
 
   return (
     <ToolShell title="进制转换" description="二/八/十/十六进制互转">
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {fields.map((f) => (
-          <div key={f.label}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>{f.label}</div>
-            <Input
-              value={f.value}
-              onChange={(e) => f.onChange(e.target.value.replace(/[^0-9a-fA-F]/g, ''))}
-              placeholder={f.ph}
-              style={{ fontFamily: "'JetBrains Mono', Consolas, monospace" }}
-            />
+      <div className="vc-panel">
+        <div className="vc-panel__head">
+          <div>
+            <h2 className="vc-panel__title">进制换算</h2>
+            <p className="vc-panel__desc">在任意一个输入框里改动，其余三个会同步换算。</p>
           </div>
-        ))}
+        </div>
+        <div className="vc-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          {fields.map((f) => (
+            <div key={f.label}>
+              <div className="vc-field-label">{f.label}</div>
+              <Input
+                className="vc-mono-input"
+                value={f.value}
+                onChange={(e) => f.onChange(e.target.value.replace(/[^0-9a-fA-F]/g, ''))}
+                placeholder={f.ph}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </ToolShell>
   );

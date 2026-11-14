@@ -3,10 +3,10 @@ import { Input, Button, message } from 'antd';
 import { Icon } from '@iconify/react';
 import copyIcon from '@iconify-icons/lucide/copy';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
+
+const ALGOS = ['MD5', 'SHA1', 'SHA256', 'SHA512'];
 
 const HashTool: React.FC = () => {
-  const { colors } = useTheme();
   const [input, setInput] = useState('');
   const [results, setResults] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -37,61 +37,62 @@ const HashTool: React.FC = () => {
     message.success('已复制');
   };
 
+  const hasResult = Object.keys(results).length > 0;
+
   return (
-    <ToolShell title="哈希计算" description="MD5 / SHA1 / SHA256 / SHA512，全部本地计算"
+    <ToolShell
+      title="哈希计算"
+      description="MD5 / SHA1 / SHA256 / SHA512，全部本地计算"
       fillHeight
-      actions={<Button size="small" type="primary" onClick={run} loading={loading} disabled={!input}>计算</Button>}
+      actions={
+        <Button type="primary" onClick={run} loading={loading} disabled={!input}>
+          计算
+        </Button>
+      }
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>输入文本</div>
-          <Input.TextArea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="输入要计算哈希的文本"
-            style={{ flex: 1, minHeight: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
-          />
+      <div className="vc-tool-split">
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">输入文本</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{input.length.toLocaleString()} 字符</span>
+            </div>
+          </div>
+          <div className="vc-tool-pane__body">
+            <Input.TextArea
+              className="vc-mono-input"
+              variant="borderless"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="输入要计算哈希的文本"
+            />
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflow: 'auto' }}>
-          {Object.entries(results).map(([algo, val]) => (
-            <div
-              key={algo}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '10px 14px',
-                background: colors.surface,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 'var(--radius-md)',
-                marginTop: 23
-              }}
-            >
-              <div style={{ width: 70, fontWeight: 600, color: colors.primary, flexShrink: 0 }}>{algo}</div>
-              <div
-                style={{
-                  flex: 1,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 12,
-                  wordBreak: 'break-all',
-                  color: colors.textSecondary,
-                }}
-              >
-                {val}
+
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">结果</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{hasResult ? `${ALGOS.length} 种算法` : '等待计算'}</span>
+            </div>
+          </div>
+          <div className="vc-tool-pane__body" style={{ overflow: 'auto', gap: 'var(--space-sm)' }}>
+            {hasResult ? (
+              Object.entries(results).map(([algo, val]) => (
+                <div key={algo} className="vc-hash-row">
+                  <span className="vc-hash-row__algo">{algo}</span>
+                  <span className="vc-hash-row__value">{val}</span>
+                  <button className="vc-icon-btn" onClick={() => copy(val)} title="复制">
+                    <Icon icon={copyIcon} width={14} />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="vc-meta" style={{ padding: 'var(--space-md) 0' }}>
+                输入文本后点「计算」
               </div>
-              <button
-                onClick={() => copy(val)}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: colors.textTertiary, flexShrink: 0 }}
-              >
-                <Icon icon={copyIcon} width={14} />
-              </button>
-            </div>
-          ))}
-          {Object.keys(results).length === 0 && (
-            <div style={{ color: colors.textTertiary, fontSize: 13, textAlign: 'center', marginTop: 40 }}>
-              输入文本后点"计算"
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </ToolShell>

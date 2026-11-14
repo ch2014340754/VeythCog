@@ -11,7 +11,6 @@ import {
   type NavIconType,
 } from '@/api/nav';
 import { useNavStore } from '@/stores/navStore';
-import { useTheme } from '@/contexts/ThemeContext';
 import { getCachedIcon, clearCachedIcon } from '@/utils/iconCache';
 import { IconPreview } from './BookmarkIcon';
 
@@ -50,10 +49,11 @@ function errorMessage(err: unknown, fallback: string): string {
  * - text   文字图标（文字 + 底色，不产生 S3 对象）
  * - upload 自定义上传（选中即上传 S3，保存时只回传 iconKey）
  * - auto   网站图标（「获取图标」抓取站点图标并上传 S3，也支持沿用历史图标）
+ *
+ * 视觉：vc-modal / vc-form-card / vc-icon-tile / vc-color-dot 统一体系，颜色全部取主题变量。
  */
 const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
   const activeCategoryId = useNavStore((s) => s.activeCategoryId);
-  const { colors } = useTheme();
 
   const [title, setTitle] = React.useState('');
   const [url, setUrl] = React.useState('');
@@ -250,217 +250,110 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
     }
   };
 
-  const selectedRing = `0 0 0 2px ${colors.primary}`;
-  const tileStyle = (selected: boolean): React.CSSProperties => ({
-    width: 66,
-    height: 66,
-    borderRadius: 14,
-    border: `1px solid ${selected ? colors.primary : colors.divider}`,
-    background: selected ? colors.primary10 : colors.surfaceElevated,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    position: 'relative',
-    padding: 6,
-    boxSizing: 'border-box',
-  });
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 1.2,
-  };
-
-  const fieldLabel: React.CSSProperties = {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 8,
-  };
-
-  const cardStyle: React.CSSProperties = {
-    background: colors.surface,
-    borderRadius: 16,
-    border: `1px solid ${colors.divider}`,
-    padding: '18px 20px',
-  };
-
   const hasAutoTile = !!autoUrl;
+  const customColor = !PRESET_COLORS.some((p) => p.toLowerCase() === color.toLowerCase());
 
   return (
     <Modal
+      rootClassName="vc-modal"
       open={open}
       onCancel={onClose}
       footer={null}
       width={560}
       title={
         <div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: colors.text }}>自定义图标</div>
-          <div style={{ fontSize: 12, color: colors.textTertiary, marginTop: 4, fontWeight: 400 }}>
-            自定义 VeythCog 桌面图标内容
-          </div>
+          <div className="vc-modal-head__title">自定义图标</div>
+          <div className="vc-modal-head__sub">自定义 VeythCog 桌面图标内容</div>
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
+      <div className="vc-stack">
         {/* 卡片 1：网址 / 名称 */}
-        <div style={cardStyle}>
-          <div style={{ marginBottom: 14 }}>
-            <div style={fieldLabel}>网址</div>
-            <Input
-              placeholder="https://"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              size="large"
-              variant="filled"
-              prefix={<span style={{ color: colors.textTertiary, marginRight: 2 }}>🔗</span>}
-              suffix={
-                <Button
-                  type="text"
-                  size="small"
-                  loading={fetching}
-                  onClick={handleFetchIcon}
-                  style={{ color: colors.primary, fontWeight: 500, paddingInline: 4 }}
-                >
-                  获取图标
-                </Button>
-              }
-              style={{ borderRadius: 10 }}
-            />
+        <div className="vc-form-card">
+          <div className="vc-field-label">网址</div>
+          <Input
+            placeholder="https://"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            size="large"
+            variant="filled"
+            prefix={<span className="vc-note">🔗</span>}
+            suffix={
+              <Button type="text" size="small" loading={fetching} onClick={handleFetchIcon}>
+                获取图标
+              </Button>
+            }
+          />
+          <div className="vc-field-label" style={{ marginTop: 16 }}>
+            名称
           </div>
-          <div>
-            <div style={fieldLabel}>名称</div>
-            <Input
-              placeholder="网站名称"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={64}
-              size="large"
-              variant="filled"
-              prefix={<span style={{ color: colors.textTertiary, marginRight: 2 }}>T</span>}
-              style={{ borderRadius: 10 }}
-            />
-          </div>
+          <Input
+            placeholder="网站名称"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={64}
+            size="large"
+            variant="filled"
+            prefix={<span className="vc-note">T</span>}
+          />
         </div>
 
         {/* 卡片 2：图标位 + 文字 / 颜色 */}
-        <div style={cardStyle}>
+        <div className="vc-form-card">
           <div style={{ display: 'flex', gap: 18 }}>
             {/* 文字图标位 */}
             <div>
-              <div style={tileStyle(mode === 'text')} onClick={() => setMode('text')}>
-                <IconPreview
-                  icon={{ type: 'text', text: text || 'A', color }}
-                  title={title}
-                  size={50}
-                  plain
-                />
-                {mode === 'text' && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      right: 2,
-                      bottom: 2,
-                      width: 18,
-                      height: 18,
-                      borderRadius: '50%',
-                      background: colors.primary,
-                      color: '#fff',
-                      fontSize: 11,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    }}
-                  >
-                    ✓
-                  </span>
-                )}
-              </div>
-              <div style={labelStyle}>文字图标</div>
+              <button
+                type="button"
+                className={"vc-icon-tile" + (mode === 'text' ? " is-active" : "")}
+                onClick={() => setMode('text')}
+                aria-pressed={mode === 'text'}
+              >
+                <IconPreview icon={{ type: 'text', text: text || 'A', color }} title={title} size={50} plain />
+                {mode === 'text' && <span className="vc-icon-tile__check">✓</span>}
+              </button>
+              <div className="vc-icon-tile-label">文字图标</div>
             </div>
 
             {/* 上传位 */}
             <div>
-              <div style={tileStyle(mode === 'upload')} onClick={() => fileInputRef.current?.click()}>
+              <button
+                type="button"
+                className={"vc-icon-tile" + (mode === 'upload' ? " is-active" : "")}
+                onClick={() => fileInputRef.current?.click()}
+                aria-pressed={mode === 'upload'}
+              >
                 {uploading ? (
                   <Spin size="small" />
                 ) : uploadUrl ? (
-                  <IconPreview
-                    icon={{ type: 'upload', url: uploadUrl }}
-                    title={title}
-                    size={50}
-                    plain
-                  />
+                  <IconPreview icon={{ type: 'upload', url: uploadUrl }} title={title} size={50} plain />
                 ) : (
-                  <span style={{ fontSize: 24, color: colors.textTertiary, lineHeight: 1 }}>+</span>
+                  <span className="vc-icon-tile__plus">+</span>
                 )}
-                {mode === 'upload' && uploadUrl && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      right: 2,
-                      bottom: 2,
-                      width: 18,
-                      height: 18,
-                      borderRadius: '50%',
-                      background: colors.primary,
-                      color: '#fff',
-                      fontSize: 11,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    }}
-                  >
-                    ✓
-                  </span>
-                )}
-              </div>
-              <div style={labelStyle}>上传</div>
+                {mode === 'upload' && uploadUrl && <span className="vc-icon-tile__check">✓</span>}
+              </button>
+              <div className="vc-icon-tile-label">上传</div>
             </div>
 
             {/* 网站图标位：获取成功后才出现 */}
             {hasAutoTile && (
               <div>
-                <div style={tileStyle(mode === 'auto')} onClick={() => setMode('auto')}>
-                  <IconPreview
-                    icon={{ type: 'auto', url: autoUrl }}
-                    title={title}
-                    size={50}
-                    plain
-                  />
-                  {mode === 'auto' && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        right: 2,
-                        bottom: 2,
-                        width: 18,
-                        height: 18,
-                        borderRadius: '50%',
-                        background: colors.primary,
-                        color: '#fff',
-                        fontSize: 11,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                      }}
-                    >
-                      ✓
-                    </span>
-                  )}
-                </div>
-                <div style={labelStyle}>网站图标</div>
+                <button
+                  type="button"
+                  className={"vc-icon-tile" + (mode === 'auto' ? " is-active" : "")}
+                  onClick={() => setMode('auto')}
+                  aria-pressed={mode === 'auto'}
+                >
+                  <IconPreview icon={{ type: 'auto', url: autoUrl }} title={title} size={50} plain />
+                  {mode === 'auto' && <span className="vc-icon-tile__check">✓</span>}
+                </button>
+                <div className="vc-icon-tile-label">网站图标</div>
               </div>
             )}
           </div>
 
           {!hasAutoTile && mode === 'auto' && (
-            <div style={{ fontSize: 12, color: colors.textTertiary, marginTop: 8 }}>
+            <div className="vc-hint" style={{ marginTop: 8 }}>
               未选择图标时，保存后会自动抓取网站图标
             </div>
           )}
@@ -474,111 +367,71 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
           />
 
           {/* 文字图标设置 */}
-          <div style={{ marginTop: 18 }}>
-            <div style={fieldLabel}>图标文字</div>
-            <Input
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value.slice(0, 3));
-                if (mode !== 'text') setMode('text');
-              }}
-              maxLength={3}
-              size="large"
-              variant="filled"
-              placeholder="A"
-              prefix={<span style={{ color: colors.textTertiary, marginRight: 2 }}>Tt</span>}
-              style={{ borderRadius: 10, maxWidth: 240 }}
-            />
+          <div className="vc-field-label" style={{ marginTop: 18 }}>
+            图标文字
           </div>
+          <Input
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value.slice(0, 3));
+              if (mode !== 'text') setMode('text');
+            }}
+            maxLength={3}
+            size="large"
+            variant="filled"
+            placeholder="A"
+            prefix={<span className="vc-note">Tt</span>}
+            style={{ maxWidth: 240 }}
+          />
 
-          <div style={{ marginTop: 18 }}>
-            <div style={fieldLabel}>图标颜色</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              {PRESET_COLORS.map((preset) => {
-                const selected = color.toLowerCase() === preset.toLowerCase();
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    aria-label={preset}
-                    onClick={() => {
-                      setColor(preset);
-                      setMode('text');
-                    }}
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: '50%',
-                      background: preset,
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0,
-                      boxShadow: selected ? selectedRing : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
-                      transform: selected ? 'scale(1.08)' : 'none',
-                      transition: 'transform 0.15s, box-shadow 0.15s',
-                    }}
-                  />
-                );
-              })}
+          <div className="vc-field-label" style={{ marginTop: 18 }}>
+            图标颜色
+          </div>
+          <div className="vc-color-dots">
+            {PRESET_COLORS.map((preset) => {
+              const selected = color.toLowerCase() === preset.toLowerCase();
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  aria-label={preset}
+                  className={"vc-color-dot" + (selected ? " is-active" : "")}
+                  style={{ background: preset }}
+                  onClick={() => {
+                    setColor(preset);
+                    setMode('text');
+                  }}
+                />
+              );
+            })}
 
-              {/* 自定义取色：彩虹圆环 + 原生取色器 */}
-              <button
-                type="button"
-                aria-label="自定义颜色"
-                onClick={() => colorInputRef.current?.click()}
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  background: 'conic-gradient(#ff5a5a, #ffc53d, #8bc34a, #4c8df6, #9b59d0, #ff5a5a)',
-                  boxShadow: !PRESET_COLORS.some((p) => p.toLowerCase() === color.toLowerCase())
-                    ? selectedRing
-                    : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
-                }}
-              />
-              <input
-                ref={colorInputRef}
-                type="color"
-                value={color}
-                onChange={(e) => {
-                  setColor(e.target.value);
-                  setMode('text');
-                }}
-                style={{ display: 'none' }}
-              />
-            </div>
+            {/* 自定义取色：彩虹圆环 + 原生取色器 */}
+            <button
+              type="button"
+              aria-label="自定义颜色"
+              className={"vc-color-dot vc-color-dot--custom" + (customColor ? " is-active" : "")}
+              onClick={() => colorInputRef.current?.click()}
+            />
+            <input
+              ref={colorInputRef}
+              type="color"
+              value={color}
+              onChange={(e) => {
+                setColor(e.target.value);
+                setMode('text');
+              }}
+              style={{ display: 'none' }}
+            />
           </div>
         </div>
 
         {/* 底部按钮 */}
-        <div style={{ display: 'flex', gap: 12, paddingTop: 4 }}>
-          <Button
-            type="primary"
-            size="large"
-            loading={saving}
-            onClick={() => save(false)}
-            style={{ borderRadius: 10, height: 44, minWidth: 120, fontWeight: 500 }}
-          >
+        <div className="vc-modal-foot">
+          <Button type="primary" size="large" loading={saving} onClick={() => save(false)} style={{ minWidth: 120 }}>
             保存
           </Button>
           {!editing && (
-            <Button
-              size="large"
-              loading={saving}
-              onClick={() => save(true)}
-              style={{
-                borderRadius: 10,
-                height: 44,
-                minWidth: 120,
-                fontWeight: 500,
-                color: colors.primary,
-                borderColor: colors.primary30,
-                background: 'transparent',
-              }}
-            >
+            <Button size="large" loading={saving} onClick={() => save(true)} style={{ minWidth: 120 }}>
               保存并继续
             </Button>
           )}

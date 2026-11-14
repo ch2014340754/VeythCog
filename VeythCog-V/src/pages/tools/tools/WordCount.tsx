@@ -1,10 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Input, Button, message } from 'antd';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 const WordCount: React.FC = () => {
-  const { colors } = useTheme();
   const [text, setText] = useState('');
   const [deduped, setDeduped] = useState('');
 
@@ -40,44 +38,59 @@ const WordCount: React.FC = () => {
   ];
 
   return (
-    <ToolShell title="字数统计 / 文本去重" description="实时统计字符数、行数、中英文数；按行去重"
-      actions={<Button size="small" onClick={dedupLines} disabled={!text.trim()}>按行去重</Button>}
+    <ToolShell
+      title="字数统计 / 文本去重"
+      description="实时统计字符数、行数、中英文数；按行去重"
+      fillHeight
+      actions={
+        <Button onClick={dedupLines} disabled={!text.trim()}>
+          按行去重
+        </Button>
+      }
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 16 }}>
+      <div className="vc-grid vc-grid--stats" style={{ flexShrink: 0, marginBottom: 'var(--space-md)' }}>
         {statCards.map((s) => (
-          <div
-            key={s.label}
-            style={{
-              padding: 12,
-              background: colors.surface,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 'var(--radius-md)',
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontSize: 20, fontWeight: 700, color: colors.primary }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: colors.textSecondary }}>{s.label}</div>
+          <div key={s.label} className="vc-card vc-stat">
+            <div className="vc-stat__value">{s.value.toLocaleString()}</div>
+            <div className="vc-stat__label">{s.label}</div>
           </div>
         ))}
       </div>
-      <Input.TextArea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="粘贴文本"
-        autoSize={{ minRows: 10, maxRows: 18 }}
-        style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
-      />
-      {deduped && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>去重结果</div>
-          <Input.TextArea
-            value={deduped}
-            readOnly
-            autoSize={{ minRows: 6, maxRows: 12 }}
-            style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13 }}
-          />
+
+      <div className="vc-tool-split">
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">输入文本</span>
+          </div>
+          <div className="vc-tool-pane__body">
+            <Input.TextArea
+              className="vc-mono-input"
+              variant="borderless"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="粘贴文本"
+            />
+          </div>
         </div>
-      )}
+
+        <div className="vc-tool-pane">
+          <div className="vc-tool-pane__head">
+            <span className="vc-tool-pane__label">去重结果</span>
+            <div className="vc-tool-pane__side">
+              <span className="vc-meta">{deduped ? `${deduped.split('\n').length} 行` : '等待去重'}</span>
+            </div>
+          </div>
+          <div className="vc-tool-pane__body">
+            <Input.TextArea
+              className="vc-mono-input"
+              variant="borderless"
+              value={deduped}
+              readOnly
+              placeholder="点右上角「按行去重」生成结果"
+            />
+          </div>
+        </div>
+      </div>
     </ToolShell>
   );
 };

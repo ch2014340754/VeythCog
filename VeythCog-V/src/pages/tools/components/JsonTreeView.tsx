@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
 import chevronRightIcon from '@iconify-icons/lucide/chevron-right';
 import chevronDownIcon from '@iconify-icons/lucide/chevron-down';
 import { Icon } from '@iconify/react';
@@ -7,16 +6,16 @@ import { Icon } from '@iconify/react';
 const INDENT = 20;
 
 /** 基础值渲染（字符串/数字/布尔/null），带语法着色 */
-function renderPrimitive(value: any, colors: any): React.ReactNode {
-  if (value === null) return <span style={{ color: colors.error }}>null</span>;
-  if (typeof value === 'boolean') return <span style={{ color: colors.error }}>{String(value)}</span>;
-  if (typeof value === 'number') return <span style={{ color: colors.warning }}>{String(value)}</span>;
+function renderPrimitive(value: any): React.ReactNode {
+  if (value === null) return <span className="vc-json-lit">null</span>;
+  if (typeof value === 'boolean') return <span className="vc-json-lit">{String(value)}</span>;
+  if (typeof value === 'number') return <span className="vc-json-num">{String(value)}</span>;
   // string：用 JSON.stringify 保证转义一致
-  return <span style={{ color: colors.success }}>{JSON.stringify(value)}</span>;
+  return <span className="vc-json-str">{JSON.stringify(value)}</span>;
 }
 
 /** 收缩态下容器节点的紧凑预览（只返回括号内部内容，不含外层括号） */
-function renderInnerPreview(value: any, colors: any): React.ReactNode {
+function renderInnerPreview(value: any): React.ReactNode {
   if (Array.isArray(value)) {
     return value.length === 0 ? null : (
       <span>
@@ -25,7 +24,7 @@ function renderInnerPreview(value: any, colors: any): React.ReactNode {
             {i > 0 ? ', ' : ''}
             {v !== null && typeof v === 'object'
               ? Array.isArray(v) ? '[…]' : '{…}'
-              : renderPrimitive(v, colors)}
+              : renderPrimitive(v)}
           </span>
         ))}
         {value.length > 2 ? ', …' : ''}
@@ -38,11 +37,11 @@ function renderInnerPreview(value: any, colors: any): React.ReactNode {
       {keys.slice(0, 2).map((k, i) => (
         <span key={i}>
           {i > 0 ? ', ' : ''}
-          <span style={{ color: colors.primary }}>{JSON.stringify(k)}</span>
-          <span style={{ color: colors.textSecondary }}>: </span>
+          <span className="vc-json-key">{JSON.stringify(k)}</span>
+          <span className="vc-json-punct">: </span>
           {value[k] !== null && typeof value[k] === 'object'
             ? Array.isArray(value[k]) ? '[…]' : '{…}'
-            : renderPrimitive(value[k], colors)}
+            : renderPrimitive(value[k])}
         </span>
       ))}
       {keys.length > 2 ? ', …' : ''}
@@ -69,10 +68,9 @@ interface NodeProps {
   path: string;
   collapsedPaths: Set<string>;
   onToggle: (path: string) => void;
-  colors: any;
 }
 
-const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPaths, onToggle, colors }) => {
+const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPaths, onToggle }) => {
   const collapsed = collapsedPaths.has(path);
   const isContainer = value !== null && typeof value === 'object';
   const isArray = Array.isArray(value);
@@ -80,17 +78,17 @@ const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPath
   // 名称部分（叶子/容器统一生成），根节点无名称
   const namePart =
     name === null ? null : (
-      <span style={{ color: colors.textSecondary }}>
-        <span style={{ color: colors.primary }}>{JSON.stringify(String(name))}</span>
+      <span className="vc-json-punct">
+        <span className="vc-json-key">{JSON.stringify(String(name))}</span>
         <span>: </span>
       </span>
     );
 
   if (!isContainer) {
     return (
-      <div style={{ paddingLeft: depth * INDENT, lineHeight: 1.7 }}>
+      <div style={{ paddingLeft: depth * INDENT }}>
         {namePart}
-        {renderPrimitive(value, colors)}
+        {renderPrimitive(value)}
       </div>
     );
   }
@@ -104,18 +102,9 @@ const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPath
 
   const toggle = (
     <button
+      type="button"
+      className="vc-json-toggle"
       onClick={() => onToggle(path)}
-      style={{
-        border: 'none',
-        background: 'transparent',
-        padding: 0,
-        margin: 0,
-        cursor: 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        verticalAlign: 'middle',
-        color: colors.textSecondary,
-      }}
       title={collapsed ? '展开' : '收缩'}
       aria-expanded={!collapsed}
     >
@@ -126,13 +115,13 @@ const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPath
   if (collapsed) {
     // 收缩态：单行显示 toggle + 括号 + 紧凑预览
     return (
-      <div style={{ paddingLeft: depth * INDENT, lineHeight: 1.7 }}>
+      <div style={{ paddingLeft: depth * INDENT }}>
         {toggle}{' '}
         <span>
           {namePart}
-          <span>{openBracket}</span>
-          <span>{renderInnerPreview(value, colors)}</span>
-          <span>{closeBracket}</span>
+          <span className="vc-json-punct">{openBracket}</span>
+          <span>{renderInnerPreview(value)}</span>
+          <span className="vc-json-punct">{closeBracket}</span>
         </span>
       </div>
     );
@@ -141,11 +130,11 @@ const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPath
   if (entries.length === 0) {
     // 空对象 / 空数组：单行 { } 或 [ ]
     return (
-      <div style={{ paddingLeft: depth * INDENT, lineHeight: 1.7 }}>
+      <div style={{ paddingLeft: depth * INDENT }}>
         {toggle}{' '}
         <span>
           {namePart}
-          <span>{openBracket} {closeBracket}</span>
+          <span className="vc-json-punct">{openBracket} {closeBracket}</span>
         </span>
       </div>
     );
@@ -153,12 +142,12 @@ const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPath
 
   // 展开态：首行 toggle + 名称 + 开括号，子节点缩进，末行闭括号
   return (
-    <div style={{ lineHeight: 1.7 }}>
+    <div>
       <div style={{ paddingLeft: depth * INDENT }}>
         {toggle}{' '}
         <span>
           {namePart}
-          <span>{openBracket}</span>
+          <span className="vc-json-punct">{openBracket}</span>
         </span>
       </div>
       {entries.map(({ key, v }) => {
@@ -172,12 +161,11 @@ const JsonNode: React.FC<NodeProps> = ({ name, value, depth, path, collapsedPath
             path={childPath}
             collapsedPaths={collapsedPaths}
             onToggle={onToggle}
-            colors={colors}
           />
         );
       })}
       <div style={{ paddingLeft: depth * INDENT }}>
-        <span>{closeBracket}</span>
+        <span className="vc-json-punct">{closeBracket}</span>
       </div>
     </div>
   );
@@ -195,8 +183,6 @@ export interface JsonTreeHandle {
 
 /** 可交互 JSON 树：支持逐节点以及全部展开 / 折叠（通过 ref 暴露） */
 const JsonTreeView = forwardRef<JsonTreeHandle, Props>(({ code, style }, ref) => {
-  const { colors } = useTheme();
-
   // 解析数据（code 为空或解析失败时为 undefined）
   const data = useMemo(() => {
     if (!code) return undefined;
@@ -237,7 +223,7 @@ const JsonTreeView = forwardRef<JsonTreeHandle, Props>(({ code, style }, ref) =>
 
   const content =
     data === undefined ? (
-      <span style={{ color: colors.error }}> 无效JSON</span>
+      <span className="vc-json-muted">（暂无内容）</span>
     ) : (
       <JsonNode
         name={null}
@@ -246,27 +232,11 @@ const JsonTreeView = forwardRef<JsonTreeHandle, Props>(({ code, style }, ref) =>
         path=""
         collapsedPaths={collapsedPaths}
         onToggle={toggle}
-        colors={colors}
       />
     );
 
   return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-        padding: 12,
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-md)',
-        fontFamily: "'JetBrains Mono', Consolas, monospace",
-        fontSize: 13,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-all',
-        ...style,
-      }}
-    >
+    <div className="vc-json-tree" style={style}>
       {content}
     </div>
   );

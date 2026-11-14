@@ -116,7 +116,7 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   { docId, blockData, markdownText, onTitleChange },
   ref,
 ) {
-  const { isDark, colors } = useTheme();
+  const { isDark } = useTheme();
   const editor = useCreateBlockNote({ dictionary: zh });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
@@ -215,28 +215,19 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   return (
     <div className="doc-editor-root">
       {outlineOpen && (
-        <aside
-          className="doc-outline"
-          style={{ borderRight: `1px solid ${colors.divider}`, background: colors.surface }}
-        >
-          <div className="doc-outline-title" style={{ color: colors.textSecondary }}>
-            目录
-          </div>
+        <aside className="doc-outline">
+          <div className="doc-outline-title">目录</div>
           {outline.length === 0 ? (
-            <div style={{ fontSize: 12, color: colors.textTertiary, padding: '0 10px' }}>
-              暂无标题，输入「# 标题」即可生成目录。
-            </div>
+            <div className="doc-outline-empty">暂无标题，输入「# 标题」即可生成目录。</div>
           ) : (
             <div className="doc-outline-list">
               {outline.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  className="doc-outline-item"
+                  className={'doc-outline-item' + (activeId === item.id ? ' is-active' : '')}
                   style={{
                     paddingLeft: 10 + (item.level - 1) * 14,
-                    color: activeId === item.id ? colors.primary : colors.textSecondary,
-                    background: activeId === item.id ? colors.primary10 : 'transparent',
                     fontWeight: item.level === 1 ? 600 : 400,
                   }}
                   onClick={() => scrollToHeading(item.id)}
@@ -249,24 +240,18 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
         </aside>
       )}
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        <div
-          className="doc-editor-toolbar"
-          style={{ borderBottom: `1px solid ${colors.divider}` }}
-        >
+      <div className="doc-editor-main">
+        <div className="doc-editor-toolbar">
           <Tooltip title={outlineOpen ? '收起目录' : '展开目录'}>
             <button
               type="button"
-              className="doc-editor-toolbar-btn"
-              style={{ color: outlineOpen ? colors.primary : colors.textSecondary }}
+              className={'doc-editor-toolbar-btn' + (outlineOpen ? ' is-on' : '')}
               onClick={() => setOutlineOpen((v) => !v)}
             >
               <Icon icon={listTreeIcon} width={16} />
             </button>
           </Tooltip>
-          <span style={{ fontSize: 12, color: colors.textTertiary }}>
-            输入「/」插入块，拖动块左侧手柄调整顺序
-          </span>
+          <span className="doc-editor-hint">输入「/」插入块，拖动块左侧手柄调整顺序</span>
         </div>
 
         <div ref={scrollRef} className="doc-editor-scroll" onScroll={handleScroll}>

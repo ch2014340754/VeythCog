@@ -3,12 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import arrowLeftIcon from '@iconify-icons/lucide/arrow-left';
 import closeIcon from '@iconify-icons/lucide/x';
-import { useTheme } from '@/contexts/ThemeContext';
 import { groupToolsByCategory, tools } from './registry';
 import ToolsHome from './index';
 import { Spin } from 'antd';
-
-const TOOLS_SIDEBAR_WIDTH = 260;
 
 interface OpenTab {
   id: string;
@@ -16,7 +13,6 @@ interface OpenTab {
 }
 
 const ToolsLayout: React.FC = () => {
-  const { colors } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const groups = groupToolsByCategory();
@@ -51,79 +47,35 @@ const ToolsLayout: React.FC = () => {
     }
   };
 
-  const goHome = () => navigate('/tools');
-
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div className="vc-subnav-layout">
       {/* 二级侧栏 */}
-      <div
-        style={{
-          width: TOOLS_SIDEBAR_WIDTH,
-          height: '100%',
-          borderRight: `1px solid ${colors.divider}`,
-          background: colors.surface,
-          display: 'flex',
-          flexDirection: 'column',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ padding: '16px 16px 8px' }}>
-          <div
-            onClick={() => navigate('/chat')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              cursor: 'pointer',
-              color: colors.textSecondary,
-              fontSize: 13,
-              marginBottom: 12,
-            }}
-          >
+      <aside className="vc-subnav vc-tools-nav">
+        <div className="vc-tools-head">
+          <button type="button" className="vc-backlink" onClick={() => navigate('/chat')}>
             <Icon icon={arrowLeftIcon} width={14} />
             返回工作区
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-heading)' }}>
-            开发工具集
-          </div>
+          </button>
+          <div className="vc-eyebrow" style={{ margin: 0 }}>Workspace</div>
+          <h2 className="vc-subnav__title" style={{ marginTop: 2 }}>开发工具集</h2>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 16px' }}>
+        <div className="vc-tools-nav__scroll">
           {groups.map((g) => (
-            <div key={g.category} style={{ marginBottom: 8 }}>
-              <div
-                style={{
-                  padding: '8px 12px 4px',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: colors.textTertiary,
-                  letterSpacing: 1,
-                }}
-              >
-                {g.category}
-              </div>
+            <div key={g.category} className="vc-tools-group">
+              <div className="vc-tools-group__label">{g.category}</div>
               {g.items.map((tool) => {
                 const path = `/tools/${tool.id}`;
                 const active = location.pathname === path;
                 return (
                   <div
                     key={tool.id}
+                    className={`vc-subnav__item${active ? ' is-active' : ''}`}
                     onClick={() => navigate(path)}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      cursor: 'pointer',
-                      background: active ? colors.primary10 : 'transparent',
-                      color: active ? colors.primary : colors.text,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      fontSize: 13,
-                      marginBottom: 2,
-                      transition: 'background 0.15s',
-                    }}
                   >
-                    <span style={{ flexShrink: 0, opacity: active ? 1 : 0.7, display: 'inline-flex' }}>{tool.icon}</span>
+                    <span style={{ display: 'inline-flex', flexShrink: 0, opacity: active ? 1 : 0.7 }}>
+                      {tool.icon}
+                    </span>
                     {tool.name}
                   </div>
                 );
@@ -131,62 +83,30 @@ const ToolsLayout: React.FC = () => {
             </div>
           ))}
         </div>
-      </div>
+      </aside>
 
       {/* 右侧：tab 栏 + 内容区 */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* 标签栏 */}
         {openTabs.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '6px 8px 0',
-              borderBottom: `1px solid ${colors.divider}`,
-              background: colors.surface,
-              overflowX: 'auto',
-              flexShrink: 0,
-              height: 41
-            }}
-          >
+          <div className="vc-tabbar">
             {openTabs.map((tab) => {
               const active = tab.id === currentToolId;
               return (
                 <div
                   key={tab.id}
+                  className={`vc-tab${active ? ' is-active' : ''}`}
                   onClick={() => navigate(`/tools/${tab.id}`)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 10px',
-                    borderRadius: '8px 8px 0 0',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    color: active ? colors.primary : colors.textSecondary,
-                    fontSize: 12,
-                    whiteSpace: 'nowrap',
-                    borderBottom: active ? `2px solid ${colors.primary}` : '2px solid transparent',
-                    marginBottom: -1,
-                  }}
                 >
                   {tab.name}
-                  <span
+                  <button
+                    type="button"
+                    className="vc-tab__close"
+                    title="关闭"
                     onClick={(e) => closeTab(tab.id, e)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 16,
-                      height: 16,
-                      borderRadius: 4,
-                      cursor: 'pointer',
-                      opacity: active ? 1 : 0.5,
-                    }}
                   >
                     <Icon icon={closeIcon} width={12} />
-                  </span>
+                  </button>
                 </div>
               );
             })}
@@ -195,7 +115,7 @@ const ToolsLayout: React.FC = () => {
 
         {/* 内容区：所有打开的工具都挂载，非激活隐藏，保留 state。overflow hidden 由工具内部自管滚动。
             背景透明，让 body 上的壁纸透出（与 Chat / Knowledge 页保持一致） */}
-        <div style={{ flex: 1, overflow: 'hidden', background: 'transparent', position: 'relative' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', background: 'transparent', position: 'relative' }}>
           {!currentToolId && <ToolsHome />}
           <Suspense
             fallback={

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Input, Button, message } from 'antd';
+import { Input, message } from 'antd';
 import { Icon } from '@iconify/react';
 import copyIcon from '@iconify-icons/lucide/copy';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 type Style = 'camel' | 'pascal' | 'snake' | 'kebab' | 'constant' | 'lower' | 'upper' | 'title';
 
@@ -38,61 +37,61 @@ function convert(s: string, style: Style): string {
   }
 }
 
+const STYLES: { key: Style; label: string }[] = [
+  { key: 'camel', label: 'camelCase' },
+  { key: 'pascal', label: 'PascalCase' },
+  { key: 'snake', label: 'snake_case' },
+  { key: 'kebab', label: 'kebab-case' },
+  { key: 'constant', label: 'CONSTANT_CASE' },
+  { key: 'lower', label: 'lower case' },
+  { key: 'upper', label: 'UPPER CASE' },
+  { key: 'title', label: 'Title Case' },
+];
+
 const CaseConverter: React.FC = () => {
-  const { colors } = useTheme();
   const [input, setInput] = useState('');
-  const styles: { key: Style; label: string }[] = [
-    { key: 'camel', label: 'camelCase' },
-    { key: 'pascal', label: 'PascalCase' },
-    { key: 'snake', label: 'snake_case' },
-    { key: 'kebab', label: 'kebab-case' },
-    { key: 'constant', label: 'CONSTANT_CASE' },
-    { key: 'lower', label: 'lower case' },
-    { key: 'upper', label: 'UPPER CASE' },
-    { key: 'title', label: 'Title Case' },
-  ];
+
+  const copy = (v: string) => {
+    navigator.clipboard.writeText(v);
+    message.success('已复制');
+  };
 
   return (
     <ToolShell title="命名风格转换" description="自动识别输入中的单词边界，一键转换八种风格">
-      <Input.TextArea
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="粘贴任意命名风格的字符串，如 helloWorld / hello_world / Hello World"
-        autoSize={{ minRows: 3, maxRows: 6 }}
-        style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 13, marginBottom: 16 }}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-        {styles.map(({ key, label }) => (
-          <div
-            key={key}
-            style={{
-              padding: 12,
-              background: colors.surface,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 'var(--radius-md)',
-            }}
-          >
-            <div style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 4 }}>{label}</div>
-            <div
-              style={{
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
-                fontSize: 13,
-                wordBreak: 'break-all',
-                minHeight: 20,
-              }}
-            >
-              {input ? convert(input, key) : ''}
-            </div>
-            {input && (
-              <button
-                onClick={() => { navigator.clipboard.writeText(convert(input, key)); message.success('已复制'); }}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: colors.primary, marginTop: 4, fontSize: 12 }}
-              >
-                <Icon icon={copyIcon} width={12} /> 复制
-              </button>
-            )}
+      <div className="vc-panel">
+        <div className="vc-panel__head">
+          <div>
+            <h2 className="vc-panel__title">输入</h2>
+            <p className="vc-panel__desc">粘贴任意命名风格的字符串，如 helloWorld / hello_world / Hello World。</p>
           </div>
-        ))}
+          <span className="vc-meta">{input.length.toLocaleString()} 字符</span>
+        </div>
+        <Input.TextArea
+          className="vc-mono-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="粘贴任意命名风格的字符串"
+          autoSize={{ minRows: 3, maxRows: 6 }}
+        />
+      </div>
+
+      <div className="vc-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+        {STYLES.map(({ key, label }) => {
+          const value = input ? convert(input, key) : '';
+          return (
+            <div key={key} className="vc-card">
+              <div className="vc-result-card__label">{label}</div>
+              <div className="vc-result-card__value">{value || '—'}</div>
+              <div className="vc-result-card__foot">
+                {value && (
+                  <button className="vc-icon-btn" onClick={() => copy(value)}>
+                    <Icon icon={copyIcon} width={12} /> 复制
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </ToolShell>
   );

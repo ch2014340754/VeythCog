@@ -3,9 +3,8 @@ import { listDocs } from '@/api/knowledge';
 import CollapsibleSidebar from '@/components/CollapsibleSidebar';
 import MessageBubble from '@/components/MessageBubble';
 import { ModelModalityIcons } from '@/components/ModelTypeTag';
-import { useTheme } from '@/contexts/ThemeContext';
+import type { DocListItem, Conversation, Message } from '@/types';
 import { modelId, useSettingsStore } from '@/stores/settingsStore';
-import type { Conversation, DocListItem, Message } from '@/types';
 import { formatRelativeTime } from '@/utils/formatTime';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import databaseIcon from '@iconify-icons/lucide/database';
@@ -21,22 +20,7 @@ import sendIcon from '@iconify-icons/lucide/send';
 import trashIcon from '@iconify-icons/lucide/trash-2';
 import zapIcon from '@iconify-icons/lucide/zap';
 import { Icon } from '@iconify/react';
-import {
-    Button,
-    Checkbox,
-    Drawer,
-    Dropdown,
-    Empty,
-    Input,
-    message,
-    Modal,
-    Popconfirm,
-    Select,
-    Spin,
-    Switch,
-    Tag,
-    Tooltip,
-} from 'antd';
+import { Button, Checkbox, Drawer, Dropdown, Input, message, Modal, Popconfirm, Select, Spin, Switch, Tag, Tooltip } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -55,8 +39,6 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const ChatPage: React.FC = () => {
-  const { colors, isDark } = useTheme();
-  const glassEnabled = useSettingsStore((s) => s.glassEnabled);
   const models = useSettingsStore((s) => s.models);
   const currentModelId = useSettingsStore((s) => s.currentModelId);
   const loadingModels = useSettingsStore((s) => s.loadingModels);
@@ -513,45 +495,29 @@ const ChatPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div className="vc-subnav-layout vc-chat">
       {/* 左侧面板 - 会话列表（可折叠） */}
       <CollapsibleSidebar width={SIDEBAR_WIDTH}>
-        {/* 搜索框 */}
-        <div style={{ padding: '16px 12px 8px' }}>
+        <div className="vc-chat-nav__head">
           <Input
-            prefix={<Icon icon={searchIcon} width={14} style={{ color: colors.textTertiary }} />}
+            prefix={<Icon icon={searchIcon} width={14} className="vc-search-icon" />}
             placeholder="搜索对话..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             allowClear
-            style={{ borderRadius: 20 }}
           />
-        </div>
-
-        {/* 新建会话按钮（描边样式，避免与选中态实心撞色） */}
-        <div style={{ padding: '0 12px 8px' }}>
-          <Button
-            icon={<Icon icon={plusIcon} width={14} />}
-            onClick={handleCreate}
-            block
-            style={{ borderRadius: 'var(--radius-md)' }}
-          >
+          <Button icon={<Icon icon={plusIcon} width={14} />} onClick={handleCreate} block>
             新建对话
           </Button>
         </div>
 
-        {/* 会话列表 */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+        <div className="vc-chat-list">
           {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+            <div className="vc-chat-list__loading">
               <Spin />
             </div>
           ) : filteredConvs.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="暂无对话"
-              style={{ marginTop: 40 }}
-            />
+            <div className="vc-chat-list__empty">暂无对话</div>
           ) : (
             filteredConvs.map((conv) => {
               const isActive = conv.id === activeConvId;
@@ -559,93 +525,23 @@ const ChatPage: React.FC = () => {
               return (
                 <div
                   key={conv.id}
-                  style={{ position: 'relative', marginBottom: 2 }}
+                  className="vc-conv-item-wrap"
                   onMouseEnter={() => setHoveredConvId(conv.id)}
                   onMouseLeave={() => setHoveredConvId(null)}
                 >
                   <div
+                    className={'vc-conv-item' + (isActive ? ' is-active' : '') + (isHovered ? ' is-hovered' : '')}
                     onClick={() => setActiveConvId(conv.id)}
-                    style={{
-                      // hover 时右侧内边距增大，为删除按钮腾出空间，内容平滑缩短
-                      padding: `12px ${isHovered ? 42 : 12}px 12px 12px`,
-                      borderRadius: 'var(--radius-md)',
-                      cursor: 'pointer',
-                      background: isActive ? colors.primary10 : 'transparent',
-                      border: isActive
-                        ? `1px solid ${colors.primary30}`
-                        : '1px solid transparent',
-                      color: isActive ? colors.primary : colors.text,
-                      transition: 'padding 0.18s var(--spring), background 0.15s, border-color 0.15s',
-                    }}
                   >
-                    {/* 标题行 */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginBottom: 4,
-                      }}
-                    >
-                      <Icon
-                        icon={messageSquareIcon}
-                        width={14}
-                        style={{ flexShrink: 0, opacity: 0.7 }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          flex: 1,
-                        }}
-                      >
-                        {conv.title}
-                      </span>
+                    <div className="vc-conv-item__row">
+                      <Icon icon={messageSquareIcon} width={14} className="vc-conv-item__icon" />
+                      <span className="vc-conv-item__title">{conv.title}</span>
                     </div>
-
-                    {/* 最后消息预览 */}
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: colors.textSecondary,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        paddingLeft: 22,
-                      }}
-                    >
-                      {conv.lastMessage || '暂无消息'}
-                    </div>
-
-                    {/* 底部：创建时间 + 知识库标识 */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        paddingLeft: 22,
-                        marginTop: 4,
-                      }}
-                    >
-                      <span style={{ fontSize: 10, color: colors.textTertiary }}>
-                        {formatRelativeTime(conv.createdAt)}
-                      </span>
+                    <div className="vc-conv-item__preview">{conv.lastMessage || '暂无消息'}</div>
+                    <div className="vc-conv-item__meta">
+                      <span className="vc-conv-item__time">{formatRelativeTime(conv.createdAt)}</span>
                       {conv.knowledgeBaseId && (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                            padding: '1px 6px',
-                            borderRadius: 'var(--radius-full)',
-                            fontSize: 10,
-                            background: colors.primary15,
-                            color: colors.primary,
-                          }}
-                        >
+                        <span className="vc-conv-item__badge">
                           <Icon icon={bookOpenIcon} width={10} />
                           知识库
                         </span>
@@ -654,23 +550,7 @@ const ChatPage: React.FC = () => {
                   </div>
 
                   {/* 删除按钮：垂直居中浮在右侧，hover 时随内容右缩淡入 */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      right: 8,
-                      top: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: isHovered ? 1 : 0,
-                      transform: isHovered
-                        ? 'translateY(-50%)'
-                        : 'translateY(calc(-50% + 4px))',
-                      transition: 'opacity 0.18s, transform 0.18s var(--spring)',
-                      zIndex: 2,
-                      pointerEvents: isHovered ? 'auto' : 'none',
-                    }}
-                  >
+                  <div className={'vc-conv-item__delete' + (isHovered ? ' is-shown' : '')}>
                     <Popconfirm
                       title="删除对话"
                       description="删除后不可恢复，确认删除？"
@@ -679,18 +559,7 @@ const ChatPage: React.FC = () => {
                       cancelText="取消"
                       placement="left"
                     >
-                      <button
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          color: colors.error,
-                          padding: 4,
-                          display: 'flex',
-                          borderRadius: 4,
-                        }}
-                      >
+                      <button onClick={(e) => e.stopPropagation()} aria-label="删除对话">
                         <Icon icon={trashIcon} width={14} />
                       </button>
                     </Popconfirm>
@@ -703,43 +572,14 @@ const ChatPage: React.FC = () => {
       </CollapsibleSidebar>
 
       {/* 右侧聊天窗口 */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="vc-chat-main">
         {activeConv ? (
           <>
             {/* 聊天标题栏 */}
-            <div
-              key={`header-${activeConv.id}`}
-              className="chat-panel-fade-in"
-              style={{
-                padding: '12px 24px',
-                borderBottom: `1px solid ${colors.divider}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 10,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                <Icon icon={messageSquareIcon} width={18} style={{ color: colors.primary, flexShrink: 0 }} />
-                <span
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 600,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {activeConv.title}
-                </span>
+            <div key={`header-${activeConv.id}`} className="vc-chat-head chat-panel-fade-in">
+              <div className="vc-chat-head__main">
+                <Icon icon={messageSquareIcon} width={18} className="vc-chat-head__icon" />
+                <span className="vc-chat-head__title">{activeConv.title}</span>
               </div>
               <Dropdown
                 trigger={['click']}
@@ -762,7 +602,7 @@ const ChatPage: React.FC = () => {
                           okText="删除"
                           cancelText="取消"
                         >
-                          <span style={{ color: colors.error }}>删除对话</span>
+                          <span className="vc-danger-text">删除对话</span>
                         </Popconfirm>
                       ),
                     },
@@ -770,67 +610,22 @@ const ChatPage: React.FC = () => {
                 }}
                 placement="bottomRight"
               >
-                <Button
-                  type="text"
-                  icon={<Icon icon={moreHorizontalIcon} width={18} />}
-                />
+                <Button type="text" icon={<Icon icon={moreHorizontalIcon} width={18} />} />
               </Dropdown>
             </div>
 
             {/* 消息列表：key 跟随会话 id，切换对话时整体淡入 */}
-            <div
-              key={activeConv.id}
-              className="chat-panel-fade-in"
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '20px 24px',
-              }}
-            >
+            <div key={activeConv.id} className="vc-chat-scroll chat-panel-fade-in">
               {activeConv.messages.length === 0 ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100%',
-                    gap: 16,
-                  }}
-                >
-                  <Icon
-                    icon={messageSquareIcon}
-                    width={48}
-                    style={{ color: colors.textTertiary, opacity: 0.4 }}
-                  />
-                  <span style={{ color: colors.textSecondary, fontSize: 14 }}>
-                    开始新的对话吧
+                <div className="vc-chat-empty">
+                  <span className="vc-chat-empty__icon">
+                    <Icon icon={messageSquareIcon} width={32} />
                   </span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 480 }}>
+                  <span className="vc-chat-empty__title">开始新的对话吧</span>
+                  <div className="vc-suggest">
+                    <span className="vc-suggest__label">试试这些问题</span>
                     {SUGGESTED_PROMPTS.map((q) => (
-                      <button
-                        key={q}
-                        onClick={() => handleSend(q)}
-                        style={{
-                          padding: '10px 14px',
-                          borderRadius: 'var(--radius-md)',
-                          border: `1px solid ${colors.border}`,
-                          background: colors.surface,
-                          color: colors.text,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          fontSize: 13,
-                          transition: 'all 0.15s',
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = colors.primary10;
-                          (e.currentTarget as HTMLButtonElement).style.borderColor = colors.primary30;
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = colors.surface;
-                          (e.currentTarget as HTMLButtonElement).style.borderColor = colors.border;
-                        }}
-                      >
+                      <button key={q} className="vc-suggest__item" onClick={() => handleSend(q)}>
                         {q}
                       </button>
                     ))}
@@ -840,39 +635,19 @@ const ChatPage: React.FC = () => {
                 activeConv.messages.map((msg, idx) => (
                   <React.Fragment key={msg.id}>
                     {msg.references && msg.references.length > 0 && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                          margin: '0 0 12px 48px',
-                          maxWidth: 'min(680px, 72%)',
-                        }}
-                      >
-                        <div style={{ fontSize: 12, color: colors.textTertiary, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div className="vc-refs">
+                        <div className="vc-refs__head">
                           <Icon icon={databaseIcon} width={12} />
                           引用自知识库（{msg.references.length} 条）
                         </div>
                         {msg.references.map((r, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              padding: '10px 12px',
-                              borderRadius: 'var(--radius-md)',
-                              background: colors.surface,
-                              border: `1px solid ${colors.divider}`,
-                              fontSize: 12,
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                              <Icon icon={zapIcon} width={12} style={{ color: colors.primary }} />
-                              <span style={{ fontWeight: 600, color: colors.text }}>{r.title}</span>
-                               <Tag style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
-                                分片 #{r.chunkIndex} · 距离 {r.score.toFixed(3)}
-                               </Tag>
+                          <div key={i} className="vc-ref-card">
+                            <div className="vc-ref-card__head">
+                              <Icon icon={zapIcon} width={12} className="vc-ref-card__icon" />
+                              <span className="vc-ref-card__title">{r.title}</span>
+                              <span className="vc-tag-soft">分片 #{r.chunkIndex} · 距离 {r.score.toFixed(3)}</span>
                             </div>
-                            <div style={{ color: colors.textSecondary, wordBreak: 'break-word' }}>
+                            <div className="vc-ref-card__text">
                               {r.chunkText.length > 200 ? `${r.chunkText.slice(0, 200)}…` : r.chunkText}
                             </div>
                           </div>
@@ -888,44 +663,21 @@ const ChatPage: React.FC = () => {
                 ))
               )}
               {sending && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 48, marginBottom: 20 }}>
+                <div className="vc-chat-thinking">
                   <Spin size="small" />
-                  <span style={{ fontSize: 12, color: colors.textTertiary }}>
-                    AI 正在思考...
-                  </span>
+                  <span>AI 正在思考...</span>
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
             {/* 输入区域 */}
-            <div
-              style={{
-                padding: '12px 24px 16px',
-              }}
-            >
+            <div className="vc-composer-wrap">
               {/* 没有可用模型时给出配置入口；正常情况模型下拉放在输入工具栏内 */}
               {models.length === 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    marginBottom: 8,
-                    fontSize: 12,
-                    color: colors.textSecondary,
-                    background: colors.primary10,
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-md)',
-                  }}
-                >
+                <div className="vc-composer-tip">
                   没有通过连通校验的模型，请先
-                  <a
-                    href="/settings/providers"
-                    style={{ color: colors.primary, fontWeight: 600 }}
-                  >
-                    去模型配置页校验
-                  </a>
+                  <a href="/settings/providers">去模型配置页校验</a>
                 </div>
               )}
               <div
@@ -940,54 +692,15 @@ const ChatPage: React.FC = () => {
                 title="向上拖动可扩大输入框"
                 onPointerDown={handleComposerResizeStart}
                 onKeyDown={handleComposerResizeKeyDown}
-                style={{
-                  height: 12,
-                  marginBottom: 4,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'ns-resize',
-                  touchAction: 'none',
-                }}
               >
                 <div
-                  className="composer-resize-grip"
-                  style={{
-                    width: 44,
-                    height: 4,
-                    borderRadius: 2,
-                    background: composerHeight > MIN_COMPOSER_HEIGHT ? colors.primary : colors.border,
-                    opacity: 0.75,
-                  }}
+                  className={'composer-resize-grip' + (composerHeight > MIN_COMPOSER_HEIGHT ? ' is-active' : '')}
                 />
               </div>
-              <div
-                className="composer-glow"
-                style={{
-                  borderRadius: 20,
-                  background: colors.surfaceElevated,
-                  padding: '10px 16px',
-                  boxShadow: `
-                    0 0 0 1.5px ${colors.primary}99,
-                    0 0 24px ${colors.primary}35,
-                    0 8px 32px ${isDark ? 'rgba(0,0,0,0.35)' : 'rgba(31,38,135,0.12)'},
-                    inset 0 1px 0 ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.6)'}
-                  `,
-                  backdropFilter: glassEnabled ? 'blur(20px) saturate(180%)' : undefined,
-                  WebkitBackdropFilter: glassEnabled ? 'blur(20px) saturate(180%)' : undefined,
-                }}
-              >
+              <div className="vc-composer composer-glow">
                 {/* 已选知识库文档标识：回答前就能看到本次会引用哪些文档 */}
                 {activeConv && (activeConv.knowledgeDocIds?.length ?? 0) > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '0 2px 8px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
+                  <div className="vc-composer-kb">
                     <Tag
                       icon={<Icon icon={databaseIcon} width={13} style={{ paddingTop: 4 }} />}
                       color="processing"
@@ -1001,12 +714,10 @@ const ChatPage: React.FC = () => {
                     >
                       已引用 {activeConv.knowledgeDocIds!.length} 篇知识库文档
                     </Tag>
-                    <span style={{ fontSize: 12, color: colors.textTertiary }}>
-                      本次回答将优先依据这些文档
-                    </span>
+                    <span className="vc-composer-kb__hint">本次回答将优先依据这些文档</span>
                   </div>
                 )}
-                <div style={{ position: 'relative' }}>
+                <div className="vc-composer__input">
                   <Input.TextArea
                     ref={inputRef}
                     value={inputValue}
@@ -1026,181 +737,94 @@ const ChatPage: React.FC = () => {
                   />
                   {/* 发送按钮内嵌在输入框右侧并垂直居中 */}
                   <Button
-                    type="text"
-                    icon={<Icon icon={sendIcon} width={20} />}
+                    className="vc-composer__send"
+                    type="primary"
+                    shape="circle"
+                    icon={<Icon icon={sendIcon} width={18} />}
                     onClick={() => handleSend()}
                     loading={sending}
                     disabled={!inputValue.trim()}
-                    style={{
-                      position: 'absolute',
-                      right: 4,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      width: 40,
-                      height: 40,
-                      minWidth: 40,
-                      padding: 0,
-                      border: 'none',
-                      background: 'transparent',
-                      boxShadow: 'none',
-                      color: colors.primary,
-                    }}
                   />
                 </div>
                 {/* 工具行 */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                    flexWrap: 'wrap',
-                    marginTop: 4,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', rowGap: 4 }}>
-                    <Tooltip title="知识库（RAG）">
-                      <button
-                        onClick={openKbDrawer}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          color:
-                            (activeConv?.knowledgeDocIds?.length ?? 0) > 0
-                              ? colors.primary
-                              : colors.textSecondary,
-                          padding: 6,
-                          borderRadius: 6,
-                          display: 'flex',
-                        }}
-                      >
-                        <Icon icon={databaseIcon} width={16} />
-                      </button>
-                    </Tooltip>
-                    <Tooltip title="上下文自动压缩：历史超过阈值时摘要最早对话，摘要失败则丢弃最早历史">
-                      <span
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '0 6px',
-                          color: activeConv?.compressEnabled !== false ? colors.primary : colors.textSecondary,
-                        }}
-                      >
-                        <Switch
-                          size="small"
-                          checked={activeConv?.compressEnabled !== false}
-                          onChange={toggleCompress}
-                        />
-                        <span style={{ fontSize: 12 }}>压缩</span>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="附件（demo）">
-                      <button
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          color: colors.textSecondary,
-                          padding: 6,
-                          borderRadius: 6,
-                          display: 'flex',
-                        }}
-                      >
-                        <Icon icon={paperclipIcon} width={16} />
-                      </button>
-                    </Tooltip>
-                    <Tooltip title="联网搜索（demo）">
-                      <button
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          color: colors.textSecondary,
-                          padding: 6,
-                          borderRadius: 6,
-                          display: 'flex',
-                        }}
-                      >
-                        <Icon icon={globeIcon} width={16} />
-                      </button>
-                    </Tooltip>
-                    <Tooltip title="语音输入（demo）">
-                      <button
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          color: colors.textSecondary,
-                          padding: 6,
-                          borderRadius: 6,
-                          display: 'flex',
-                        }}
-                      >
-                        <Icon icon={micIcon} width={16} />
-                      </button>
-                    </Tooltip>
-                    {models.length > 0 && (
-                      <Select
+                <div className="vc-composer__tools">
+                  <Tooltip title="知识库（RAG）">
+                    <button
+                      className={
+                        'vc-composer-tool' + ((activeConv?.knowledgeDocIds?.length ?? 0) > 0 ? ' is-on' : '')
+                      }
+                      onClick={openKbDrawer}
+                    >
+                      <Icon icon={databaseIcon} width={16} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="上下文自动压缩：历史超过阈值时摘要最早对话，摘要失败则丢弃最早历史">
+                    <span
+                      className={
+                        'vc-composer-switch' + (activeConv?.compressEnabled !== false ? ' is-on' : '')
+                      }
+                    >
+                      <Switch
                         size="small"
-                        variant="borderless"
-                        className="composer-model-select"
-                        style={{ width: 200, marginLeft: 4 }}
-                        value={
-                          activeConv?.vendor
-                            ? modelId(activeConv.vendor, activeConv.modelCode!)
-                            : currentModelId ?? undefined
-                        }
-                        placeholder="选择模型"
-                        options={models.map((m) => ({
-                          value: modelId(m.vendor, m.modelCode),
-                          label: (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <ModelModalityIcons types={m.modalities} fallback={m.modelType} size={13} />
-                              {m.modelName}（{m.vendor}）
-                            </span>
-                          ),
-                        }))}
-                        onChange={(id) => setCurrentModel(id)}
-                        disabled={!!activeConv?.vendor || loadingModels}
-                        popupMatchSelectWidth={false}
+                        checked={activeConv?.compressEnabled !== false}
+                        onChange={toggleCompress}
                       />
-                    )}
-                    {activeConv?.vendor && (
-                      <span style={{ fontSize: 11, color: colors.textTertiary, whiteSpace: 'nowrap' }}>
-                        已绑定模型
-                      </span>
-                    )}
-                  </div>
+                      <span>压缩</span>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="附件（demo）">
+                    <button className="vc-composer-tool">
+                      <Icon icon={paperclipIcon} width={16} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="联网搜索（demo）">
+                    <button className="vc-composer-tool">
+                      <Icon icon={globeIcon} width={16} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="语音输入（demo）">
+                    <button className="vc-composer-tool">
+                      <Icon icon={micIcon} width={16} />
+                    </button>
+                  </Tooltip>
+                  {models.length > 0 && (
+                    <Select
+                      size="small"
+                      variant="borderless"
+                      className="composer-model-select vc-composer-model"
+                      value={
+                        activeConv?.vendor
+                          ? modelId(activeConv.vendor, activeConv.modelCode!)
+                          : currentModelId ?? undefined
+                      }
+                      placeholder="选择模型"
+                      options={models.map((m) => ({
+                        value: modelId(m.vendor, m.modelCode),
+                        label: (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <ModelModalityIcons types={m.modalities} fallback={m.modelType} size={13} />
+                            {m.modelName}（{m.vendor}）
+                          </span>
+                        ),
+                      }))}
+                      onChange={(id) => setCurrentModel(id)}
+                      disabled={!!activeConv?.vendor || loadingModels}
+                      popupMatchSelectWidth={false}
+                    />
+                  )}
+                  {activeConv?.vendor && <span className="vc-composer-bound">已绑定模型</span>}
                 </div>
               </div>
             </div>
           </>
         ) : (
           /* 空状态 */
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              gap: 16,
-            }}
-          >
-            <Icon
-              icon={messageSquareIcon}
-              width={64}
-              style={{ color: colors.textTertiary, opacity: 0.3 }}
-            />
-            <span style={{ color: colors.textSecondary, fontSize: 16 }}>
-              选择或创建一个对话
+          <div className="vc-chat-empty">
+            <span className="vc-chat-empty__icon">
+              <Icon icon={messageSquareIcon} width={32} />
             </span>
-            <Button
-              type="primary"
-              icon={<Icon icon={plusIcon} width={14} />}
-              onClick={handleCreate}
-            >
+            <span className="vc-chat-empty__title">选择或创建一个对话</span>
+            <Button type="primary" icon={<Icon icon={plusIcon} width={14} />} onClick={handleCreate}>
               新建对话
             </Button>
           </div>
@@ -1215,47 +839,37 @@ const ChatPage: React.FC = () => {
         open={kbDrawerOpen}
         onClose={() => setKbDrawerOpen(false)}
       >
-        <div style={{ margin: '16px 0 8px', fontSize: 12, color: colors.textTertiary }}>
+        <div className="vc-hint" style={{ marginBottom: 'var(--space-md)' }}>
           已选 {activeConv?.knowledgeDocIds?.length ?? 0} 篇（仅已向量化文档可召回）
         </div>
         {kbLoading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+          <div className="vc-chat-list__loading">
             <Spin />
           </div>
         ) : kbDocs.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无文档" style={{ marginTop: 40 }} />
+          <div className="vc-knowledge-list__empty">暂无文档</div>
         ) : (
           <Checkbox.Group
             style={{ width: '100%' }}
             value={activeConv?.knowledgeDocIds ?? []}
             onChange={(vals) => setSelectedDocIds(vals as number[])}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="vc-kb-list">
               {kbDocs.map((doc) => (
-                <div
-                  key={doc.id}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    background: colors.surface,
-                    border: `1px solid ${colors.divider}`,
-                  }}
-                >
+                <div key={doc.id} className="vc-kb-card">
                   <Checkbox value={doc.id} disabled={!doc.isVectorized}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{doc.title}</span>
+                    <span className="vc-kb-card__title">{doc.title}</span>
                   </Checkbox>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, paddingLeft: 24 }}>
+                  <div className="vc-kb-card__meta">
                     {doc.isVectorized ? (
                       <Tag color="success" icon={<Icon icon={zapIcon} width={12} />} style={{ margin: 0 }}>
                         已向量化
                       </Tag>
                     ) : (
-                      <Tag color="default" style={{ margin: 0 }}>未向量化</Tag>
+                      <Tag style={{ margin: 0 }}>未向量化</Tag>
                     )}
                     {doc.tags && doc.tags.length > 0 && (
-                      <span style={{ fontSize: 11, color: colors.textTertiary }}>
-                        {doc.tags.slice(0, 3).join(' / ')}
-                      </span>
+                      <span className="vc-kb-card__tags">{doc.tags.slice(0, 3).join(' / ')}</span>
                     )}
                   </div>
                 </div>

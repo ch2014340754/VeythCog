@@ -1,15 +1,13 @@
-﻿import React, { useEffect, useState } from 'react';
-import { Button, Checkbox, Empty, Input, message, Modal, Select, Spin, Tag, Tooltip } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Button, Checkbox, Input, message, Modal, Select, Tag, Tooltip } from 'antd';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
-import {
-  batchBindModels,
-  clearVendorKey,
-  getCatalog,
-  verifyModel,
-} from '@/api/llm';
+import { batchBindModels, clearVendorKey, getCatalog, verifyModel } from '@/api/llm';
 import type { CatalogVendorItem } from '@/types';
 import { ModelModalityTags } from '@/components/ModelTypeTag';
+import PageHeader from '@/components/PageHeader';
+import EmptyState from '@/components/states/EmptyState';
+import LoadingState from '@/components/states/LoadingState';
 
 /** 供应商卡片上的编辑草稿（前端本地状态，保存时整体提交） */
 interface VendorDraft {
@@ -49,28 +47,8 @@ function sameSet(a: string[], b: string[]): boolean {
 
 /** 顶部 2px 细进度条（保存时使用，不遮挡内容） */
 const SlimProgress: React.FC = () => (
-  <div
-    style={{
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 2,
-      overflow: 'hidden',
-      pointerEvents: 'none',
-      borderTopLeftRadius: 'var(--radius-lg)',
-      borderTopRightRadius: 'var(--radius-lg)',
-    }}
-  >
-    <div
-      style={{
-        width: '45%',
-        height: '100%',
-        borderRadius: 2,
-        background: 'var(--color-primary, #7C3AED)',
-        animation: 'vc-slim-progress 1.1s ease-in-out infinite',
-      }}
-    />
+  <div className="vc-slim-progress">
+    <div className="vc-slim-progress__bar" />
   </div>
 );
 
@@ -277,72 +255,29 @@ const ProvidersPage: React.FC = () => {
       .map((m) => ({ label: `${m.modelName}（${m.modelCode}）`, value: m.modelCode }));
 
     return (
-      <div
-        key={v.vendor}
-        className="glass-panel"
-        style={{
-          position: 'relative',
-          background: colors.surface,
-          borderRadius: 'var(--radius-lg)',
-          border: `1px solid ${colors.border}`,
-          padding: 20,
-          marginBottom: 16,
-          overflow: 'hidden',
-        }}
-      >
+      <section key={v.vendor} className="vc-panel vc-provider">
         {busy && <SlimProgress />}
 
-        {/* 供应商头部 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 16,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: colors.text }}>{v.vendorName}</span>
+        <div className="vc-provider__head">
+          <div className="vc-provider__title">
+            <span>{v.vendorName}</span>
             <Tag color="default" style={{ marginInlineEnd: 0 }}>{v.vendor}</Tag>
             {statusTag(v)}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {(v.effectiveBaseUrl || v.baseUrl) && (
-              <Tooltip title={v.effectiveBaseUrl || v.baseUrl}>
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: colors.textTertiary,
-                    maxWidth: 360,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {v.effectiveBaseUrl || v.baseUrl}
-                </span>
-              </Tooltip>
-            )}
-          </div>
+          {(v.effectiveBaseUrl || v.baseUrl) && (
+            <Tooltip title={v.effectiveBaseUrl || v.baseUrl}>
+              <span className="vc-provider__url">{v.effectiveBaseUrl || v.baseUrl}</span>
+            </Tooltip>
+          )}
         </div>
 
         {/* API Key */}
-        <div
-          style={{
-            border: `1px solid ${colors.divider}`,
-            borderRadius: 'var(--radius-md)',
-            padding: '12px 14px',
-            marginBottom: 16,
-            background: colors.primary10,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>API Key</span>
-            <span style={{ fontSize: 12, color: colors.textTertiary }}>
-              仅加密保存到你的账号下；同一供应商下的模型共用一把 Key
-            </span>
+        <div className="vc-provider__block">
+          <div className="vc-provider__block-head">
+            <span className="vc-provider__block-title">API Key</span>
+            <span className="vc-meta">仅加密保存到你的账号下；同一供应商下的模型共用一把 Key</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="vc-toolbar" style={{ flexWrap: 'nowrap' }}>
             <Input.Password
               value={d.keyDraft}
               onChange={(e) => patch(v.vendor, { keyDraft: e.target.value })}
@@ -362,24 +297,12 @@ const ProvidersPage: React.FC = () => {
 
         {/* 百炼地域 / 业务空间（与 AK 同级：同一供应商共用） */}
         {v.vendor === 'dashscope' && (
-          <div
-            style={{
-              border: `1px solid ${colors.divider}`,
-              borderRadius: 'var(--radius-md)',
-              padding: '12px 14px',
-              marginBottom: 16,
-              background: colors.primary10,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: colors.text }}>
-                业务空间 / 地域
-              </span>
-              <span style={{ fontSize: 12, color: colors.textTertiary }}>
-                留空回落系统配置；配置后调用专属域名，适配工作空间模型与地域隔离
-              </span>
+          <div className="vc-provider__block">
+            <div className="vc-provider__block-head">
+              <span className="vc-provider__block-title">业务空间 / 地域</span>
+              <span className="vc-meta">留空回落系统配置；配置后调用专属域名，适配工作空间模型与地域隔离</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="vc-toolbar" style={{ flexWrap: 'nowrap' }}>
               <Input
                 value={d.workspaceDraft}
                 onChange={(e) => patch(v.vendor, { workspaceDraft: e.target.value })}
@@ -398,10 +321,10 @@ const ProvidersPage: React.FC = () => {
                 placeholder={`地域，默认 ${v.effectiveRegion || 'cn-beijing'}`}
                 disabled={busy}
                 spellCheck={false}
-                style={{ width: 200 }}
+                style={{ width: 200, flexShrink: 0 }}
               />
             </div>
-            <div style={{ fontSize: 12, color: colors.textTertiary, marginTop: 8 }}>
+            <div className="vc-hint" style={{ marginTop: 8 }}>
               当前调用：{v.effectiveBaseUrl || v.baseUrl}
               {v.hasFallbackWorkspace && !v.workspaceId ? '（系统兜底业务空间）' : ''}
             </div>
@@ -409,87 +332,63 @@ const ProvidersPage: React.FC = () => {
         )}
 
         {/* 模型多选 */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: colors.text, marginBottom: 8 }}>
-            可用模型（多选）
-          </div>
-          <Checkbox.Group
-            value={d.selected}
-            disabled={busy}
-            style={{ display: 'block' }}
-            onChange={(vals) => {
-              const selected = (vals as unknown as string[]).map(String);
-              const nextDefault =
-                d.defaultCode && selected.includes(d.defaultCode) ? d.defaultCode : undefined;
-              patch(v.vendor, { selected, defaultCode: nextDefault });
-            }}
-          >
-            {v.models.map((m) => (
-              <div
-                key={m.modelCode}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  padding: '8px 0',
-                  borderBottom: `1px solid ${colors.divider}`,
-                }}
-              >
-                <Checkbox value={m.modelCode} disabled={!m.enabled || busy}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14, color: colors.text, fontWeight: 500 }}>{m.modelName}</span>
-                    <ModelModalityTags types={m.modalities} fallback={m.modelType} compact />
-                    <span style={{ fontSize: 12, color: colors.textTertiary }}>{m.modelCode}</span>
-                  </span>
-                </Checkbox>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {m.valid && (
-                    <Tag color="green" style={{ marginInlineEnd: 0 }}>
-                      {m.bound ? '已验证' : '已验证 · 待绑定'}
-                    </Tag>
-                  )}
-                  {!m.valid && m.bound && (
-                    <Tooltip title={m.verifyError || '尚未通过连通校验，不会出现在对话页'}>
-                      <Tag color="orange" style={{ marginInlineEnd: 0 }}>未校验</Tag>
-                    </Tooltip>
-                  )}
-                  {!m.valid && !m.bound && m.verifyError && (
-                    <Tooltip title={m.verifyError}>
-                      <Tag color="red" style={{ marginInlineEnd: 0 }}>校验失败</Tag>
-                    </Tooltip>
-                  )}
-                  {m.isDefault && (
-                    <Tag color="gold" style={{ marginInlineEnd: 0 }}>当前默认</Tag>
-                  )}
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ paddingInline: 4, height: 22, fontSize: 12 }}
-                    loading={d.verifyingCode === m.modelCode}
-                    disabled={!m.enabled || busy}
-                    onClick={() => void verifyOne(v, d, m.modelCode, m.modelName)}
-                  >
-                    校验
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </Checkbox.Group>
-        </div>
-
-        {/* 默认模型 + 保存 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap',
+        <div className="vc-field-label" style={{ marginTop: 4 }}>可用模型（多选）</div>
+        <Checkbox.Group
+          value={d.selected}
+          disabled={busy}
+          style={{ display: 'block', width: '100%' }}
+          onChange={(vals) => {
+            const selected = (vals as unknown as string[]).map(String);
+            const nextDefault =
+              d.defaultCode && selected.includes(d.defaultCode) ? d.defaultCode : undefined;
+            patch(v.vendor, { selected, defaultCode: nextDefault });
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: colors.textSecondary }}>默认模型</span>
+          {v.models.map((m) => (
+            <div key={m.modelCode} className="vc-model-row">
+              <Checkbox value={m.modelCode} disabled={!m.enabled || busy}>
+                <span className="vc-model-row__label">
+                  <span className="vc-model-row__name">{m.modelName}</span>
+                  <ModelModalityTags types={m.modalities} fallback={m.modelType} compact />
+                  <span className="vc-model-row__code">{m.modelCode}</span>
+                </span>
+              </Checkbox>
+              <div className="vc-toolbar" style={{ gap: 8 }}>
+                {m.valid && (
+                  <Tag color="green" style={{ marginInlineEnd: 0 }}>
+                    {m.bound ? '已验证' : '已验证 · 待绑定'}
+                  </Tag>
+                )}
+                {!m.valid && m.bound && (
+                  <Tooltip title={m.verifyError || '尚未通过连通校验，不会出现在对话页'}>
+                    <Tag color="orange" style={{ marginInlineEnd: 0 }}>未校验</Tag>
+                  </Tooltip>
+                )}
+                {!m.valid && !m.bound && m.verifyError && (
+                  <Tooltip title={m.verifyError}>
+                    <Tag color="red" style={{ marginInlineEnd: 0 }}>校验失败</Tag>
+                  </Tooltip>
+                )}
+                {m.isDefault && <Tag color="gold" style={{ marginInlineEnd: 0 }}>当前默认</Tag>}
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ paddingInline: 4, height: 22, fontSize: 12 }}
+                  loading={d.verifyingCode === m.modelCode}
+                  disabled={!m.enabled || busy}
+                  onClick={() => void verifyOne(v, d, m.modelCode, m.modelName)}
+                >
+                  校验
+                </Button>
+              </div>
+            </div>
+          ))}
+        </Checkbox.Group>
+
+        {/* 默认模型 + 保存 */}
+        <div className="vc-provider__foot">
+          <div className="vc-toolbar" style={{ gap: 8 }}>
+            <span className="vc-meta">默认模型</span>
             <Select
               size="small"
               style={{ minWidth: 220 }}
@@ -501,10 +400,8 @@ const ProvidersPage: React.FC = () => {
               onChange={(val) => patch(v.vendor, { defaultCode: val })}
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 12, color: colors.textTertiary }}>
-              已选 {d.selected.length}/{v.models.length}
-            </span>
+          <div className="vc-toolbar" style={{ gap: 12 }}>
+            <span className="vc-meta vc-num">已选 {d.selected.length}/{v.models.length}</span>
             <Button
               type="primary"
               size="small"
@@ -516,51 +413,27 @@ const ProvidersPage: React.FC = () => {
             </Button>
           </div>
         </div>
-      </div>
+      </section>
     );
   };
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 12,
-        }}
-      >
-        <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: 0 }}>模型配置</h2>
-          <div style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}>
-            选择供应商 → 填写你自己的 API Key（加密保存）→ 逐行点「校验」；校验通过后再勾选要用的模型并保存。
-            校验不要求先绑定，未填 AK 时用已保存 AK 或系统兜底；只有通过校验的对话模型会出现在对话页
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="模型配置"
+      />
 
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
-          <Spin />
-        </div>
+        <LoadingState tip="正在读取供应商目录…" />
       ) : catalog.length === 0 ? (
-        <Empty description="暂无可用供应商" style={{ marginTop: 80 }} />
+        <EmptyState description="暂无可用供应商" />
       ) : (
-        catalog.map(renderCard)
+        <div className="vc-stack">{catalog.map(renderCard)}</div>
       )}
 
-      <div
-        style={{
-          marginTop: 16,
-          fontSize: 12,
-          color: colors.textTertiary,
-          background: colors.primary10,
-          padding: '10px 14px',
-          borderRadius: 'var(--radius-md)',
-        }}
-      >
-        提示：API Key 使用 AES-256-GCM 加密后存储在 `user_llm_binding`，同一供应商下的模型共用一把 Key；
-        校验结论按「用户 + 模型 + Key 指纹」记录在 `user_llm_model_verify`，修改或清除 AK 后自动失效；
+      <div className="vc-note" style={{ marginTop: 16 }}>
+        提示：API Key 使用 AES-256-GCM 加密后存储在 <code>user_llm_binding</code>，同一供应商下的模型共用一把 Key；
+        校验结论按「用户 + 模型 + Key 指纹」记录在 <code>user_llm_model_verify</code>，修改或清除 AK 后自动失效；
         清除 AK 后自动回落到后端配置文件中的 AK。
       </div>
     </div>

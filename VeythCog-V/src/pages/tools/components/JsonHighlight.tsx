@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
 
 /**
  * 轻量 JSON 语法高亮（只读展示用）
  * key -> primary, string -> success, number -> warning, true/false/null -> error
+ * 颜色全部来自 CSS 变量，跟随主题与暗色模式。
  */
-export function highlightJson(code: string, colors: any): React.ReactNode {
+export function highlightJson(code: string): React.ReactNode {
   if (!code) return null;
   const nodes: React.ReactNode[] = [];
   // 匹配："key" 后跟冒号 / "string" / number / true/false/null / 其他
@@ -19,20 +19,20 @@ export function highlightJson(code: string, colors: any): React.ReactNode {
       // 字符串
       const isKey = !!m[2];
       nodes.push(
-        <span key={i++} style={{ color: isKey ? colors.primary : colors.success }}>
+        <span key={i++} className={isKey ? 'vc-json-key' : 'vc-json-str'}>
           {m[1]}
         </span>
       );
-      if (m[2]) nodes.push(<span key={i++}>{m[2]}</span>);
+      if (m[2]) nodes.push(<span key={i++} className="vc-json-punct">{m[2]}</span>);
     } else if (m[3] !== undefined) {
       nodes.push(
-        <span key={i++} style={{ color: colors.warning }}>
+        <span key={i++} className="vc-json-num">
           {m[3]}
         </span>
       );
     } else if (m[4] !== undefined) {
       nodes.push(
-        <span key={i++} style={{ color: colors.error }}>
+        <span key={i++} className="vc-json-lit">
           {m[4]}
         </span>
       );
@@ -50,26 +50,10 @@ interface Props {
 
 /** 只读 JSON 高亮块，带滚动 */
 const JsonHighlight: React.FC<Props> = ({ code, style }) => {
-  const { colors } = useTheme();
-  const content = useMemo(() => highlightJson(code, colors), [code, colors]);
+  const content = useMemo(() => highlightJson(code), [code]);
   return (
-    <pre
-      style={{
-        margin: 0,
-        padding: 12,
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-md)',
-        fontFamily: "'JetBrains Mono', Consolas, monospace",
-        fontSize: 13,
-        lineHeight: 1.6,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-all',
-        overflow: 'auto',
-        ...style,
-      }}
-    >
-      {content}
+    <pre className="vc-json-pre" style={style}>
+      {content || <span className="vc-json-muted">（空）</span>}
     </pre>
   );
 };

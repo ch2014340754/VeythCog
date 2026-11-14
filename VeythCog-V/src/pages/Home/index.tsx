@@ -1,7 +1,6 @@
 import type { NavBookmark } from '@/api/nav';
 import { syncIcons } from '@/api/nav';
 import WallpaperManagerModal from '@/components/WallpaperManagerModal';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
 import { useNavStore } from '@/stores/navStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
@@ -28,37 +27,24 @@ import SearchBar from './SearchBar';
 
 /**
  * 右键菜单单项：文字在左，图标在右（参照 iTab）
+ * 配色/悬停全部由 .vc-home-menu__item 提供（含 body.has-bg 壁纸变体）
  */
 interface MenuItemProps {
   label: string;
   icon: typeof externalLinkIcon;
-  color: string;
-  hoverBg: string;
+  danger?: boolean;
   onSelect: () => void;
 }
 
-const MenuItem: React.FC<MenuItemProps> = ({ label, icon, color, hoverBg, onSelect }) => (
-  <div
+const MenuItem: React.FC<MenuItemProps> = ({ label, icon, danger = false, onSelect }) => (
+  <button
+    type="button"
+    className={"vc-home-menu__item" + (danger ? " is-danger" : "")}
     onClick={onSelect}
-    onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 16,
-      padding: '10px 12px',
-      borderRadius: 8,
-      cursor: 'pointer',
-      fontSize: 13,
-      color,
-      userSelect: 'none',
-      transition: 'background 0.15s ease',
-    }}
   >
     <span>{label}</span>
-    <Icon icon={icon} width={15} style={{ opacity: 0.75, flexShrink: 0 }} />
-  </div>
+    <Icon icon={icon} width={15} className="vc-home-menu__icon" />
+  </button>
 );
 
 /**
@@ -68,7 +54,6 @@ const MenuItem: React.FC<MenuItemProps> = ({ label, icon, color, hoverBg, onSele
  */
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { colors } = useTheme();
   const loadHome = useNavStore((s) => s.loadHome);
   const categories = useNavStore((s) => s.categories);
   const activeCategoryId = useNavStore((s) => s.activeCategoryId);
@@ -229,32 +214,13 @@ const HomePage: React.FC = () => {
     navigate('/login');
   };
 
-  const isWallpaperMode = !!activeWallpaper;
-  const menuBg = isWallpaperMode ? 'rgba(30,30,40,0.92)' : colors.surfaceOverlay;
-  const menuBorder = isWallpaperMode ? 'rgba(255,255,255,0.12)' : colors.border;
-  const menuItemColor = isWallpaperMode ? 'rgba(255,255,255,0.9)' : colors.text;
-  const menuHoverBg = isWallpaperMode ? 'rgba(255,255,255,0.1)' : 'rgba(128,128,128,0.1)';
 
   return (
-    <div
-      onWheel={handleWheel}
-      onContextMenu={handlePageContextMenu}
-      style={{
-        position: 'relative',
-        minHeight: '100vh',
-        overflow: 'hidden',
-      }}
-    >
+    <div className="vc-home" onWheel={handleWheel} onContextMenu={handlePageContextMenu}>
       <HomeSidebar />
 
       {/* 内容区：fading 只作用在下半的书签区，不作用在壁纸和上半固定区 */}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          padding: '12vh 24px 80px',
-        }}
-      >
+      <div className="vc-home__content">
         {/* 固定区：时钟 + 搜索框，滚轮切分类时保持不动 */}
         <Clock />
         <SearchBar />
@@ -263,22 +229,8 @@ const HomePage: React.FC = () => {
             key 取 dataCategoryId —— 新分类的书签真正到位时才重挂载、播一次；
             同一分类内的静默刷新（图标同步完成）不会重播。
             外层 wrapper 承担版块显隐过渡（opacity / 位移 / 高度）。 */}
-        <div
-          style={{
-            overflow: 'hidden',
-            maxHeight: gridVisible ? 1600 : 0,
-            opacity: gridVisible ? 1 : 0,
-            transform: gridVisible ? 'translateY(0)' : 'translateY(16px)',
-            transition:
-              'max-height 0.35s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)), opacity 0.3s ease, transform 0.35s var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1))',
-            pointerEvents: gridVisible ? 'auto' : 'none',
-          }}
-        >
-          <div
-            key={dataCategoryId ?? 'nav-empty'}
-            className="vc-nav-pop"
-            style={{ paddingTop: '40px' }}
-          >
+        <div className={"vc-home__grid-shell" + (gridVisible ? "" : " is-hidden")}>
+          <div key={dataCategoryId ?? 'nav-empty'} className="vc-nav-pop vc-home__grid-pop">
             <BookmarkGrid
               onAddBookmark={handleAddBookmark}
               onEditBookmark={handleEditBookmark}
@@ -295,20 +247,10 @@ const HomePage: React.FC = () => {
       {/* 全局右键菜单：书签菜单 / 空白区菜单共用一个容器 */}
       {menu && (
         <div
+          className="vc-home-menu"
           style={{
-            position: 'fixed',
             left: Math.min(menu.x, window.innerWidth - 200),
             top: Math.min(menu.y, window.innerHeight - 220),
-            zIndex: 1000,
-            minWidth: 168,
-            borderRadius: 12,
-            overflow: 'hidden',
-            background: menuBg,
-            backdropFilter: 'blur(20px) saturate(160%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-            border: `1px solid ${menuBorder}`,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-            padding: 4,
           }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -318,25 +260,16 @@ const HomePage: React.FC = () => {
               <MenuItem
                 label="在新标签页打开"
                 icon={externalLinkIcon}
-                color={menuItemColor}
-                hoverBg={menuHoverBg}
                 onSelect={() => {
                   window.open(menu.bookmark.url, '_blank', 'noopener,noreferrer');
                   setMenu(null);
                 }}
               />
-              <MenuItem
-                label="编辑图标"
-                icon={pencilIcon}
-                color={menuItemColor}
-                hoverBg={menuHoverBg}
-                onSelect={() => handleEditBookmark(menu.bookmark)}
-              />
+              <MenuItem label="编辑图标" icon={pencilIcon} onSelect={() => handleEditBookmark(menu.bookmark)} />
               <MenuItem
                 label="删除"
                 icon={trashIcon}
-                color={isWallpaperMode ? '#ff6b6b' : colors.error}
-                hoverBg={menuHoverBg}
+                danger
                 onSelect={() => handleDeleteBookmark(menu.bookmark)}
               />
             </>
@@ -345,8 +278,6 @@ const HomePage: React.FC = () => {
               <MenuItem
                 label="新增图标"
                 icon={plusIcon}
-                color={menuItemColor}
-                hoverBg={menuHoverBg}
                 onSelect={() => {
                   setMenu(null);
                   handleAddBookmark();
@@ -355,8 +286,6 @@ const HomePage: React.FC = () => {
               <MenuItem
                 label="切换壁纸"
                 icon={refreshIcon}
-                color={menuItemColor}
-                hoverBg={menuHoverBg}
                 onSelect={() => {
                   setMenu(null);
                   switchRandomWallpaper();
@@ -365,8 +294,6 @@ const HomePage: React.FC = () => {
               <MenuItem
                 label="壁纸管理"
                 icon={imageIcon}
-                color={menuItemColor}
-                hoverBg={menuHoverBg}
                 onSelect={() => {
                   setMenu(null);
                   setWallpaperManagerOpen(true);

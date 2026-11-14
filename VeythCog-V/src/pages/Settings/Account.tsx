@@ -1,36 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Form, Input, Button, message } from 'antd';
+import { fetchMe, removeAvatar, uploadAvatar } from '@/api/auth';
+import PageHeader from '@/components/PageHeader';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchMe, uploadAvatar, removeAvatar } from '@/api/auth';
-
-const Section: React.FC<{ title: string; desc?: string; children: React.ReactNode }> = ({
-  title,
-  desc,
-  children,
-}) => {
-  const { colors } = useTheme();
-  return (
-    <section
-      className="glass-panel"
-      style={{
-        background: colors.surface,
-        borderRadius: 'var(--radius-lg)',
-        border: `1px solid ${colors.border}`,
-        padding: 24,
-        marginBottom: 20,
-      }}
-    >
-      <div style={{ fontSize: 16, fontWeight: 600, color: colors.text, marginBottom: 4 }}>
-        {title}
-      </div>
-      {desc && (
-        <div style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 20 }}>{desc}</div>
-      )}
-      {children}
-    </section>
-  );
-};
+import { Button, Form, Input, message } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
 
 const AccountPage: React.FC = () => {
   const { colors } = useTheme();
@@ -157,123 +130,98 @@ const AccountPage: React.FC = () => {
 
   return (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: colors.text, margin: '0 0 20px' }}>
-        账号设置
-      </h2>
+      <PageHeader title="账号设置" />
 
-      <Section title="基本信息" desc="修改头像、显示名和联系邮箱">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24, flexWrap: 'wrap' }}>
-          <div
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: '50%',
-              background: colors.primary,
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 28,
-              fontWeight: 700,
-              flexShrink: 0,
-              position: 'relative',
-              overflow: 'hidden',
-              border: `1px solid ${colors.border}`,
-            }}
-          >
-            {avatarUrl && !avatarBroken ? (
-              <img
-                src={avatarUrl}
-                alt="用户头像"
-                onError={() => setAvatarBroken(true)}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : (
-              initial
-            )}
-            {uploadingAvatar && (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: 'rgba(0,0,0,0.48)',
-                  color: '#fff',
-                  fontSize: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                上传中
-              </div>
-            )}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 220, flex: 1 }}>
-            <div style={{ fontSize: 13, color: colors.textSecondary }}>
-              支持 PNG / JPG / WebP，不超过 2MB；建议使用 1:1 正方形图片
+      <div className="vc-stack">
+        <section className="vc-panel">
+          <div className="vc-panel__head">
+            <div>
+              <h2 className="vc-panel__title">基本信息</h2>
+              <p className="vc-panel__desc">修改头像、显示名和联系邮箱</p>
             </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Button
-                size="small"
-                loading={uploadingAvatar}
-                disabled={removingAvatar}
-                onClick={() => avatarInputRef.current?.click()}
-              >
-                上传头像
-              </Button>
-              {avatarUrl && (
-                <Button size="small" loading={removingAvatar} disabled={uploadingAvatar} onClick={onRemoveAvatar}>
-                  恢复默认
-                </Button>
+          </div>
+
+          <div className="vc-account-avatar">
+            <div className="vc-account-avatar__img" style={{ background: colors.primary, color: colors.textInverse }}>
+              {avatarUrl && !avatarBroken ? (
+                <img src={avatarUrl} alt="用户头像" onError={() => setAvatarBroken(true)} />
+              ) : (
+                initial
               )}
+              {uploadingAvatar && <div className="vc-account-avatar__mask">上传中</div>}
+            </div>
+            <div className="vc-account-avatar__side">
+              <div className="vc-meta">支持 PNG / JPG / WebP，不超过 2MB；建议使用 1:1 正方形图片</div>
+              <div className="vc-toolbar">
+                <Button
+                  size="small"
+                  loading={uploadingAvatar}
+                  disabled={removingAvatar}
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  上传头像
+                </Button>
+                {avatarUrl && (
+                  <Button size="small" loading={removingAvatar} disabled={uploadingAvatar} onClick={onRemoveAvatar}>
+                    恢复默认
+                  </Button>
+                )}
+              </div>
+            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={onAvatarSelected}
+              style={{ display: 'none' }}
+            />
+          </div>
+
+          <Form layout="vertical">
+            <Form.Item label="昵称">
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="你的昵称" />
+            </Form.Item>
+            <Form.Item label="邮箱" style={{ marginBottom: 20 }}>
+              <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            </Form.Item>
+            <Button type="primary" loading={savingProfile} onClick={onSaveProfile}>
+              保存
+            </Button>
+          </Form>
+        </section>
+
+        <section className="vc-panel">
+          <div className="vc-panel__head">
+            <div>
+              <h2 className="vc-panel__title">修改密码</h2>
+              <p className="vc-panel__desc">mock 阶段仅前端校验，不会真正变更服务端密码</p>
             </div>
           </div>
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={onAvatarSelected}
-            style={{ display: 'none' }}
-          />
-        </div>
-        <Form layout="vertical">
-          <Form.Item label="昵称">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="你的昵称" />
-          </Form.Item>
-          <Form.Item label="邮箱" style={{ marginBottom: 20 }}>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-          </Form.Item>
-          <Button type="primary" loading={savingProfile} onClick={onSaveProfile}>
-            保存
-          </Button>
-        </Form>
-      </Section>
-
-      <Section title="修改密码" desc="mock 阶段仅前端校验，不会真正变更服务端密码">
-        {!pwdExpanded ? (
-          <Button type="primary" onClick={() => setPwdExpanded(true)}>
-            修改密码
-          </Button>
-        ) : (
-          <Form layout="vertical">
-            <Form.Item label="当前密码">
-              <Input.Password value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} />
-            </Form.Item>
-            <Form.Item label="新密码">
-              <Input.Password value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
-            </Form.Item>
-            <Form.Item label="确认新密码" style={{ marginBottom: 20 }}>
-              <Input.Password value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} onPressEnter={onChangePwd} />
-            </Form.Item>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Button type="primary" loading={savingPwd} onClick={onChangePwd}>
-                应用修改
-              </Button>
-              <Button onClick={onCancelPwd}>取消</Button>
-            </div>
-          </Form>
-        )}
-      </Section>
+          {!pwdExpanded ? (
+            <Button type="primary" onClick={() => setPwdExpanded(true)}>
+              修改密码
+            </Button>
+          ) : (
+            <Form layout="vertical">
+              <Form.Item label="当前密码">
+                <Input.Password value={oldPwd} onChange={(e) => setOldPwd(e.target.value)} />
+              </Form.Item>
+              <Form.Item label="新密码">
+                <Input.Password value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
+              </Form.Item>
+              <Form.Item label="确认新密码" style={{ marginBottom: 20 }}>
+                <Input.Password value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} onPressEnter={onChangePwd} />
+              </Form.Item>
+              <div className="vc-toolbar">
+                <Button type="primary" loading={savingPwd} onClick={onChangePwd}>
+                  应用修改
+                </Button>
+                <Button onClick={onCancelPwd}>取消</Button>
+              </div>
+            </Form>
+          )}
+        </section>
+      </div>
     </div>
   );
 };

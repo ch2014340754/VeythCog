@@ -70,10 +70,30 @@
   --glass-bg: rgba(255, 255, 255, 0.6);
   --glass-border: rgba(255, 255, 255, 0.3);
 
-  /* 过渡时长 */
+  /* 过渡时长（旧变量，保留兼容） */
   --duration-fast: 150ms;
   --duration-normal: 250ms;
   --duration-slow: 400ms;
+
+  /* --- 动效令牌（全站动效的唯一参数来源，见 agent.md §7） --- */
+  --motion-duration-fast: 150ms;    /* 状态色/描边切换 */
+  --motion-duration-base: 250ms;    /* 按钮微交互、列表出现 */
+  --motion-duration-slow: 400ms;    /* 页面切换、面板展开 */
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-in-out: cubic-bezier(0.83, 0, 0.17, 1);
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-lift: -2px;              /* 悬浮抬起高度 */
+  --motion-lift-soft: -1px;         /* 按钮级轻微抬起 */
+  --motion-press-scale: 0.985;      /* 按压回弹比例 */
+  --motion-enter-distance: 10px;    /* 淡入上滑位移 */
+  --motion-stagger: 45ms;           /* 列表错峰步长 */
+  --motion-stagger-limit: 10;       /* 错峰最多累加档位 */
+
+  /* 卡片流光（悬停扫光），统一参数 */
+  --sheen-angle: 105deg;
+  --sheen-width: 60%;
+  --sheen-opacity: 0.55;
+  --sheen-duration: 860ms;
 
   /* z-index 层级 */
   --z-dropdown: 1000;
@@ -87,6 +107,8 @@
 
 /* --- 暗色模式变量覆盖（仅阴影等非颜色变量，颜色变量由 JS 动态注入） --- */
 body.dark {
+  /* 暗色下流光收敛，避免过曝 */
+  --sheen-opacity: 0.26;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
@@ -193,34 +215,8 @@ body.has-bg::after {
    响应式断点
    ======================================== */
 
-/* 移动端优先断点混入（通过 CSS 媒体查询实现） */
-@media (min-width: 640px) {
-  :root {
-    --radius-sm: 8px;
-    --radius-md: 12px;
-  }
-}
-
-@media (min-width: 768px) {
-  :root {
-    --space-md: 20px;
-    --space-lg: 28px;
-  }
-}
-
-@media (min-width: 1024px) {
-  :root {
-    --space-lg: 32px;
-    --space-xl: 40px;
-  }
-}
-
-@media (min-width: 1280px) {
-  :root {
-    --space-xl: 48px;
-    --space-2xl: 64px;
-  }
-}
+/* 间距 / 圆角令牌是固定刻度（style guide §3），不随视口放大；
+   响应式只调整布局与容器内边距，见各页面与 page.css 的断点。 */
 
 /* ========================================
    Ant Design 暗色模式覆盖
@@ -250,6 +246,16 @@ body.dark .ant-btn-default {
   background-color: var(--color-surface-elevated);
   border-color: var(--color-border);
   color: var(--color-text);
+}
+
+/* 暗色的主色是「亮填充」，主按钮文字必须用深色，否则白字压亮紫对比不足（style guide §7） */
+body.dark .ant-btn-primary:not(.ant-btn-dangerous) {
+  color: var(--color-text-inverse);
+}
+body.dark .ant-btn-primary:not(.ant-btn-dangerous):hover,
+body.dark .ant-btn-primary:not(.ant-btn-dangerous):focus-visible,
+body.dark .ant-btn-primary:not(.ant-btn-dangerous):active {
+  color: var(--color-text-inverse);
 }
 
 body.dark .ant-table {
@@ -533,8 +539,8 @@ body.dark.glass-on .glass-panel {
 }
 
 /* ========================================
-   输入控件全局发光描边（跟主题 primary 色联动）
-   未聚焦：弱发光；聚焦：强发光 + 外扩
+   输入控件：1px 描边 + 聚焦 3px 主色光圈（style guide §7）
+   光照只出现在聚焦态，静态不发光，避免整页泛紫
    ======================================== */
 .ant-input,
 .ant-input-affix-wrapper,
@@ -542,22 +548,7 @@ body.dark.glass-on .glass-panel {
 .ant-picker,
 .ant-select .ant-select-selector,
 textarea.ant-input {
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent),
-    0 0 12px color-mix(in srgb, var(--color-primary) 18%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
-}
-
-.ant-input:focus,
-.ant-input-focused,
-.ant-input-affix-wrapper-focused,
-.ant-input-number-focused,
-.ant-picker-focused,
-.ant-select-focused .ant-select-selector {
-  box-shadow:
-    0 0 0 1.5px color-mix(in srgb, var(--color-primary) 55%, transparent),
-    0 0 22px color-mix(in srgb, var(--color-primary) 38%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
 }
 
 body.dark .ant-input,
@@ -566,22 +557,32 @@ body.dark .ant-input-number,
 body.dark .ant-picker,
 body.dark .ant-select .ant-select-selector,
 body.dark textarea.ant-input {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+/* 聚焦：3px 主色 14% 光圈（明暗一致，暗色只把内高光压低） */
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused,
+.ant-input-affix-wrapper:focus-within,
+.ant-input-number-focused,
+.ant-picker-focused,
+.ant-select-focused .ant-select-selector {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, transparent),
-    0 0 14px color-mix(in srgb, var(--color-primary) 25%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
 }
 
 body.dark .ant-input:focus,
 body.dark .ant-input-focused,
 body.dark .ant-input-affix-wrapper-focused,
+body.dark .ant-input-affix-wrapper:focus-within,
 body.dark .ant-input-number-focused,
 body.dark .ant-picker-focused,
 body.dark .ant-select-focused .ant-select-selector {
   box-shadow:
-    0 0 0 1.5px color-mix(in srgb, var(--color-primary) 65%, transparent),
-    0 0 26px color-mix(in srgb, var(--color-primary) 45%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+    0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 
 /* disabled / 只读态不发光 */

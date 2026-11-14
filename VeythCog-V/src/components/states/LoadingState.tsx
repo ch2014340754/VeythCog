@@ -1,5 +1,5 @@
 /**
- * 加载状态组件
+ * 加载状态组件：与全站 .vc-state 视觉一致
  */
 import React from 'react';
 import { Spin } from 'antd';
@@ -10,19 +10,10 @@ interface Props {
   full?: boolean;
 }
 
-const LoadingState: React.FC<Props> = ({ tip = '加载中...', full = true }) => (
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 12,
-      ...(full ? { height: '100%', minHeight: 200 } : { padding: 48 }),
-    }}
-  >
-    <Spin />
-    <div style={{ fontSize: 12, color: '#999' }}>{tip}</div>
+const LoadingState: React.FC<Props> = ({ tip = '加载中…', full = true }) => (
+  <div className={full ? 'vc-state vc-state--fill' : 'vc-state'}>
+    <Spin size="default" />
+    <div className="vc-state__desc">{tip}</div>
   </div>
 );
 

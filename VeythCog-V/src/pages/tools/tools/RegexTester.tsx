@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Input, Tag } from 'antd';
+import { Input } from 'antd';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 const COMMON_REGEX = [
   { label: '邮箱', pattern: '[\\w.-]+@[\\w.-]+\\.\\w+' },
@@ -13,7 +12,6 @@ const COMMON_REGEX = [
 ];
 
 const RegexTester: React.FC = () => {
-  const { colors } = useTheme();
   const [pattern, setPattern] = useState('');
   const [flags, setFlags] = useState('g');
   const [text, setText] = useState('');
@@ -44,7 +42,7 @@ const RegexTester: React.FC = () => {
     matches.forEach((m, i) => {
       if (m.start > last) nodes.push(text.slice(last, m.start));
       nodes.push(
-        <mark key={i} style={{ background: colors.primary15, color: colors.primary, borderRadius: 2, padding: '0 2px' }}>
+        <mark key={i} className="vc-mark">
           {text.slice(m.start, m.end)}
         </mark>
       );
@@ -52,65 +50,66 @@ const RegexTester: React.FC = () => {
     });
     if (last < text.length) nodes.push(text.slice(last));
     return nodes;
-  }, [matches, text, colors]);
+  }, [matches, text]);
 
   return (
     <ToolShell title="正则测试器" description="实时高亮匹配结果" fillHeight>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.textTertiary }}>/</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', flex: 1, minHeight: 0 }}>
+        <div className="vc-regex-bar" style={{ flexShrink: 0 }}>
+          <span className="vc-regex-slash">/</span>
           <Input
+            className="vc-mono-input"
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
-            placeholder="输入正则，如 \d+"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            placeholder="输入正则，如 \\d+"
+            style={{ flex: 1, minWidth: 200 }}
           />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", color: colors.textTertiary }}>/</span>
+          <span className="vc-regex-slash">/</span>
           <Input
+            className="vc-mono-input"
             value={flags}
             onChange={(e) => setFlags(e.target.value)}
             placeholder="g"
-            style={{ width: 80, fontFamily: "'JetBrains Mono', monospace" }}
+            style={{ width: 88 }}
           />
-        </div>
-        {error && <div style={{ color: colors.error, fontSize: 12 }}>{error}</div>}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
           {COMMON_REGEX.map((r) => (
-            <Tag key={r.label} color="default" style={{ cursor: 'pointer' }} onClick={() => setPattern(r.pattern)}>
+            <button key={r.label} className="vc-chip" onClick={() => setPattern(r.pattern)}>
               {r.label}
-            </Tag>
+            </button>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1, minHeight: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>测试文本</div>
-            <Input.TextArea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="输入要测试的文本"
-              style={{ flex: 1, minHeight: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
-            />
+
+        {error && <div className="vc-tool-error" style={{ flexShrink: 0 }}>{error}</div>}
+
+        <div className="vc-tool-split">
+          <div className="vc-tool-pane">
+            <div className="vc-tool-pane__head">
+              <span className="vc-tool-pane__label">测试文本</span>
+              <div className="vc-tool-pane__side">
+                <span className="vc-meta">{text.length.toLocaleString()} 字符</span>
+              </div>
+            </div>
+            <div className="vc-tool-pane__body">
+              <Input.TextArea
+                className="vc-mono-input"
+                variant="borderless"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="输入要测试的文本"
+              />
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 6 }}>
-              匹配结果（{matches.length} 处）
+
+          <div className="vc-tool-pane">
+            <div className="vc-tool-pane__head">
+              <span className="vc-tool-pane__label">匹配结果</span>
+              <div className="vc-tool-pane__side">
+                <span className="vc-meta">{matches.length} 处</span>
+              </div>
             </div>
-            <div
-              style={{
-                flex: 1,
-                padding: 12,
-                background: colors.surface,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 'var(--radius-md)',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 13,
-                lineHeight: 1.8,
-                whiteSpace: 'pre-wrap',
-                overflow: 'auto',
-              }}
-            >
+            <pre className="vc-json-pre" style={{ flex: 1, minHeight: 0, whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
               {highlighted}
-            </div>
+            </pre>
           </div>
         </div>
       </div>

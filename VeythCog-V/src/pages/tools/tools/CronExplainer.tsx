@@ -2,10 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Input } from 'antd';
 import cronParser from 'cron-parser';
 import ToolShell from '../ToolShell';
-import { useTheme } from '@/contexts/ThemeContext';
 
 const CronExplainer: React.FC = () => {
-  const { colors } = useTheme();
   const [expr, setExpr] = useState('*/5 * * * *');
   const [error, setError] = useState('');
 
@@ -38,43 +36,44 @@ const CronExplainer: React.FC = () => {
 
   return (
     <ToolShell title="Cron 解释" description="把表达式翻译成中文，预览未来 5 次执行时间">
-      <Input
-        value={expr}
-        onChange={(e) => setExpr(e.target.value)}
-        placeholder="*/5 * * * *"
-        style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", marginBottom: 16 }}
-      />
-      {error && <div style={{ color: colors.error, fontSize: 12, marginBottom: 12 }}>{error}</div>}
+      <div style={{ marginBottom: 'var(--space-md)' }}>
+        <div className="vc-field-label">表达式</div>
+        <Input
+          className="vc-mono-input"
+          value={expr}
+          onChange={(e) => setExpr(e.target.value)}
+          placeholder="*/5 * * * *"
+        />
+      </div>
+
+      {error && <div className="vc-tool-error" style={{ marginBottom: 'var(--space-md)' }}>{error}</div>}
+
       {info && (
         <>
-          <div
-            style={{
-              padding: 16,
-              background: colors.primary10,
-              borderRadius: 'var(--radius-md)',
-              marginBottom: 16,
-              fontSize: 14,
-            }}
-          >
-            {explain(expr)}
-          </div>
-          <div style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 8 }}>未来 5 次执行时间</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {info.next5.map((d, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: '8px 12px',
-                  background: colors.surface,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: 'var(--radius-sm)',
-                  fontFamily: "'JetBrains Mono', Consolas, monospace",
-                  fontSize: 13,
-                }}
-              >
-                #{i + 1}  {d.toLocaleString('zh-CN')}
+          <div className="vc-panel" style={{ marginBottom: 'var(--space-md)' }}>
+            <div className="vc-panel__head">
+              <div>
+                <h2 className="vc-panel__title">含义</h2>
+                <p className="vc-panel__desc">按「分 时 日 月 周」逐段解释。</p>
               </div>
-            ))}
+            </div>
+            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: 'var(--color-text)' }}>{explain(expr)}</p>
+          </div>
+
+          <div className="vc-panel">
+            <div className="vc-panel__head">
+              <div>
+                <h2 className="vc-panel__title">未来 5 次执行时间</h2>
+              </div>
+            </div>
+            <div className="vc-stack vc-stack--tight">
+              {info.next5.map((d, i) => (
+                <div key={i} className="vc-hash-row" style={{ gridTemplateColumns: '48px minmax(0, 1fr)' }}>
+                  <span className="vc-hash-row__algo">#{i + 1}</span>
+                  <span className="vc-hash-row__value">{d.toLocaleString('zh-CN')}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}

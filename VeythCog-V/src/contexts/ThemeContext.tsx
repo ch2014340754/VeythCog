@@ -170,7 +170,7 @@ function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnable
 }
 
 /** 将预设颜色和暗色模式变量注入到 CSS 变量 */
-function applyCSSVariables(presetName: PresetName, isDark: boolean, glassOpacity: number): void {
+function applyCSSVariables(presetName: PresetName, isDark: boolean, glassEnabled: boolean, glassOpacity: number): void {
   const preset = getPreset(presetName, isDark);
   const root = document.documentElement;
 
@@ -193,8 +193,12 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean, glassOpacity
     const surface = preset.surface ?? '#1a1a2e';
     const surfaceElevated = preset.surfaceElevated ?? '#22223a';
     const surfaceOverlay = preset.surfaceOverlay ?? 'rgba(26, 26, 46, 0.85)';
-    root.style.setProperty('--color-surface', surface);
-    root.style.setProperty('--color-surface-elevated', surfaceElevated);
+    // 毛玻璃模式：CSS 变量必须与 useTheme().colors 同源（半透明），
+    // 否则用 CSS 变量写样式的区域（输入件 / 面板）会变成实心块，玻璃层断裂。
+    const surfaceVar = glassEnabled ? hexToRgba(surface, 0.55) : surface;
+    const surfaceElevatedVar = glassEnabled ? hexToRgba(surfaceElevated, 0.65) : surfaceElevated;
+    root.style.setProperty('--color-surface', surfaceVar);
+    root.style.setProperty('--color-surface-elevated', surfaceElevatedVar);
     root.style.setProperty('--color-surface-overlay', surfaceOverlay);
     root.style.setProperty('--color-text-secondary', '#9CA3AF');
     root.style.setProperty('--color-text-tertiary', '#8A8FA3');
@@ -213,8 +217,10 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean, glassOpacity
     root.style.setProperty('--shadow-lg', '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3)');
     root.style.setProperty('--shadow-xl', '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)');
   } else {
-    root.style.setProperty('--color-surface', '#ffffff');
-    root.style.setProperty('--color-surface-elevated', '#ffffff');
+    const lightSurface = glassEnabled ? 'rgba(255, 255, 255, 0.55)' : '#ffffff';
+    const lightSurfaceElevated = glassEnabled ? 'rgba(255, 255, 255, 0.65)' : '#ffffff';
+    root.style.setProperty('--color-surface', lightSurface);
+    root.style.setProperty('--color-surface-elevated', lightSurfaceElevated);
     root.style.setProperty('--color-surface-overlay', 'rgba(255, 255, 255, 0.85)');
     root.style.setProperty('--color-text-secondary', '#6B7280');
     root.style.setProperty('--color-text-tertiary', '#9CA3AF');
@@ -251,9 +257,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // 主题变化时同步 CSS 变量 + dark 类（使用 useLayoutEffect 避免闪烁）
   useLayoutEffect(() => {
-    applyCSSVariables(presetName, isDark, glassOpacity);
+    applyCSSVariables(presetName, isDark, glassEnabled, glassOpacity);
     applyDarkClass(isDark);
-  }, [presetName, isDark, glassOpacity]);
+  }, [presetName, isDark, glassEnabled, glassOpacity]);
 
   // 全局毛玻璃开关：给 body 加 glass-on class，global.css 据此覆盖 AntD 组件
   useLayoutEffect(() => {
@@ -306,11 +312,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => {
       applyDarkClass(e.matches);
-      applyCSSVariables(presetName, e.matches, glassOpacity);
+      applyCSSVariables(presetName, e.matches, glassEnabled, glassOpacity);
     };
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
-  }, [appearanceMode, presetName, glassOpacity]);
+  }, [appearanceMode, presetName, glassEnabled, glassOpacity]);
 
   const setPreset = useCallback((name: PresetName) => {
     setPresetName(name);

@@ -29,20 +29,13 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
-        <div style={{ padding: 48, textAlign: 'center', fontFamily: 'system-ui' }}>
-          <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>页面出错了</div>
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
-            {this.state.error?.message}
-          </div>
+        <div className="vc-fatal">
+          <div className="vc-fatal__title">页面出错了</div>
+          <div className="vc-fatal__msg">{this.state.error?.message}</div>
           <button
+            type="button"
+            className="vc-fatal__btn"
             onClick={() => this.setState({ hasError: false, error: null })}
-            style={{
-              padding: '6px 16px',
-              borderRadius: 6,
-              border: '1px solid #ccc',
-              background: '#fff',
-              cursor: 'pointer',
-            }}
           >
             重试
           </button>
