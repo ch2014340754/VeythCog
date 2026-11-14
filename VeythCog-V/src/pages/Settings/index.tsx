@@ -17,6 +17,7 @@ const SettingsPage: React.FC = () => (
     eyebrow="Settings"
     title="设置"
     items={MENU}
+    backTo="/home"
     foot="主题与壁纸在「外观」中统一管理，全站页面同步生效。"
   />
 );

@@ -9,6 +9,7 @@ import messageIcon from '@iconify-icons/lucide/message-square';
 import bookIcon from '@iconify-icons/lucide/book-open';
 import wrenchIcon from '@iconify-icons/lucide/wrench';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useAuthStore } from '@/stores/authStore';
 import { useModeStore } from '@/stores/modeStore';
 import { register as authRegister } from '@/api/auth';
@@ -66,6 +67,7 @@ const FEATURES = [
 ];
 
 const LoginPage: React.FC = () => {
+  useDocumentTitle('登录');
   const { colors, isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -73,13 +75,14 @@ const LoginPage: React.FC = () => {
 
   const [mode, setMode] = useState<Mode>('login');
 
-  // 登录表单
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-
-  // 注册表单
-  const [nickname, setNickname] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  // 登录 / 注册表单（分开实例，避免切换模式时字段与校验互相污染）
+  const [loginForm] = Form.useForm<{ username: string; password: string }>();
+  const [registerForm] = Form.useForm<{
+    username: string;
+    nickname?: string;
+    password: string;
+    confirm: string;
+  }>();
   const [registering, setRegistering] = useState(false);
 
   // 注册成功 → 3 秒倒计时 → 自动登录
@@ -192,13 +195,9 @@ const LoginPage: React.FC = () => {
     if (v) useModeStore.getState().setApiBase(v);
   };
 
-  const onLogin = async () => {
-    if (!username.trim()) {
-      message.warning('请输入用户名');
-      return;
-    }
+  const onLogin = async (values: { username: string; password: string }) => {
     try {
-      await login(username, password);
+      await login(values.username, values.password);
       // mock 模式（后端未部署）直接进工具集，避免 /chat 拉后端数据报错
       const mockToken = useAuthStore.getState().token === MOCK_TOKEN;
       const from = mockToken
@@ -210,25 +209,13 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const onRegister = async () => {
-    if (!username.trim()) {
-      message.warning('请输入用户名');
-      return;
-    }
-    if (password.length < 6) {
-      message.warning('密码至少 6 位');
-      return;
-    }
-    if (password !== confirmPassword) {
-      message.warning('两次输入的密码不一致');
-      return;
-    }
+  const onRegister = async (values: { username: string; nickname?: string; password: string }) => {
     setRegistering(true);
     try {
-      await authRegister({ username, password, nickname });
+      await authRegister({ username: values.username, password: values.password, nickname: values.nickname });
       setRegistering(false);
       // 注册成功 → 3 秒后自动登录
-      setPendingAutoLogin({ username: username.trim(), password });
+      setPendingAutoLogin({ username: values.username.trim(), password: values.password });
       setCountdown(3);
     } catch (e) {
       setRegistering(false);
@@ -430,89 +417,108 @@ const LoginPage: React.FC = () => {
           ) : (
             <div key={mode} className="vc-tab-pane">
               {mode === 'login' ? (
-                <Form layout="vertical" onFinish={onLogin}>
-                  <Form.Item label="用户名">
+                <Form form={loginForm} layout="vertical" onFinish={onLogin}>
+                  <Form.Item
+                    label="用户名"
+                    name="username"
+                    rules={[{ required: true, whitespace: true, message: '请输入用户名' }]}
+                  >
                     <Input
                       size="large"
                       placeholder="用户名"
                       autoComplete="username"
                       prefix={<Icon icon={userIcon} width={16} />}
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
                       autoFocus
                     />
                   </Form.Item>
-                  <Form.Item label="密码" style={{ marginBottom: 18 }}>
+                  <Form.Item
+                    label="密码"
+                    name="password"
+                    rules={[{ required: true, message: '请输入密码' }]}
+                    style={{ marginBottom: 18 }}
+                  >
                     <Input.Password
                       size="large"
                       placeholder="密码"
                       autoComplete="current-password"
                       prefix={<Icon icon={lockIcon} width={16} />}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onPressEnter={onLogin}
+                      onPressEnter={() => loginForm.submit()}
                     />
                   </Form.Item>
                   <Button
                     type="primary"
+                    htmlType="submit"
                     size="large"
                     block
                     className="vc-login__submit"
                     loading={loading}
-                    onClick={onLogin}
                   >
                     登 录
                   </Button>
                 </Form>
               ) : (
-                <Form layout="vertical" onFinish={onRegister}>
-                  <Form.Item label="用户名">
+                <Form form={registerForm} layout="vertical" onFinish={onRegister}>
+                  <Form.Item
+                    label="用户名"
+                    name="username"
+                    rules={[{ required: true, whitespace: true, message: '请输入用户名' }]}
+                  >
                     <Input
                       size="large"
                       placeholder="用户名"
                       autoComplete="username"
                       prefix={<Icon icon={userIcon} width={16} />}
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
                       autoFocus
                     />
                   </Form.Item>
-                  <Form.Item label="昵称（可选）">
-                    <Input
-                      size="large"
-                      placeholder="昵称，留空默认用用户名"
-                      value={nickname}
-                      onChange={(e) => setNickname(e.target.value)}
-                    />
+                  <Form.Item label="昵称（可选）" name="nickname">
+                    <Input size="large" placeholder="昵称，留空默认用用户名" />
                   </Form.Item>
-                  <Form.Item label="密码">
+                  <Form.Item
+                    label="密码"
+                    name="password"
+                    rules={[
+                      { required: true, message: '请输入密码' },
+                      { min: 6, message: '密码至少 6 位' },
+                    ]}
+                  >
                     <Input.Password
                       size="large"
                       placeholder="至少 6 位"
                       autoComplete="new-password"
                       prefix={<Icon icon={lockIcon} width={16} />}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
                     />
                   </Form.Item>
-                  <Form.Item label="确认密码" style={{ marginBottom: 18 }}>
+                  <Form.Item
+                    label="确认密码"
+                    name="confirm"
+                    dependencies={['password']}
+                    style={{ marginBottom: 18 }}
+                    rules={[
+                      { required: true, message: '请再次输入密码' },
+                      ({ getFieldValue }) => ({
+                        validator(_rule, value) {
+                          if (!value || getFieldValue('password') === value) return Promise.resolve();
+                          return Promise.reject(new Error('两次输入的密码不一致'));
+                        },
+                      }),
+                    ]}
+                  >
                     <Input.Password
                       size="large"
                       placeholder="再次输入密码"
                       autoComplete="new-password"
                       prefix={<Icon icon={lockIcon} width={16} />}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      onPressEnter={onRegister}
+                      onPressEnter={() => registerForm.submit()}
                     />
                   </Form.Item>
                   <Button
                     type="primary"
+                    htmlType="submit"
                     size="large"
                     block
                     className="vc-login__submit"
                     loading={registering}
-                    onClick={onRegister}
                   >
                     注册并登录
                   </Button>

@@ -24,6 +24,7 @@ const AdminPage: React.FC = () => (
     title="系统管理"
     wide
     items={MENU}
+    backTo="/home"
     foot=""
   />
 );

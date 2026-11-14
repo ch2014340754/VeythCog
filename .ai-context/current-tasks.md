@@ -154,3 +154,30 @@
 | MOD-06 | MainAgent | 文档同步 | 已完成 | `PROJECT_MEMORY.md`、`.ai-context/change-log.md`、本表 | MOD-05 |
 
 > 验证记录（2026-11-13）：`mvn -o -q -pl vc-llm,vc-app -am -DskipTests compile` EXIT=0；`npm run build` EXIT=0。百炼同步 `total=373 / updated=84 / unchanged=289`，`qwen3.8-27b → reasoning + text,reasoning,vision`；二次同步 `updated=0 / unchanged=373`。用户模型接口与目录接口均下发 `modalities`；`qwen3.8-27b` 对话 `code=0` 约 1.54s；临时模型新增/编辑多模态验证后已删除，测试会话已删除，8125 已停止。
+
+## 12. 导航体验 P3（2026-11-14）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| NAV3-01 | MainAgent | 标题体系：`useDocumentTitle` + `pageTitle` 映射，接入 MainLayout/ToolsLayout/Home/Login | 已完成 | `VeythCog-V/src/{hooks/useDocumentTitle.ts,utils/pageTitle.ts}`、`layouts/MainLayout.tsx`、`pages/tools/ToolsLayout.tsx` | 用户确认「先改导航」 |
+| NAV3-02 | MainAgent | 全局命令面板：Ctrl/Cmd+K、分组/过滤/键盘操作/a11y、`/` 聚焦首页搜索、工具懒加载、admin 可见性 | 已完成 | `VeythCog-V/src/components/CommandPalette.tsx`、`App.tsx`、`pages/Home/SearchBar.tsx` | NAV3-01 |
+| NAV3-03 | MainAgent | 工具集：返回 `/home`、按工具名设标题、多标签 `useToolTabsStore` 持久化 | 已完成 | `VeythCog-V/src/pages/tools/ToolsLayout.tsx`、`stores/toolTabsStore`（复用） | NAV3-01 |
+| NAV3-04 | MainAgent | 设置/系统管理二级导航「返回首页」；rail 搜索按钮；`RequireAuth` 保留 query/hash、`RequireAdmin` 回落 `/home` | 已完成 | `components/SectionNav.tsx`、`layouts/MainLayout.tsx`、`App.tsx`、`pages/{Settings,Admin}/index.tsx` | NAV3-02 |
+| NAV3-05 | MainAgent | 样式与构建：`.vc-palette*`/`.vc-kbd`/`.vc-subnav__back`（仅令牌）；`tsc --noEmit`、`npm run build` | 已完成（EXIT=0；build 约 7s） | `VeythCog-V/src/styles/page.css`、`VeythCog-V/dist` | NAV3-02~04 |
+| NAV3-06 | MainAgent | 运行时验收（4173 preview）：标题、`/` 聚焦、面板过滤/回车跳转、标签持久化、返回首页、键盘导航 | 已完成（书签空、Modal 目视不收为环境限制） | `openspec/changes/p3-nav-experience/tasks.md`、本表 | NAV3-05 |
+| NAV3-07 | MainAgent | 文档同步 | 已完成 | `openspec/changes/p3-nav-experience/*`、`.ai-context/change-log.md`、本表 | NAV3-06 |
+
+> 验证记录（2026-11-14）：`npx tsc --noEmit` EXIT=0；`npm run build` EXIT=0。preview 构建 API base 指向 `https://api.veythcog.top`，浏览器 `ERR_FAILED`，故书签分组为空属预期；自动化浏览器不触发 `transitionend`，antd Modal 停在 `ant-zoom-leave` 无法目视收起（既有弹窗同样复现），判定环境限制。推迟项：对话页输入法回车/滚动跟随、Admin 四页 loading/error、≤520px、表格横滚、表单校验统一、会话搜索。
+
+## 13. 表单体验 P3（2026-11-14）
+
+| 任务ID | 负责Agent | 任务内容 | 状态 | 输出文件 | 依赖/前置 |
+|---|---|---|---|---|---|
+| FRM-01 | MainAgent | `client.ts`：超时/断网错误转中文 `ApiError`（408 / 0） | 已完成 | `VeythCog-V/src/api/client.ts` | 用户确认「继续改表单」 |
+| FRM-02 | MainAgent | `BookmarkModal`：网址/名称迁 `Form` + rules，图标校验内联 `iconError` | 已完成 | `VeythCog-V/src/pages/Home/BookmarkModal.tsx` | FRM-01 |
+| FRM-03 | MainAgent | `Login`：登录/注册迁 `Form` + name + rules，去掉 warning toast | 已完成 | `VeythCog-V/src/pages/Login/index.tsx` | FRM-01 |
+| FRM-04 | MainAgent | `page.css`：`.vc-field-error` 与表单错误字号 | 已完成 | `VeythCog-V/src/styles/page.css` | FRM-02 |
+| FRM-05 | MainAgent | 构建/类型检查 + 4173 preview 运行时内联错误抽查 | 已完成（`tsc` 0、build 7.47s） | `openspec/changes/p3-forms/tasks.md`、本表 | FRM-02~04 |
+| FRM-06 | MainAgent | 文档同步 | 已完成 | `openspec/changes/p3-forms/*`、`.ai-context/change-log.md`、本表 | FRM-05 |
+
+> 验证记录（2026-11-14）：登录空提交「请输入用户名/请输入密码」、注册 `123`「密码至少 6 位」、确认不一致「两次输入的密码不一致」，toast 计数均为 0；书签空提交「请填写网址/请填写名称」、`abc` 触发前缀错误、图标文字清空「请填写图标文字」（`rgb(239,68,68)` / 12px）；「获取图标」在 API 不可达时提示「网络连接失败，请检查网络或服务地址」。preview 构建 API base 为 `https://api.veythcog.top`，`/api/*` 不可达属预期；30s 超时未实机触发。推迟项：Admin 四页 loading/error、≤520px、表格横滚、会话搜索、统一错误摘要。

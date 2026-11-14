@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Input, Button, message, Spin } from 'antd';
+import { Modal, Input, Button, Form, message, Spin } from 'antd';
 import {
   createBookmark,
   fetchSiteIcon,
@@ -19,6 +19,11 @@ interface Props {
   onClose: () => void;
   /** 编辑模式：传入书签对象；新建模式：传 null */
   editing: NavBookmark | null;
+}
+
+interface BookmarkFormValues {
+  title: string;
+  url: string;
 }
 
 /** 预设底色：参照 iTab 色板顺序 */
@@ -50,16 +55,21 @@ function errorMessage(err: unknown, fallback: string): string {
  * - upload 自定义上传（选中即上传 S3，保存时只回传 iconKey）
  * - auto   网站图标（「获取图标」抓取站点图标并上传 S3，也支持沿用历史图标）
  *
+ * 校验：网址 / 名称由 AntD Form rules 负责，错误内联在字段下方；
+ * 图标模式不是标准输入，用 iconError 在图标区内联提示。
+ *
  * 视觉：vc-modal / vc-form-card / vc-icon-tile / vc-color-dot 统一体系，颜色全部取主题变量。
  */
 const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
   const activeCategoryId = useNavStore((s) => s.activeCategoryId);
 
-  const [title, setTitle] = React.useState('');
-  const [url, setUrl] = React.useState('');
+  const [form] = Form.useForm<BookmarkFormValues>();
+  const title = Form.useWatch('title', form) ?? '';
+
   const [mode, setMode] = React.useState<NavIconType>('auto');
   const [text, setText] = React.useState('A');
   const [color, setColor] = React.useState(DEFAULT_COLOR);
+  const [iconError, setIconError] = React.useState('');
 
   /** 网站图标（auto）与上传图标（upload）各自的 key / 预览地址，切换模式不丢 */
   const [autoKey, setAutoKey] = React.useState<string | null>(null);
@@ -81,14 +91,15 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
 
     const type = editing?.iconType ?? 'auto';
     setMode(type);
-    setTitle(editing?.title ?? '');
-    setUrl(editing?.url ?? '');
+    form.resetFields();
+    form.setFieldsValue({ title: editing?.title ?? '', url: editing?.url ?? '' });
     setText(editing?.iconText || editing?.title?.slice(0, 1) || 'A');
     setColor(editing?.iconColor || DEFAULT_COLOR);
     setAutoKey(type === 'auto' ? editing?.iconKey ?? null : null);
     setUploadKey(type === 'upload' ? editing?.iconKey ?? null : null);
     setAutoUrl(null);
     setUploadUrl(null);
+    setIconError('');
 
     // 编辑已有图片图标：优先用本地缓存地址，未命中再问后端要 S3 直链
     if (editing && editing.hasIcon && type !== 'text') {
@@ -112,11 +123,11 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
     return () => {
       cancelled = true;
     };
-  }, [open, editing]);
+  }, [open, editing, form]);
 
   const resetForContinue = () => {
-    setTitle('');
-    setUrl('');
+    form.resetFields();
+    form.setFieldsValue({ title: '', url: '' });
     setMode('auto');
     setText('A');
     setColor(DEFAULT_COLOR);
@@ -124,27 +135,28 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
     setAutoUrl(null);
     setUploadKey(null);
     setUploadUrl(null);
+    setIconError('');
   };
 
-  /** 获取网站图标：抓取 + 上传 S3，成功即选中「网站图标」位 */
+  /** 获取网站图标：先校验网址字段，再抓取 + 上传 S3，成功即选中「网站图标」位 */
   const handleFetchIcon = async () => {
-    const target = url.trim();
-    if (!target) {
-      message.warning('请先填写网址');
-      return;
+    let values: BookmarkFormValues;
+    try {
+      values = await form.validateFields(['url']);
+    } catch {
+      return; // 错误已由 Form.Item 内联展示
     }
-    if (!HTTP_URL.test(target)) {
-      message.warning('网址需以 http:// 或 https:// 开头');
-      return;
-    }
+    const target = values.url.trim();
+
     setFetching(true);
     try {
       const result = await fetchSiteIcon(target);
       setAutoKey(result.iconKey);
       setAutoUrl(result.iconUrl);
       setMode('auto');
-      if (!title.trim() && result.title) {
-        setTitle(result.title.slice(0, 64));
+      setIconError('');
+      if (!form.getFieldValue('title')?.trim() && result.title) {
+        form.setFieldsValue({ title: result.title.slice(0, 64) });
       }
       message.success('已获取网站图标');
     } catch (err) {
@@ -163,22 +175,23 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
 
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      message.error('仅支持 png / jpg / jpeg / webp / gif / ico');
+      setIconError('仅支持 png / jpg / jpeg / webp / gif / ico');
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
-      message.error('图标不能超过 512KB');
+      setIconError('图标不能超过 512KB');
       return;
     }
 
     setUploading(true);
+    setIconError('');
     try {
       const result = await uploadIcon(file);
       setUploadKey(result.iconKey);
       setUploadUrl(result.iconUrl);
       setMode('upload');
-      if (!title.trim()) {
-        setTitle(file.name.replace(/\.\w+$/, '').slice(0, 64));
+      if (!form.getFieldValue('title')?.trim()) {
+        form.setFieldsValue({ title: file.name.replace(/\.\w+$/, '').slice(0, 64) });
       }
       message.success('图标已上传');
     } catch (err) {
@@ -190,25 +203,25 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
   };
 
   const save = async (continueAdding: boolean) => {
-    const finalTitle = title.trim();
-    const finalUrl = url.trim();
+    let values: BookmarkFormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return; // 必填/格式错误已内联展示
+    }
 
-    if (!finalTitle) {
-      message.warning('请填写名称');
-      return;
-    }
-    if (!finalUrl || !HTTP_URL.test(finalUrl)) {
-      message.warning('请填写以 http:// 或 https:// 开头的网址');
-      return;
-    }
+    const finalTitle = values.title.trim();
+    const finalUrl = values.url.trim();
+
     if (mode === 'text' && !text.trim()) {
-      message.warning('请填写图标文字');
+      setIconError('请填写图标文字');
       return;
     }
     if (mode === 'upload' && !uploadKey) {
-      message.warning('请先上传图标图片');
+      setIconError('请先上传图标图片');
       return;
     }
+    setIconError('');
 
     const payload: BookmarkSaveInput = {
       title: finalTitle,
@@ -270,32 +283,48 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
       <div className="vc-stack">
         {/* 卡片 1：网址 / 名称 */}
         <div className="vc-form-card">
-          <div className="vc-field-label">网址</div>
-          <Input
-            placeholder="https://"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            size="large"
-            variant="filled"
-            prefix={<span className="vc-note">🔗</span>}
-            suffix={
-              <Button type="text" size="small" loading={fetching} onClick={handleFetchIcon}>
-                获取图标
-              </Button>
-            }
-          />
-          <div className="vc-field-label" style={{ marginTop: 16 }}>
-            名称
-          </div>
-          <Input
-            placeholder="网站名称"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={64}
-            size="large"
-            variant="filled"
-            prefix={<span className="vc-note">T</span>}
-          />
+          <Form form={form} layout="vertical" requiredMark={false} className="vc-bookmark-form">
+            <div className="vc-field-label">网址</div>
+            <Form.Item
+              name="url"
+              style={{ marginBottom: 0 }}
+              rules={[
+                { required: true, whitespace: true, message: '请填写网址' },
+                { pattern: HTTP_URL, message: '网址需以 http:// 或 https:// 开头' },
+              ]}
+            >
+              <Input
+                placeholder="https://"
+                size="large"
+                variant="filled"
+                prefix={<span className="vc-note">🔗</span>}
+                suffix={
+                  <Button type="text" size="small" loading={fetching} onClick={handleFetchIcon}>
+                    获取图标
+                  </Button>
+                }
+              />
+            </Form.Item>
+            <div className="vc-field-label" style={{ marginTop: 16 }}>
+              名称
+            </div>
+            <Form.Item
+              name="title"
+              style={{ marginBottom: 0 }}
+              rules={[
+                { required: true, whitespace: true, message: '请填写名称' },
+                { max: 64, message: '名称最多 64 个字符' },
+              ]}
+            >
+              <Input
+                placeholder="网站名称"
+                maxLength={64}
+                size="large"
+                variant="filled"
+                prefix={<span className="vc-note">T</span>}
+              />
+            </Form.Item>
+          </Form>
         </div>
 
         {/* 卡片 2：图标位 + 文字 / 颜色 */}
@@ -305,8 +334,11 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
             <div>
               <button
                 type="button"
-                className={"vc-icon-tile" + (mode === 'text' ? " is-active" : "")}
-                onClick={() => setMode('text')}
+                className={'vc-icon-tile' + (mode === 'text' ? ' is-active' : '')}
+                onClick={() => {
+                  setMode('text');
+                  setIconError('');
+                }}
                 aria-pressed={mode === 'text'}
               >
                 <IconPreview icon={{ type: 'text', text: text || 'A', color }} title={title} size={50} plain />
@@ -319,7 +351,7 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
             <div>
               <button
                 type="button"
-                className={"vc-icon-tile" + (mode === 'upload' ? " is-active" : "")}
+                className={'vc-icon-tile' + (mode === 'upload' ? ' is-active' : '')}
                 onClick={() => fileInputRef.current?.click()}
                 aria-pressed={mode === 'upload'}
               >
@@ -340,8 +372,11 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
               <div>
                 <button
                   type="button"
-                  className={"vc-icon-tile" + (mode === 'auto' ? " is-active" : "")}
-                  onClick={() => setMode('auto')}
+                  className={'vc-icon-tile' + (mode === 'auto' ? ' is-active' : '')}
+                  onClick={() => {
+                    setMode('auto');
+                    setIconError('');
+                  }}
                   aria-pressed={mode === 'auto'}
                 >
                   <IconPreview icon={{ type: 'auto', url: autoUrl }} title={title} size={50} plain />
@@ -355,6 +390,12 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
           {!hasAutoTile && mode === 'auto' && (
             <div className="vc-hint" style={{ marginTop: 8 }}>
               未选择图标时，保存后会自动抓取网站图标
+            </div>
+          )}
+
+          {iconError && (
+            <div className="vc-field-error" role="alert">
+              {iconError}
             </div>
           )}
 
@@ -374,6 +415,7 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
             value={text}
             onChange={(e) => {
               setText(e.target.value.slice(0, 3));
+              setIconError('');
               if (mode !== 'text') setMode('text');
             }}
             maxLength={3}
@@ -395,11 +437,12 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
                   key={preset}
                   type="button"
                   aria-label={preset}
-                  className={"vc-color-dot" + (selected ? " is-active" : "")}
+                  className={'vc-color-dot' + (selected ? ' is-active' : '')}
                   style={{ background: preset }}
                   onClick={() => {
                     setColor(preset);
                     setMode('text');
+                    setIconError('');
                   }}
                 />
               );
@@ -409,7 +452,7 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
             <button
               type="button"
               aria-label="自定义颜色"
-              className={"vc-color-dot vc-color-dot--custom" + (customColor ? " is-active" : "")}
+              className={'vc-color-dot vc-color-dot--custom' + (customColor ? ' is-active' : '')}
               onClick={() => colorInputRef.current?.click()}
             />
             <input
@@ -419,6 +462,7 @@ const BookmarkModal: React.FC<Props> = ({ open, onClose, editing }) => {
               onChange={(e) => {
                 setColor(e.target.value);
                 setMode('text');
+                setIconError('');
               }}
               style={{ display: 'none' }}
             />

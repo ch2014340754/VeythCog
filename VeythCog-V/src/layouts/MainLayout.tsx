@@ -1,9 +1,12 @@
 import UserMenu from '@/components/UserMenu';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useAuthStore } from '@/stores/authStore';
+import { resolvePageTitle } from '@/utils/pageTitle';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
+import searchIcon from '@iconify-icons/lucide/search';
 import shieldIcon from '@iconify-icons/lucide/shield-check';
 import wrenchIcon from '@iconify-icons/lucide/wrench';
 import { Icon } from '@iconify/react';
@@ -28,7 +31,16 @@ const MainLayout: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
 
+  // /tools/:id 的标题由 ToolsLayout 用工具名设置，这里让位避免父级覆盖
+  const isToolDetail = location.pathname.startsWith('/tools/');
+  useDocumentTitle(isToolDetail ? null : resolvePageTitle(location.pathname));
+
   const isActive = (path: string) => location.pathname.startsWith(path);
+
+  /** 打开全局命令面板（Ctrl/Cmd+K 的按钮入口，便于鼠标用户发现） */
+  const openPalette = () => {
+    window.dispatchEvent(new Event('veythcog:open-palette'));
+  };
 
   return (
     <div className="vc-shell">
@@ -42,6 +54,17 @@ const MainLayout: React.FC = () => {
           title="回到导航首页"
         >
           <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} />
+        </button>
+
+        {/* 全局搜索：Ctrl/Cmd+K 的命令面板入口 */}
+        <button
+          type="button"
+          className="vc-rail__btn"
+          onClick={openPalette}
+          title="全局搜索（Ctrl+K）"
+          aria-label="全局搜索"
+        >
+          <Icon icon={searchIcon} width={22} />
         </button>
 
         {NAV_ITEMS.map((item) => {

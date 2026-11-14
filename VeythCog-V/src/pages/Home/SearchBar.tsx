@@ -234,6 +234,12 @@ const SearchBar: React.FC = () => {
       });
   }, []);
 
+  React.useEffect(() => {
+    const focusSearch = () => inputRef.current?.focus();
+    window.addEventListener('veythcog:focus-search', focusSearch);
+    return () => window.removeEventListener('veythcog:focus-search', focusSearch);
+  }, []);
+
   const isWallpaperMode = !!wallpaper?.url;
   // 无壁纸：完全用主题玻璃（.vc-search__bar）；有壁纸：白色玻璃，厚度与全局「朦胧度」联动
   const barStyle: React.CSSProperties = isWallpaperMode

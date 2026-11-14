@@ -6,6 +6,7 @@ import { generateAntDTheme } from '@/styles/theme';
 import { getPreset } from '@/styles/presets';
 import MainLayout from '@/layouts/MainLayout';
 import HomePage from '@/pages/Home';
+import CommandPalette from '@/components/CommandPalette';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import WallpaperBackdrop from '@/components/WallpaperBackdrop';
 import FloatingMusicPlayer from '@/components/FloatingMusicPlayer';
@@ -38,7 +39,9 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const token = useAuthStore((s) => s.token);
   const location = useLocation();
   if (!token) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    // 保留 query / hash：未登录打开深链，登录后回到原上下文
+    const from = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to="/login" replace state={{ from }} />;
   }
   return <>{children}</>;
 };
@@ -47,7 +50,7 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const RequireAdmin: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const user = useAuthStore((s) => s.user);
   if (user?.role !== 'admin') {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to="/home" replace />;
   }
   return <>{children}</>;
 };
@@ -102,6 +105,7 @@ const AppContent: React.FC = () => {
       <BrowserRouter>
         <WallpaperRouteSync />
         <GlobalMusic />
+        <CommandPalette />
         <ErrorBoundary>
           <React.Suspense
             fallback={

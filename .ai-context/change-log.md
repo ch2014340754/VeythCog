@@ -30,6 +30,8 @@
 | 2026-11-13 | ✏️ | 前端系统管理「模型目录」由 mock 改为真实接口（表格/筛选/新增/编辑/删除/上下架/同步，静默刷新）；列表撑满父容器、取消分页改内部滚动、新增关键字搜索 | `VeythCog-V/src/api/adminModels.ts`、`src/pages/Admin/Models.tsx` | 前端 Agent |
 | 2026-11-12 | ✏️ | 导航图标接口端到端验证：18 条历史书签同步成功 13 条；5 条因站点/网络原因保留 1 天失败冷却 | `openspec/changes/p2-nav-icons/tasks.md`、`design.md §7` | 前后端 Agent |
 | 2026-11-14 | 📄 | 新增前端视觉规范（颜色三层 / 令牌 / 玻璃配方 / 排版 / 动效 / 暗色清单 / 新页面 checklist / 反模式）；登录页定为视觉基准并完成改版（玻璃卡 + 漂移光斑 + 指针视差 + 方位渐变描边） | `VeythCog-V/docs/frontend-style-guide.md`（新）、`VeythCog-V/src/pages/Login/{index.tsx,login.css}`、`PROJECT_MEMORY.md §13`、`.ai-context/global-rule.md §9` | 全体 Agent（尤其前端） |
+| 2026-11-14 | 🆕 | 前端导航体验增强：全站标题、Ctrl+K 命令面板、登录回跳保 query、工具标签持久化、返回入口 | `openspec/changes/p3-nav-experience/*`、`VeythCog-V/src/{hooks/useDocumentTitle.ts,utils/pageTitle.ts,components/{CommandPalette.tsx,SectionNav.tsx},layouts/MainLayout.tsx,pages/tools/ToolsLayout.tsx,App.tsx,pages/Home/{index.tsx,SearchBar.tsx},pages/Login/index.tsx,styles/page.css}` | 全体 Agent（尤其前端） |
+| 2026-11-14 | 🆕 | 表单体验增强：书签弹窗/登录注册迁移 AntD Form 内联校验、请求超时与断网错误中文化 | `openspec/changes/p3-forms/*`、`VeythCog-V/src/{api/client.ts,pages/Home/BookmarkModal.tsx,pages/Login/index.tsx,styles/page.css}` | 全体 Agent（尤其前端） |
 
 ## 关键 spec 变更明细（v0.1 → v0.2，需全体 Agent 知悉）
 
@@ -138,3 +140,24 @@
 - **设计与无障碍决策**：放弃 `primary→accent` 渐变（amethyst 的 accent 是 `#FBBF24`，紫→黄=夕阳橙），改同色相白/黑叠加；暗色 preset primary 被提亮（`#A78BFA`）白字仅 2.4:1，改"亮填充 + `#14102B` 深字"（≈8:1）；覆盖 Chrome autofill 的 `#E8F0FE`；≥1900px 放大档与 `max-height:780px` 压缩档。
 - **验证**：`npx tsc --noEmit` EXIT=0；动效实测 a 94px/s、b 89、c 87、d 57、orbit 2.09°/s；描边方位右下 146.33°（期望 146.3°）、左下 -147.8°（期望 -146.3°）；光源与卡片矩形重叠面积 0。
 - **用户约束（长期）**：视觉验收不要用截图，用 computed style / getBoundingClientRect 数值；回复中不输出图片。
+
+## 2026-11-14 P3 导航体验增强（前端）
+
+- **新增**：`VeythCog-V/src/hooks/useDocumentTitle.ts`（`${title}｜渡思｜VeythCog`）、`VeythCog-V/src/utils/pageTitle.ts`（页面标题映射，`/tools/*` 返回 null 由工具页按工具名自设）。
+- **新增命令面板** `VeythCog-V/src/components/CommandPalette.tsx`：Ctrl/Cmd+K 开关；分组「页面/工具/书签/操作」（书签分组依赖接口，失败静默为空）；空查询按声明顺序、有查询按前缀优先过滤；↑↓/Home/End/Enter/Esc 与 `aria-activedescendant`；首页空查询按 `/` 派发 `veythcog:focus-search` 聚焦搜索框；工具目录首次打开动态 `import('@/pages/tools/registry')`；系统管理项仅 `role=admin` 可见；操作含切换亮/暗与退出登录。
+- **导航**：`MainLayout` rail logo 下增加全局搜索按钮并接入事件；`ToolsLayout` 返回链接 `navigate('/home')`（文案「返回首页」）、标题取当前工具名、标签改用 `useToolTabsStore`（`mywork:tool-tabs` 持久化，关闭当前标签自动切相邻）；`SectionNav` 增加 `backTo/backLabel`，`Settings/index.tsx`、`Admin/index.tsx` 二级导航顶部出现「返回首页」。
+- **路由**：`App.tsx` 的 `RequireAuth` 保存 `pathname + search + hash`；`RequireAdmin` 回落 `/home`；`CommandPalette` 挂在 `BrowserRouter` 内。`Home/index.tsx`、`Login/index.tsx` 设标题；`Home/SearchBar.tsx` 监听聚焦事件。
+- **样式**：`VeythCog-V/src/styles/page.css` 新增 `.vc-palette*`、`.vc-kbd`、`.vc-subnav__back`，颜色/圆角/间距/动效全部取令牌。
+- **验证**：`cd VeythCog-V && npx tsc --noEmit` EXIT=0；`npm run build` EXIT=0（约 7s）。4173 preview（dist）实测通过：`/home` 标题、`/` 聚焦搜索、Ctrl+K 打开且输入框聚焦、分组正确、输入「哈希/正则」过滤并回车跳转工具、工具标签刷新持久化与关闭切换、`/settings/account` 返回首页、`/chat` rail 搜索按钮、方向键导航。Esc 与 Ctrl+K 关闭进入 `ant-zoom-leave` 状态。
+- **环境说明（重要）**：① preview 构建 API base 为 `https://api.veythcog.top`（`.env.local`），浏览器请求 `ERR_FAILED`，故面板书签分组为空属预期；② 自动化浏览器（Tabbit Chromium）不触发 `transitionend`（实测临时元素 400ms 未收到事件），antd Modal 的 rc-motion 停在 `ant-zoom-leave-active` 无法目视收起；既有「新增用户」弹窗同样复现，判定为环境限制而非代码缺陷，真实浏览器正常收起。
+- **本次推迟**：对话页输入法回车误发/流式滚动跟随、Admin 四页 loading/error、≤520px 移动端、表格横向滚动、表单校验统一（BookmarkModal 迁 Form）、会话搜索。
+
+## 2026-11-14 P3 表单体验增强（前端）
+
+- **BookmarkModal**（`VeythCog-V/src/pages/Home/BookmarkModal.tsx`）：网址/名称改为 `Form` + `rules`（必填、`whitespace`、`^https?://` 前缀、max 64），错误由 `Form.Item` 内联；图标模式的文字/上传缺失改为 `iconError` 内联（`.vc-field-error`），不再 `message.warning`；保存前 `await form.validateFields()`，失败不发请求；「保存并继续」用 `form.resetFields()` 并清空图标；「获取图标」先校验网址字段。
+- **Login**（`VeythCog-V/src/pages/Login/index.tsx`）：`loginForm` / `registerForm` 两个实例 + `name` 字段；登录用户名/密码必填；注册密码 ≥6、确认密码 validator 比对；提交按钮 `htmlType="submit"`；服务端错误仍 `message.error`（文案来自客户端映射）。
+- **client.ts**（`VeythCog-V/src/api/client.ts`）：新增 `toRequestError`，`AbortError` → `ApiError(408,'请求超时，请检查网络后重试')`，`TypeError` → `ApiError(0,'网络连接失败，请检查网络或服务地址')`；`request()` / `uploadFile()` 内层 try/catch + 外层 finally `clearTimeout`。
+- **样式**：`page.css` 新增 `.vc-field-error`（`--color-error`、12px）与 `.vc-bookmark-form .ant-form-item-explain-error` 字号对齐。
+- **验证**：`cd VeythCog-V && npx tsc --noEmit` EXIT=0；`npm run build` EXIT=0（7.47s，入口 `index-BYWnmg7-.js` 892.60 kB / gzip 288.48）。4173 preview + Tabbit 实测：登录空提交内联「请输入用户名/请输入密码」、注册密码 `123` 内联「密码至少 6 位」、确认不一致内联「两次输入的密码不一致」，三处 toast 计数 0；书签空提交内联「请填写网址/请填写名称」、网址 `abc` 内联「网址需以 http:// 或 https:// 开头」、清空图标文字后内联「请填写图标文字」（`rgb(239,68,68)` / 12px）；点「获取图标」在 API 不可达时提示「网络连接失败，请检查网络或服务地址」，证明 client.ts 映射生效。
+- **环境说明**：preview 构建 API base = `https://api.veythcog.top`，`/api/*` 全部 `ERR_FAILED`，故书签分类/列表为空、保存请求不可达属预期；30s 超时（AbortError）未实机触发，仅做代码路径与类型校验。
+- **本次推迟**：Admin 四页 loading/error、≤520px 移动端、表格横滚、会话搜索、统一错误摘要。

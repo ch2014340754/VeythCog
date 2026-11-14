@@ -2,6 +2,7 @@ import type { NavBookmark } from '@/api/nav';
 import { syncIcons } from '@/api/nav';
 import WallpaperManagerModal from '@/components/WallpaperManagerModal';
 import { useAuthStore } from '@/stores/authStore';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useNavStore } from '@/stores/navStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { clearCachedIcon } from '@/utils/iconCache';
@@ -53,6 +54,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ label, icon, danger = false, onSele
  * 右键菜单全局统一管理，跟随鼠标位置
  */
 const HomePage: React.FC = () => {
+  useDocumentTitle('导航首页');
   const navigate = useNavigate();
   const loadHome = useNavStore((s) => s.loadHome);
   const categories = useNavStore((s) => s.categories);

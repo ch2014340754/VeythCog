@@ -1,48 +1,47 @@
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import arrowLeftIcon from '@iconify-icons/lucide/arrow-left';
 import closeIcon from '@iconify-icons/lucide/x';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useToolTabsStore } from '@/stores/toolTabsStore';
 import { groupToolsByCategory, tools } from './registry';
 import ToolsHome from './index';
 import { Spin } from 'antd';
-
-interface OpenTab {
-  id: string;
-  name: string;
-}
 
 const ToolsLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const groups = groupToolsByCategory();
 
-  // 当前打开的工具 tab
-  const [openTabs, setOpenTabs] = useState<OpenTab[]>([]);
+  // 标签栏提到全局 store 持久化：刷新后多标签工作区不丢
+  const tabs = useToolTabsStore((s) => s.tabs);
+  const openTab = useToolTabsStore((s) => s.openTab);
+  const closeTab = useToolTabsStore((s) => s.closeTab);
 
   // 从路径解析当前 toolId
   const currentToolId = location.pathname.startsWith('/tools/')
     ? location.pathname.split('/')[2]
     : null;
+  const currentTool = currentToolId ? tools.find((t) => t.id === currentToolId) : undefined;
 
-  // 切到某个工具时自动加 tab
+  useDocumentTitle(currentTool?.name ?? '工具集');
+
+  // 切到某个工具时确保标签存在（顺序沿用打开顺序，不重排）
   useEffect(() => {
-    if (!currentToolId) return;
-    const tool = tools.find((t) => t.id === currentToolId);
-    if (tool && !openTabs.find((t) => t.id === currentToolId)) {
-      setOpenTabs((prev) => [...prev, { id: tool.id, name: tool.name }]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentToolId]);
+    if (!currentTool) return;
+    openTab({ id: currentTool.id, name: currentTool.name, openedAt: Date.now() });
+  }, [currentTool, openTab]);
 
-  const closeTab = (id: string, e: React.MouseEvent) => {
+  // registry 里已删除的 id 不渲染（store 由旧版本持久化时可能出现）
+  const openTabs = tabs.filter((tab) => tools.some((t) => t.id === tab.id));
+
+  const handleCloseTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const idx = openTabs.findIndex((t) => t.id === id);
-    const newTabs = openTabs.filter((t) => t.id !== id);
-    setOpenTabs(newTabs);
+    const next = openTabs[idx + 1] ?? openTabs[idx - 1];
+    closeTab(id);
     if (id === currentToolId) {
-      // 关的是当前 tab，切到右边或左边
-      const next = newTabs[idx] || newTabs[idx - 1];
       navigate(next ? `/tools/${next.id}` : '/tools');
     }
   };
@@ -52,9 +51,9 @@ const ToolsLayout: React.FC = () => {
       {/* 二级侧栏 */}
       <aside className="vc-subnav vc-tools-nav">
         <div className="vc-tools-head">
-          <button type="button" className="vc-backlink" onClick={() => navigate('/chat')}>
+          <button type="button" className="vc-backlink" onClick={() => navigate('/home')}>
             <Icon icon={arrowLeftIcon} width={14} />
-            返回工作区
+            返回首页
           </button>
           <div className="vc-eyebrow" style={{ margin: 0 }}>Workspace</div>
           <h2 className="vc-subnav__title" style={{ marginTop: 2 }}>开发工具集</h2>
@@ -103,7 +102,7 @@ const ToolsLayout: React.FC = () => {
                     type="button"
                     className="vc-tab__close"
                     title="关闭"
-                    onClick={(e) => closeTab(tab.id, e)}
+                    onClick={(e) => handleCloseTab(tab.id, e)}
                   >
                     <Icon icon={closeIcon} width={12} />
                   </button>

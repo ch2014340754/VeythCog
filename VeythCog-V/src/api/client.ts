@@ -20,6 +20,21 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 把 fetch 层异常转成中文 ApiError，避免 AbortError / TypeError 原文冒到界面。
+ * - AbortError：30s 超时或被主动中断
+ * - TypeError：断网、DNS 失败、CORS 被拦
+ */
+export function toRequestError(err: unknown): never {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    throw new ApiError(408, '请求超时，请检查网络后重试');
+  }
+  if (err instanceof TypeError) {
+    throw new ApiError(0, '网络连接失败，请检查网络或服务地址');
+  }
+  throw err;
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   query?: Record<string, string | number | undefined>;
@@ -110,17 +125,21 @@ export async function request<T = unknown>(path: string, opts: RequestOptions = 
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const resp = await fetch(buildUrl(path, query), {
-      method,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-        ...headers,
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    return await parseResponse<T>(resp);
+    try {
+      const resp = await fetch(buildUrl(path, query), {
+        method,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+          ...headers,
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      return await parseResponse<T>(resp);
+    } catch (err) {
+      toRequestError(err);
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -139,16 +158,20 @@ export async function uploadFile<T = unknown>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const form = new FormData();
-    form.append(field, file, file.name);
-    const token = getToken();
-    const resp = await fetch(buildUrl(path), {
-      method: 'POST',
-      signal: controller.signal,
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    });
-    return await parseResponse<T>(resp);
+    try {
+      const form = new FormData();
+      form.append(field, file, file.name);
+      const token = getToken();
+      const resp = await fetch(buildUrl(path), {
+        method: 'POST',
+        signal: controller.signal,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      return await parseResponse<T>(resp);
+    } catch (err) {
+      toRequestError(err);
+    }
   } finally {
     clearTimeout(timer);
   }
