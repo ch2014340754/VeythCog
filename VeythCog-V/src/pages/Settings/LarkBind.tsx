@@ -30,7 +30,7 @@ const LarkBindPage: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title="飞书账号绑定"  />
+      <PageHeader title="飞书账号绑定" flow={false} />
 
       <section className="vc-panel">
         {lark.bound ? (

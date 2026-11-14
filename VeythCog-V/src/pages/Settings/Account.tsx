@@ -130,7 +130,7 @@ const AccountPage: React.FC = () => {
 
   return (
     <div>
-      <PageHeader title="账号设置" />
+      <PageHeader title="账号设置" flow={false} />
 
       <div className="vc-stack">
         <section className="vc-panel">

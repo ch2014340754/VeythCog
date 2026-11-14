@@ -233,7 +233,6 @@ const HomePage: React.FC = () => {
           <div key={dataCategoryId ?? 'nav-empty'} className="vc-nav-pop vc-home__grid-pop">
             <BookmarkGrid
               onAddBookmark={handleAddBookmark}
-              onEditBookmark={handleEditBookmark}
               onContextMenu={(b, e) => setMenu({ kind: 'bookmark', bookmark: b, x: e.clientX, y: e.clientY })}
             />
           </div>

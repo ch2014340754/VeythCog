@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useLayoutEffect, useCallback, useMemo } from 'react';
 import type { PresetName, AppearanceMode } from '../types';
-import { getPreset } from '../styles/presets';
+import { getPreset, presetNames } from '../styles/presets';
 import { overlayColor, resolveBackground } from '../styles/backgrounds';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useWallpaperStore } from '../stores/wallpaperStore';
@@ -48,11 +48,12 @@ const ThemeContext = createContext<ThemeState | null>(null);
 const PRESET_KEY = 'theme-preset';
 const APPEARANCE_KEY = 'theme-appearance';
 
+// 白名单直接取 presetNames：增删预设只需改 presets.ts，这里不用跟着维护
 function getStoredPreset(): PresetName {
   try {
     const stored = localStorage.getItem(PRESET_KEY);
-    if (stored === 'amethyst' || stored === 'amber' || stored === 'emerald' || stored === 'indigo' || stored === 'rose' || stored === 'slate') {
-      return stored;
+    if (stored && (presetNames as string[]).includes(stored)) {
+      return stored as PresetName;
     }
   } catch {
     // localStorage 不可用时忽略
@@ -118,10 +119,10 @@ function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnable
       accent: preset.accent,
       bg: preset.bg,
       text: preset.text,
-      textSecondary: '#9CA3AF',
+      textSecondary: '#C4C0DA',
       // 暗色下辅助文字提亮，避免在深底上对比不足
-      textTertiary: '#8A8FA3',
-      textTertiary15: 'rgba(138, 143, 163, 0.15)',
+      textTertiary: '#A8A4C2',
+      textTertiary15: 'rgba(168, 164, 194, 0.15)',
       textInverse: '#1E1B4B',
       border: preset.border,
       divider: hexToRgba(preset.border, 0.4),
@@ -151,9 +152,9 @@ function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnable
     accent: preset.accent,
     bg: preset.bg,
     text: preset.text,
-    textSecondary: '#6B7280',
-    textTertiary: '#9CA3AF',
-    textTertiary15: 'rgba(156, 163, 175, 0.15)',
+    textSecondary: '#4B5563',
+    textTertiary: '#66707E',
+    textTertiary15: 'rgba(102, 112, 126, 0.15)',
     textInverse: '#ffffff',
     border: preset.border,
     divider: '#E5E7EB',
@@ -200,9 +201,11 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean, glassEnabled
     root.style.setProperty('--color-surface', surfaceVar);
     root.style.setProperty('--color-surface-elevated', surfaceElevatedVar);
     root.style.setProperty('--color-surface-overlay', surfaceOverlay);
-    root.style.setProperty('--color-text-secondary', '#9CA3AF');
-    root.style.setProperty('--color-text-tertiary', '#8A8FA3');
-    root.style.setProperty('--color-text-tertiary-15', 'rgba(138, 143, 163, 0.15)');
+    // 暗色下正文与次级文字在毛玻璃 / 壁纸上会被再压一层对比度，
+    // 次级色往 text 提亮一档（原 #9CA3AF / #8A8FA3 在深紫面板上发灰）。
+    root.style.setProperty('--color-text-secondary', '#C4C0DA');
+    root.style.setProperty('--color-text-tertiary', '#A8A4C2');
+    root.style.setProperty('--color-text-tertiary-15', 'rgba(168, 164, 194, 0.15)');
     root.style.setProperty('--color-text-inverse', '#1E1B4B');
     root.style.setProperty('--color-divider', hexToRgba(preset.border, 0.4));
     root.style.setProperty('--color-success', '#34D399');
@@ -222,9 +225,9 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean, glassEnabled
     root.style.setProperty('--color-surface', lightSurface);
     root.style.setProperty('--color-surface-elevated', lightSurfaceElevated);
     root.style.setProperty('--color-surface-overlay', 'rgba(255, 255, 255, 0.85)');
-    root.style.setProperty('--color-text-secondary', '#6B7280');
-    root.style.setProperty('--color-text-tertiary', '#9CA3AF');
-    root.style.setProperty('--color-text-tertiary-15', 'rgba(156, 163, 175, 0.15)');
+    root.style.setProperty('--color-text-secondary', '#4B5563');
+    root.style.setProperty('--color-text-tertiary', '#66707E');
+    root.style.setProperty('--color-text-tertiary-15', 'rgba(102, 112, 126, 0.15)');
     root.style.setProperty('--color-text-inverse', '#ffffff');
     root.style.setProperty('--color-divider', '#E5E7EB');
     root.style.setProperty('--color-success', '#10B981');
@@ -273,6 +276,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // 动态壁纸由 WallpaperBackdrop 全屏渲染，body 只保留纯色，避免两层叠加
     if (activeWallpaper?.kind === 'video') {
       body.classList.remove('has-bg');
+      // has-bg 专门指"图片壁纸铺在 body 上"；has-wall 指"屏幕上确实有壁纸"，
+      // 给首页压在照片上的图标标题用（亮色下靠它加浅色衬光，否则小字发虚）。
+      body.classList.add('has-wall');
       body.style.backgroundImage = '';
       body.style.setProperty('--bg-overlay', 'transparent');
       return;
@@ -280,6 +286,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     if (activeWallpaper?.kind === 'image') {
       body.classList.add('has-bg');
+      body.classList.add('has-wall');
       body.style.backgroundImage = `url("${activeWallpaper.url}")`;
       body.style.backgroundSize = 'cover';
       body.style.backgroundPosition = 'center';
@@ -292,6 +299,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const { active, css } = resolveBackground(background, isDark);
     if (active) {
       body.classList.add('has-bg');
+      body.classList.add('has-wall');
       body.style.backgroundImage = css;
       body.style.backgroundSize = 'cover';
       body.style.backgroundPosition = 'center';
@@ -300,6 +308,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       body.style.setProperty('--bg-overlay', 'transparent');
     } else {
       body.classList.remove('has-bg');
+      body.classList.remove('has-wall');
       body.style.backgroundImage = '';
       body.style.setProperty('--bg-overlay', 'transparent');
     }

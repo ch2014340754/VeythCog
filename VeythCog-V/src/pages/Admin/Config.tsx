@@ -7,11 +7,16 @@ import type { SystemConfig, PresetName } from '@/types';
 
 const PRESET_OPTIONS = [
   { value: 'amethyst', label: '紫晶' },
-  { value: 'amber', label: '琥珀' },
   { value: 'emerald', label: '翡翠' },
   { value: 'indigo', label: '靛蓝' },
   { value: 'rose', label: '玫瑰' },
   { value: 'slate', label: '石墨' },
+  { value: 'tide', label: '潮汐' },
+  { value: 'sprout', label: '新芽' },
+  { value: 'cobalt', label: '钴蓝' },
+  { value: 'lime', label: '青柠' },
+  { value: 'sunset', label: '落日' },
+  { value: 'mist', label: '薄雾' },
 ];
 
 const ConfigPage: React.FC = () => {

@@ -64,9 +64,9 @@ body.dark .vc-login__core {
 
 @keyframes vc-orbit {
   0%   { transform: rotate(0deg); }
-  25%  { transform: rotate(7deg); }
+  25%  { transform: rotate(4deg); }
   50%  { transform: rotate(0deg); }
-  75%  { transform: rotate(-7deg); }
+  75%  { transform: rotate(-4deg); }
   100% { transform: rotate(0deg); }
 }
 
@@ -75,8 +75,8 @@ body.dark .vc-login__core {
   inset: -10%;
   will-change: transform;
   transform: translate3d(
-    calc(var(--lg-mx, 0) * 34px),
-    calc(var(--lg-my, 0) * 26px),
+    calc(var(--lg-mx, 0) * 18px),
+    calc(var(--lg-my, 0) * 14px),
     0
   );
 }
@@ -92,8 +92,8 @@ body.dark .vc-login__core {
 /* 四个光斑各自不同的呼吸节奏（18~30s），振幅 ~10%，肉眼可见但不抢戏 */
 
 .vc-login__blob--a {
-  --blob-lo: 0.46;
-  --blob-hi: 0.62;
+  --blob-lo: 0.3;
+  --blob-hi: 0.42;
   width: 640px;
   height: 640px;
   left: -10%;
@@ -104,8 +104,8 @@ body.dark .vc-login__core {
 }
 
 .vc-login__blob--b {
-  --blob-lo: 0.22;
-  --blob-hi: 0.4;
+  --blob-lo: 0.14;
+  --blob-hi: 0.26;
   width: 600px;
   height: 600px;
   right: 6%;
@@ -116,13 +116,13 @@ body.dark .vc-login__core {
 }
 
 body.dark .vc-login__blob--b {
-  --blob-lo: 0.32;
-  --blob-hi: 0.52;
+  --blob-lo: 0.2;
+  --blob-hi: 0.34;
 }
 
 .vc-login__blob--c {
-  --blob-lo: 0.38;
-  --blob-hi: 0.56;
+  --blob-lo: 0.24;
+  --blob-hi: 0.36;
   width: 720px;
   height: 720px;
   left: 22%;
@@ -134,8 +134,8 @@ body.dark .vc-login__blob--b {
 
 /* 左下角的主光源：卡片上不再压光，全部收到画面左下 */
 .vc-login__blob--d {
-  --blob-lo: 0.5;
-  --blob-hi: 0.66;
+  --blob-lo: 0.32;
+  --blob-hi: 0.44;
   width: 780px;
   height: 780px;
   left: -6%;
@@ -146,8 +146,8 @@ body.dark .vc-login__blob--b {
 }
 
 body.dark .vc-login__blob--d {
-  --blob-lo: 0.3;
-  --blob-hi: 0.44;
+  --blob-lo: 0.2;
+  --blob-hi: 0.3;
 }
 
 .vc-login__grid {
@@ -346,7 +346,7 @@ body.dark .vc-login__blob--d {
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  opacity: calc(0.42 + var(--lg-glow, 0.5) * 0.6);
+  opacity: calc(0.28 + var(--lg-glow, 0.5) * 0.42);
   transition: opacity 0.45s var(--ease-out);
 }
 
@@ -354,7 +354,7 @@ body.dark .vc-login__blob--d {
 .vc-login__ring--halo {
   padding: 9px;
   z-index: 2;
-  opacity: calc(0.1 + var(--lg-glow, 0.5) * 0.26);
+  opacity: calc(0.07 + var(--lg-glow, 0.5) * 0.18);
 }
 
 /* 玻璃边缘高光：1px 渐变描边 */

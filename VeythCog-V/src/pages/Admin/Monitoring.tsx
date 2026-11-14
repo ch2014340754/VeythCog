@@ -138,7 +138,6 @@ const MonitoringPage: React.FC = () => {
     return [
       { label: hours === 24 ? '近 24h 调用' : '近 7 天调用', value: overview.calls.toLocaleString(), sub: `最近 1 分钟 ${overview.callsLastMinute} 次` },
       { label: '失败率', value: `${errorPct.toFixed(errorPct < 0.1 && errorPct > 0 ? 2 : 1)}%`, sub: `${overview.errors} 次业务失败`, danger: overview.errors > 0 },
-      { label: 'P95 耗时', value: `${overview.p95Ms} ms`, sub: `平均 ${overview.avgCostMs} ms` },
       { label: 'Token 消耗', value: overview.totalTokens.toLocaleString(), sub: `输出 ${overview.completionTokens.toLocaleString()} · 估算 ${overview.estimatedCalls} 次` },
       { label: '在线会话', value: overview.onlineSessions.toLocaleString(), sub: `活跃用户 ${overview.activeUsers}` },
       { label: 'LLM 调用', value: overview.llmCalls.toLocaleString(), sub: `${hours === 24 ? '近 24h' : '近 7 天'}含失败` },

@@ -1,12 +1,12 @@
-import React from 'react';
-import usersIcon from '@iconify-icons/lucide/users';
-import shieldIcon from '@iconify-icons/lucide/shield-check';
-import brainIcon from '@iconify-icons/lucide/brain';
+import { SubPageLayout } from '@/components/SectionNav';
 import monitorIcon from '@iconify-icons/lucide/activity';
+import brainIcon from '@iconify-icons/lucide/brain';
+import clockIcon from '@iconify-icons/lucide/clock';
 import listIcon from '@iconify-icons/lucide/list-checks';
 import settingsIcon from '@iconify-icons/lucide/settings-2';
-import clockIcon from '@iconify-icons/lucide/clock';
-import { SubPageLayout } from '@/components/SectionNav';
+import shieldIcon from '@iconify-icons/lucide/shield-check';
+import usersIcon from '@iconify-icons/lucide/users';
+import React from 'react';
 
 const MENU = [
   { path: '/admin/users', icon: usersIcon, label: '用户管理' },
@@ -24,7 +24,7 @@ const AdminPage: React.FC = () => (
     title="系统管理"
     wide
     items={MENU}
-    foot="仅管理员可见。所有变更会记录到审计日志。"
+    foot=""
   />
 );
 

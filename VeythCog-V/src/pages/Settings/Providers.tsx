@@ -421,6 +421,7 @@ const ProvidersPage: React.FC = () => {
     <div>
       <PageHeader
         title="模型配置"
+        flow={false}
       />
 
       {loading ? (

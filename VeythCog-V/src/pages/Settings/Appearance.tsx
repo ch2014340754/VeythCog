@@ -53,6 +53,7 @@ const AppearancePage: React.FC = () => {
     <div>
       <PageHeader
         title="外观"
+        flow={false}
       />
 
       <div className="vc-stack">
@@ -63,27 +64,35 @@ const AppearancePage: React.FC = () => {
               <h2 className="vc-panel__title">配色预设</h2>
               <p className="vc-panel__desc">预设同时包含亮色/暗色两套色板，切换后全站令牌同步更新</p>
             </div>
-            <span className="vc-meta">当前：{activePreset.label}</span>
+            <span className="vc-meta">共 {presetNames.length} 套 · 当前：{activePreset.label}</span>
           </div>
           <div className="vc-theme-row">
             {presetNames.map((name) => {
               const preset = getPreset(name, isDark);
               const active = presetName === name;
               return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setPreset(name)}
-                  className={`vc-theme-swatch${active ? ' is-active' : ''}`}
-                  style={{
-                    background: preset.primary,
-                    borderColor: active ? 'var(--color-text)' : 'transparent',
-                  }}
-                  title={preset.label}
-                  aria-label={preset.label}
-                >
-                  {active && <Icon icon={checkIcon} width={16} color="var(--color-text-inverse)" />}
-                </button>
+                <div key={name} className="vc-theme-item">
+                  <button
+                    type="button"
+                    onClick={() => setPreset(name)}
+                    className={`vc-theme-swatch${active ? ' is-active' : ''}`}
+                    style={{
+                      background: preset.primary,
+                      borderColor: active ? 'var(--color-text)' : 'transparent',
+                    }}
+                    title={`${preset.label}（主色 + 撞色）`}
+                    aria-label={preset.label}
+                    aria-pressed={active}
+                  >
+                    {active && <Icon icon={checkIcon} width={16} color="var(--color-text-inverse)" />}
+                    <span
+                      className="vc-theme-swatch__accent"
+                      style={{ background: preset.accent }}
+                      aria-hidden
+                    />
+                  </button>
+                  <span className={`vc-theme-name${active ? ' is-active' : ''}`}>{preset.label}</span>
+                </div>
               );
             })}
           </div>

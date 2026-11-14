@@ -23,16 +23,23 @@
 
 ### 2.1 第一层：主题预设（唯一真源）
 
-`src/styles/presets.ts`，6 套 preset × 亮/暗两套。默认 `amethyst`（紫晶）。localStorage 键：`theme-preset`、`theme-appearance`（`light | dark | system`）。
+`src/styles/presets.ts`，11 套 preset × 亮/暗两套。默认 `amethyst`（紫晶）。localStorage 键：`theme-preset`、`theme-appearance`（`light | dark | system`）。
 
 | preset | label | 亮色 primary | 亮色 bg | 暗色 primary | 暗色 surface |
 |---|---|---|---|---|---|
 | amethyst | 紫晶 | `#7C3AED` | `#FAF5FF` | `#A78BFA` | `#2A2756` |
-| amber | 琥珀 | `#D97706` | `#FFFBEB` | `#FBBF24` | `#292524` |
 | emerald | 翡翠 | `#059669` | `#ECFDF5` | `#34D399` | `#064E3B` |
 | indigo | 靛蓝 | `#4F46E5` | `#EEF2FF` | `#818CF8` | `#2A2756` |
 | rose | 玫瑰 | `#E11D48` | `#FFF1F2` | `#FB7185` | `#881337` |
 | slate | 石墨 | `#475569` | `#F8FAFC` | `#94A3B8` | `#1E293B` |
+| tide | 潮汐 | `#0F7370` | `#D2EEEE` | `#1DC8C1` | `#173534` |
+| sprout | 新芽 | `#0B772F` | `#D0F0DB` | `#16CF53` | `#163621` |
+| cobalt | 钴蓝 | `#273BF6` | `#CED1F3` | `#6D8DFF` | `#161A40` |
+| lime | 青柠 | `#4D7C0F` | `#F8FCF3` | `#7CC912` | `#293715` |
+| sunset | 落日 | `#B45309` | `#FCF8F3` | `#F2A018` | `#382B14` |
+| mist | 薄雾 | `#0369A1` | `#F5F8FA` | `#64BBD9` | `#1A2C32` |
+
+> 后六套（潮汐/新芽/钴蓝/青柠/落日/薄雾）来自用户提供的六组「类似色」色板：背景与文字沿用原值，`primary` / `accent` 保留原色相、只调明度与饱和度，使 `primary` 对 `bg` 的对比度亮色 ≥4.5、暗色 ≥7；`accent` 与 `primary` 至少保持 25° 色相差并叠加明度差，供 Logo 飘带做异色对撞。
 
 **禁止**：在组件里写死 `#7C3AED`、`rgba(124,58,237,...)`。需要主色透明度时用 `colors.primary10/15/30/40` 或 `--color-primary-10/15/30/40`。
 
@@ -64,6 +71,18 @@ const { colors, isDark } = useTheme();
 `ThemeContext.applyCSSVariables()` 在 `useLayoutEffect` 里写入 `document.documentElement`：
 `--color-primary / -secondary / -cta / -accent / -bg / -text / -border`、`--color-primary-10/15/30/40`、`--color-surface(-elevated/-overlay)`、`--color-text-secondary/-tertiary/-tertiary-15/-inverse`、`--color-divider`、`--color-success/warning/error/info`、`--noise-opacity`（亮 0.03 / 暗 0.04）、`--glass-bg`、`--glass-border`、`--shadow-sm..xl`。
 同时 `body` 上挂 `dark` / `glass-on` / `has-bg` 三个 class，并写 `--bg-overlay`。
+
+**文字三级的取值（2026-11-14 校准，以“看得清”为准而不是“够淡”）**：
+
+| 变量 | 亮色 | 暗色 | 用途 |
+|---|---|---|---|
+| `--color-text` | 预设 `#1E1B4B` | 预设 `#EDE9FE` | 正文、标题 |
+| `--color-text-secondary` | `#4B5563` | `#C4C0DA` | 说明、次级行、面板描述 |
+| `--color-text-tertiary` | `#66707E` | `#A8A4C2` | eyebrow、表头、页脚注释、时间戳 |
+
+改之前暗色是 `#9CA3AF` / `#8A8FA3`、亮色是 `#6B7280` / `#9CA3AF`，在深紫面板和玻璃层上分别只有 5.4:1 / 4.3:1 与 5.0:1 / 2.5:1，小字看着发灰。**新值在同样底色上分别是 7.8:1 / 5.8:1 和 7.6:1 / 5.0:1**；方向是"往上抬一档"，不是换色系，`body.dark` 里仍然只覆盖 sheen / ambient / flow / shadow，不碰这三行以外的颜色。
+
+亮色下不要再往"浅白"改：亮色的底本身就是白面板 + 58% 白蒙版，白字贴上去等于消失。让亮色显得不"淡"的办法是把文字压深一档（上表），以及给压在照片上的字加浅色衬光（见 `body.has-wall:not(.dark) .vc-bookmark__label`）。
 
 **页面级 scoped 变量写法（推荐）**：像登录页那样，在组件根节点注入一组 `--lg-*`，颜色全部由 `colors` 派生，CSS 只消费变量：
 
@@ -189,7 +208,9 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 - 面板切换用 `.vc-tab-pane`（`global.css` 已有入场动画），不要自造。
 
 **表格（管理端）**
-- 外层 `.admin-panel`，表格 `.admin-table`（半透明表面 + `--radius-lg`）；表头 13px/600、行高 48、hover 行 `colors.primary10`。
+- 外层用 `.vc-panel.vc-table-card`，表格 `.admin-table`；表头 13px/600、行高 48、hover 行 `colors.primary10`。
+- 表格容器自带**边缘聚光**：1px 品牌紫渐变描边（`::before` + mask 只留描边）+ 外侧低强度扩散 + 顶部内高光，颜色全部由 `--color-primary` 派生，亮/暗/玻璃自动适配；页面内不得再自写描边或阴影覆盖。
+- 列表页统一 `.vc-page--list` + `.vc-table-card--fill` + `.vc-table-fill`：整屏高度、表体内部滚动、表头吸顶；`pagination={false}`，下滑用 `useInfiniteRows` + `ListSentinel` 懒加载。
 
 **图标**
 - 一律 `@iconify/react` + `@iconify-icons/lucide`（已安装）；尺寸 16（行内）/ 20（rail、工具卡）/ 22（大按钮）。不要引第二套图标库。
@@ -202,6 +223,36 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 **禁止**：改 `width/height/top/left` 做动画、`filter: blur()` 大范围动画、无限旋转的装饰元素、同屏 >2 组常驻动画。
 
 **时长表**：hover 150ms / 状态切换 250ms / 面板进出 400ms / 环境光漂移 4–12s（多段 keyframes，首尾同值才能无缝循环）。
+
+**常驻光效（2026-11-14 新增，v1）**——内页"静止帧也有光"的唯一手段，参数只有一组令牌：
+
+| 原子 | 落点 | 配方 | 令牌 |
+|---|---|---|---|
+| 环境光 | `.vc-shell__canvas::before` | 两团 radial（左上 primary / 右下 secondary，`color-mix` 取 26%），9s 呼吸 0.7×~1×，只动 opacity | `--ambient-opacity / --ambient-duration / --ambient-tint` |
+| 页头流光 | `.vc-page-head::before` + `::after` | `::before` 3px 静态渐隐线（圆角 2px，2026-11-14 由 1px 加粗）；`::after` 34% 宽带高光 11s 从画外走到画外（首尾都在画面外 → 无接缝）。**设置类子页用 `<PageHeader flow={false} />` 关掉**（窄内容列里的短横线像多余的划线） | `--flow-duration / --flow-opacity / --flow-band` |
+| 统计脉搏 | `.vc-stat::before` | 左下 radial 主色 26%，8s 呼吸 0.18→0.3，`z-index:-1` 在卡片底色之上、正文之下 | 复用环境光令牌，无独立参数 |
+
+三条硬规则：
+1. **常驻动画同屏 ≤2 组**：环境光 + 页头流光已占满，别再加第三组循环动画。
+2. **降级时不降到 0**：`prefers-reduced-motion` 下环境光保留 `opacity .32` 的静态底光，否则整页突然变扁平；页头流光则直接 `opacity:0`。
+3. **壁纸模式必须出白色变体**（`body.has-bg`），紫色光压在用户照片上会显脏。
+
+> 详细数值验收与调参见 `docs/frontend-visual-polish-v1.md`。
+
+**指针聚光（2026-11-14，v1.3）**——"靠近才亮"的近场反馈。**首屏只管书签图标，内页才有面板级光环**：
+
+| 项 | 规则 |
+|---|---|
+| 数据来源 | `src/utils/pointerGlow.ts` 单实例，全局 `pointermove` → 一帧一次 rAF，矩形缓存（resize/scroll/DOM 变动才重建） |
+| 只写两个变量 | `--glow`（0~1）、`--glow-angle`（deg，指针方位） |
+| 两类目标 | **卡片** `.vc-bookmark`（只在首屏）：smoothstep(离边缘/130)，无基线，离开就熄。**面板** `.vc-panel:not(.vc-stat)` + 弹窗：smoothstep(离边缘/440) + **基线 0.32**，方位每帧 0.18 缓动 → 光沿边框"流"而不是闪 |
+| 首屏边界 | **不给 `.vc-bookmark-grid-wrap` 画整框**：容器固定 4 行高，框上去就是一大块空盒子，比图标更抢眼 |
+| 画法 | conic 渐变 + `mask: content-box / exclude` 只留一圈；面板/弹窗收窄成 ±30° 短光段（弧越宽越像"这侧边框变色"） |
+| 必带降级 | 触屏 `(hover: none)` 全关；壁纸模式换白光；`prefers-reduced-motion` 取消缓动（`easeFactor=1`）直接跳位 |
+
+三条硬规则之外再加两条：**别用 `:hover` 冒充"靠近"**（`hover` 只有进出两态，给不出距离）；**面板级聚光必须有基线 + 缓动**（面板只有一个、面积又大，没有基线就是"看不见的一帧静止光"，没有缓动就是"闪一下"）。
+
+
 
 **曲线**：位移与进场用 `--ease-out`；小元件回弹用 `--spring`；环境光用 `ease-in-out`。
 
@@ -228,9 +279,9 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 .vc-login（底色：primary-15 左上 + primary-10 右下 + --color-bg）
  └ .vc-login__scene（fixed）
     ├ .vc-login__core      静态底光（离开卡片的两团 radial，保证光斑飘走时页面仍成立）
-    ├ .vc-login__orbit     ±7° 缓慢摇摆的容器（12s）
-    │  └ .vc-login__aurora 指针视差层（--lg-mx/--lg-my，34px/26px）
-    │     └ .vc-login__blob--a/b/c/d  4 团彩色光斑（5s/5s/7s/4s，位移 12–20% + scale ≤1.28）
+    ├ .vc-login__orbit     ±4° 缓慢摇摆的容器（12s）
+    │  └ .vc-login__aurora 指针视差层（--lg-mx/--lg-my，18px/14px）
+    │     └ .vc-login__blob--a/b/c/d  4 团彩色光斑（5s/5s/7s/4s，位移 12–20% + scale ≤1.28，峰值 opacity .26–.44）
     ├ .vc-login__grid      64px 网格（mask 向中心淡出）
     ├ .vc-login__noise     噪点
     └ .vc-login__vignette  暗角呼吸（10s）
@@ -301,6 +352,12 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 | 暗色下白字 + 提亮主色 | 对比 ~2.4:1，读不清 | 亮填充 + 深字 `#14102B` |
 | 用 `locator().boundingBox()` 做视觉验证 | 在 Tabbit/Playwright 里会挂死 | 用 `page.evaluate` 读 `getBoundingClientRect` / computed style |
 | 截图给用户看当验收 | 用户明确要求"不要再输出图片" | 用数值验收：角度、px/s、opacity、对比度 |
+| 只做 hover / 入场特效，没有常驻光 | 静止画面一帧不动，页面显得"素"、像静态稿 | 加 §8 的环境光（`--ambient-*`），这是"活"的底座 |
+| 用 `:hover` 冒充"鼠标靠近" | 只有进出两态，鼠标在旁边但没进入时毫无反馈 | 用 `pointerGlow` 的 `--glow`（距离 → 亮度） |
+| 在 `pointermove` 里直接 `getBoundingClientRect()` | 每个事件强制 layout，列表一划就掉帧 | rAF 合帧 + 矩形缓存 + 变化阈值 |
+| 面板级聚光没有基线、没有缓动 | 弹窗只有一个、面积大，指针一停就是"一帧静止光"，用户会判定"没做" | 基线 `0.32` + 方位每帧 `0.18` 缓动（登录表单卡同配方） |
+| 把光圈画在固定高度的容器上 | 网格留白区被圈进去，凭空出现一个"空盒子"，比内容还抢眼 | 首屏只给图标，不给容器；面板只给真正有边界的分区 |
+| 玻璃侧栏里沿用 `--color-text-secondary` | 暗色 / 壁纸下多层透明叠起来，菜单字发灰、看不清 | 侧栏文字取 `color-mix(--color-text 78%)`，仍低于选中态 |
 | 变量下标硬编码 z-index | 弹层被遮挡、改一处崩一片 | 用 `--z-*` 令牌 |
 | 整页滚动 + 内部再滚动 | 双层滚动条、移动端卡顿 | 外层 `overflow:hidden`，内层单点滚动 |
 

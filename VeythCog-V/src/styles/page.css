@@ -54,13 +54,88 @@
 /* ---------- 页头 ---------- */
 
 .vc-page-head {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-lg);
   flex-wrap: wrap;
-  margin-bottom: var(--space-xl);
+  /* 流光画在自己的 padding 里，再 overflow 裁掉——
+     否则走光那一段（translate ±58%）会左右溢出内容列，
+     万一伪元素的包含块被别的布局改到 page-body 的 padding box，还会更宽。 */
+  padding-bottom: 15px;
+  margin-bottom: calc(var(--space-xl) - 15px);
+  overflow: hidden;
 }
+
+/* ---------- 页头流光（第 2 阶：一条极细的品牌色线 + 上面慢慢走的一小段高光） ----------
+   静态线负责"这条线在那"，走光负责"它是活的"：11s 一遍，首尾都在画面外，
+   所以看不到循环的接缝。只用 transform + opacity，不重绘布局。 */
+.vc-page-head::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 30%, transparent) 0%,
+    color-mix(in srgb, var(--color-secondary) 16%, transparent) 38%,
+    transparent 76%
+  );
+}
+
+.vc-page-head::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent calc(50% - var(--flow-band) / 2),
+    color-mix(in srgb, var(--color-primary) 92%, transparent) 50%,
+    transparent calc(50% + var(--flow-band) / 2)
+  );
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-primary) 55%, transparent));
+  opacity: 0;
+  animation: vc-flow-travel var(--flow-duration) var(--motion-ease-in-out) infinite;
+}
+
+@keyframes vc-flow-travel {
+  0%   { transform: translate3d(-58%, 0, 0); opacity: 0; }
+  14%  { opacity: var(--flow-opacity); }
+  86%  { opacity: var(--flow-opacity); }
+  100% { transform: translate3d(58%, 0, 0); opacity: 0; }
+}
+
+/* 关掉流光的页头（设置类子页）：窄内容列里一条短横线反而像多余的划线 */
+.vc-page-head--no-flow::before,
+.vc-page-head--no-flow::after {
+  display: none;
+}
+
+/* 壁纸模式：白线上走白光，避免紫色压在照片上显脏 */
+body.has-bg .vc-page-head::before {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.2) 38%, transparent 76%);
+}
+
+body.has-bg .vc-page-head::after {
+  background: linear-gradient(
+    90deg,
+    transparent calc(50% - var(--flow-band) / 2),
+    rgba(255, 255, 255, 0.95) 50%,
+    transparent calc(50% + var(--flow-band) / 2)
+  );
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.55));
+}
+
 
 .vc-page-head__main { min-width: 0; }
 
@@ -238,6 +313,23 @@ body.dark.glass-on .vc-panel {
 
 .vc-subnav__item svg { flex-shrink: 0; }
 
+/* 暗色 / 壁纸下，玻璃侧栏本身要吃掉一层对比度，菜单字在这儿会发灰：
+   往上提一档（仍低于选中态，不抢主色） */
+body.dark .vc-subnav__item,
+body.has-bg .vc-subnav__item {
+  color: color-mix(in srgb, var(--color-text) 78%, var(--color-text-secondary));
+}
+
+body.dark .vc-subnav__eyebrow,
+body.has-bg .vc-subnav__eyebrow {
+  color: color-mix(in srgb, var(--color-text) 58%, var(--color-text-tertiary));
+}
+
+body.dark .vc-subnav__foot,
+body.has-bg .vc-subnav__foot {
+  color: color-mix(in srgb, var(--color-text) 46%, var(--color-text-tertiary));
+}
+
 .vc-subnav__foot {
   margin: 12px 12px 0;
   padding-top: 12px;
@@ -412,6 +504,36 @@ body.dark.glass-on .vc-panel {
 .vc-theme-swatch.is-active {
   transform: scale(1.08);
   box-shadow: 0 0 0 4px var(--color-primary-15);
+}
+
+/* 预设项：主色圆点 + 右上撞色点 + 名称，10 套时仍可换行 */
+.vc-theme-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.vc-theme-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.vc-theme-name.is-active {
+  color: var(--color-text);
+}
+
+.vc-theme-swatch__accent {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 15px;
+  height: 15px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, transparent);
 }
 
 .vc-bg-swatch {
@@ -1815,6 +1937,33 @@ body.dark .vc-dialog-scrim {
   padding: var(--space-md) var(--space-lg);
 }
 
+/* 统计数字身后的极淡光：8s 呼吸（0.18~0.3），给监控/字数这类"数字页"一点脉搏。
+   z-index:-1 落在卡片自身底色之上、正文之下；父级 isolation 已由动效层提供。 */
+.vc-stat::before {
+  content: "";
+  position: absolute;
+  left: -16%;
+  bottom: -58%;
+  width: 72%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-primary) 26%, transparent) 0%,
+    transparent 70%
+  );
+  opacity: 0.24;
+  animation: vc-stat-pulse 8s var(--motion-ease-in-out) infinite;
+}
+
+@keyframes vc-stat-pulse {
+  0%,
+  100% { opacity: 0.18; }
+  50%  { opacity: 0.3; }
+}
+
 .vc-stat__label {
   font-size: 12px;
   line-height: 1.5;
@@ -1948,6 +2097,53 @@ body.dark .vc-dialog-scrim {
 /* ---------- 表格卡片（Admin 列表统一容器） ---------- */
 
 .vc-table-card { padding: 0; overflow: hidden; }
+
+/* ---------- 表格边缘聚光 ---------- */
+/* 所有表格容器共用一圈品牌紫边缘光：1px 渐变描边 + 外侧低强度扩散 + 顶部内高光。
+   颜色全部由主题变量派生，亮/暗/玻璃/壁纸下自动适配，不引入新色值。 */
+.vc-panel.vc-table-card {
+  --vc-table-glow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 14%, transparent),
+    0 0 26px -16px color-mix(in srgb, var(--color-primary) 55%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 55%, transparent);
+  position: relative;
+  isolation: isolate;
+  box-shadow: var(--vc-table-glow);
+}
+
+body.glass-on .vc-panel.vc-table-card {
+  box-shadow: var(--shadow-sm), var(--vc-table-glow);
+}
+
+body.dark .vc-panel.vc-table-card {
+  --vc-table-glow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent),
+    0 0 30px -16px color-mix(in srgb, var(--color-primary) 72%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 8%, transparent);
+}
+
+.vc-table-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 46%, transparent) 0%,
+    color-mix(in srgb, var(--color-primary) 16%, transparent) 26%,
+    transparent 52%,
+    transparent 68%,
+    color-mix(in srgb, var(--color-primary) 34%, transparent) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
 
 .vc-table-card__bar {
   display: flex;
@@ -2166,7 +2362,7 @@ body.dark .vc-dialog-scrim {
 }
 
 .vc-conv-item {
-  padding: 9px 10px;
+  padding: 9px 40px 9px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -2187,7 +2383,7 @@ body.dark .vc-dialog-scrim {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-right: 18px;
+  padding-right: 38px;
 }
 
 .vc-conv-item__icon {
@@ -3010,7 +3206,6 @@ body.dark .vc-dialog-scrim {
   flex-direction: column;
   gap: 2px;
   padding: var(--space-md) var(--space-sm);
-  border-right: 1px solid var(--color-divider);
   background: color-mix(in srgb, var(--color-surface) 55%, transparent);
 }
 
@@ -3697,6 +3892,7 @@ body.dark .vc-dialog-scrim {
   padding: 10px 10px 10px 0;
 }
 .vc-shell__canvas {
+  position: relative;
   width: 100%;
   height: 100%;
   border-radius: var(--radius-xl);
@@ -3707,6 +3903,42 @@ body.dark .vc-dialog-scrim {
   backdrop-filter: blur(var(--glass-blur)) saturate(160%);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
 }
+
+/* ---------- 内页环境光（第 1 阶：静止画面也有"底光"） ----------
+   两团极淡的品牌色径向光贴在内容卡左上 / 右下，9s 呼吸（只动 opacity）。
+   作用等同登录页的 __core：让玻璃面板有"底"可透，页面不再是纯色平板。
+   页码内容在 .vc-page 内（position:relative，DOM 在后）自然盖在光层之上。 */
+.vc-shell__canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(64% 46% at 6% -6%,
+      color-mix(in srgb, var(--color-primary) var(--ambient-tint), transparent) 0%,
+      transparent 72%),
+    radial-gradient(56% 44% at 100% 104%,
+      color-mix(in srgb, var(--color-secondary) var(--ambient-tint), transparent) 0%,
+      transparent 74%);
+  opacity: var(--ambient-opacity);
+  animation: vc-ambient-breathe var(--ambient-duration) var(--motion-ease-in-out) infinite;
+}
+
+@keyframes vc-ambient-breathe {
+  0%,
+  100% { opacity: calc(var(--ambient-opacity) * 0.7); }
+  50%  { opacity: var(--ambient-opacity); }
+}
+
+/* 壁纸模式：玻璃卡本身已是白色薄片，环境光改用白色，避免把壁纸染成紫色 */
+body.has-bg .vc-shell__canvas::before {
+  background:
+    radial-gradient(64% 46% at 6% -6%, rgba(255, 255, 255, 0.1) 0%, transparent 72%),
+    radial-gradient(56% 44% at 100% 104%, rgba(255, 255, 255, 0.07) 0%, transparent 74%);
+}
+
 
 .vc-rail {
   position: fixed;
@@ -4025,7 +4257,7 @@ body.has-bg .vc-bookmark:hover {
   background: rgba(255, 255, 255, 0.12);
 }
 .vc-bookmark__label {
-  max-width: 80px;
+  max-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4034,42 +4266,12 @@ body.has-bg .vc-bookmark:hover {
 }
 body.has-bg .vc-bookmark__label {
   color: #fff;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
 }
-.vc-bookmark__actions {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: none;
-  gap: 4px;
-}
-.vc-bookmark:hover .vc-bookmark__actions,
-.vc-bookmark:focus-within .vc-bookmark__actions {
-  display: flex;
-}
-.vc-bookmark__action {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-overlay);
-  color: var(--color-text);
-  font-size: 12px;
-  cursor: pointer;
-}
-.vc-bookmark__action.is-danger {
-  color: var(--color-error);
-}
-body.has-bg .vc-bookmark__action {
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-}
-body.has-bg .vc-bookmark__action.is-danger {
-  color: #ff8b8b;
+/* 亮色 + 壁纸：标题压在照片上，深色字容易被背景花纹吃掉，
+   加一层极浅的白色衬光把它托出来（不改字色，仍保持素净）。 */
+body.has-wall:not(.dark) .vc-bookmark__label {
+  text-wrap: nowrap;
 }
 .vc-bookmark__add {
   height: 100%;
@@ -4894,7 +5096,6 @@ body.has-bg .vc-search__icon-btn {
 .vc-composer-tool,
 .vc-composer__send,
 .vc-tab__close,
-.vc-bookmark__action,
 .vc-bookmark__add,
 .vc-avatar-btn {
   transition: transform var(--motion-duration-base) var(--motion-ease-out),
@@ -4912,7 +5113,6 @@ body.has-bg .vc-search__icon-btn {
 .vc-composer-tool:hover,
 .vc-composer__send:hover,
 .vc-tab__close:hover,
-.vc-bookmark__action:hover,
 .vc-bookmark__add:hover {
   transform: translateY(var(--motion-lift-soft));
 }
@@ -4925,7 +5125,6 @@ body.has-bg .vc-search__icon-btn {
 .vc-composer-tool:active,
 .vc-composer__send:active,
 .vc-tab__close:active,
-.vc-bookmark__action:active,
 .vc-bookmark__add:active {
   transform: translateY(0) scale(var(--motion-press-scale));
 }
@@ -5141,7 +5340,6 @@ body.dark .vc-table-fill .admin-table .ant-table-thead > tr > th {
   .vc-composer-tool,
   .vc-composer__send,
   .vc-tab__close,
-  .vc-bookmark__action,
   .vc-bookmark__add {
     transition: none !important;
     transform: none !important;
@@ -5165,5 +5363,214 @@ body.dark .vc-table-fill .admin-table .ant-table-thead > tr > th {
     opacity: 0 !important;
   }
 
+  /* 常驻环境光 / 页头流光 / 统计呼吸全关。
+     环境光不降到 0：静态时保留一层很淡的底光，页面不会突然变扁平。 */
+  .vc-shell__canvas::before {
+    animation: none !important;
+    opacity: 0.52 !important;
+  }
+
+  .vc-page-head::after {
+    animation: none !important;
+    opacity: 0 !important;
+    transform: none !important;
+  }
+
+  .vc-stat::before {
+    animation: none !important;
+    opacity: 0.2 !important;
+  }
+
 }
 
+
+/* ============================================================
+   指针聚光（v1.2 · 书签卡 / 网站列表 / 弹窗）
+   ------------------------------------------------------------
+   由 src/utils/pointerGlow.ts 驱动，只写两个自定义属性：
+     --glow        0~1
+     --glow-angle  指针相对元素中心的方位角（deg）
+   画法：conic 渐变 + mask content-box / exclude，只留边缘那一圈。
+   首屏（首页图标墙）只有书签卡这一层：靠近哪张哪张亮。
+   内页面板（.vc-panel）与弹窗沿用登录页表单卡的配方：
+   常亮一点微光 + 越近越亮 + 方位角缓动旋转 → 看上去是光在边框上流动。
+   首屏那块图标容器（.vc-bookmark-grid-wrap）**不画整框**：它固定 4 行高，
+   框上去就是一大块空盒子，反而抢戏。
+   ============================================================ */
+
+.vc-bookmark,
+.vc-panel:not(.vc-stat),
+.ant-modal .ant-modal-content {
+  --glow: 0;
+  --glow-angle: 210deg;
+}
+
+/* ---------- 1. 书签卡：靠近哪张哪张亮，离开就熄 ---------- */
+
+.vc-bookmark::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 40deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 82%, transparent) 30deg,
+    color-mix(in srgb, var(--color-primary) 26%, transparent) 64deg,
+    transparent 98deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: calc(var(--glow) * 0.85);
+}
+
+/* ---------- 2. 内页面板：整块版面的一圈流光（与登录表单同配方；首屏不放，只在弹窗与内页面板上） ---------- */
+
+.vc-panel:not(.vc-stat) {
+  position: relative;
+}
+
+.vc-panel:not(.vc-stat)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  pointer-events: none;
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 30deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 32%, transparent) 12deg,
+    color-mix(in srgb, var(--color-primary) 94%, transparent) 30deg,
+    color-mix(in srgb, var(--color-primary) 32%, transparent) 48deg,
+    transparent 60deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: calc(0.07 + var(--glow) * 0.55);
+}
+
+/* ---------- 3. 弹窗：2px 描边 + 9px 外溢，靠近时整条边亮起来 ---------- */
+
+.ant-modal .ant-modal-content {
+  position: relative;
+}
+
+.ant-modal .ant-modal-content::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  pointer-events: none;
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 34deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 34%, transparent) 14deg,
+    color-mix(in srgb, var(--color-primary) 96%, transparent) 34deg,
+    color-mix(in srgb, var(--color-primary) 34%, transparent) 54deg,
+    transparent 70deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: calc(0.08 + var(--glow) * 0.5);
+}
+
+/* 外溢：同方位、卡片外侧 9px 的一圈低不透明度带子（不进内容区） */
+.ant-modal .ant-modal-content::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: calc(var(--radius-lg) + 9px);
+  padding: 9px;
+  pointer-events: none;
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 44deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 30%, transparent) 26deg,
+    color-mix(in srgb, var(--color-primary) 10%, transparent) 70deg,
+    transparent 110deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: calc(0.03 + var(--glow) * 0.22);
+}
+
+/* ---------- 4. 壁纸模式：光换白，别在照片上压紫 ---------- */
+
+body.has-bg .vc-bookmark::after {
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 40deg),
+    transparent 0deg,
+    rgba(255, 255, 255, 0.9) 30deg,
+    rgba(255, 255, 255, 0.35) 64deg,
+    transparent 98deg
+  );
+}
+
+body.has-bg .vc-panel:not(.vc-stat)::after {
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 30deg),
+    transparent 0deg,
+    rgba(255, 255, 255, 0.34) 12deg,
+    rgba(255, 255, 255, 0.9) 30deg,
+    rgba(255, 255, 255, 0.34) 48deg,
+    transparent 60deg
+  );
+}
+
+/* ---------- 5. 暗色：光芯换白，尾巴保留主色 ---------- */
+
+body.dark .ant-modal .ant-modal-content::after {
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 58deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 40%, transparent) 24deg,
+    rgba(255, 255, 255, 0.9) 58deg,
+    color-mix(in srgb, var(--color-primary) 40%, transparent) 96deg,
+    transparent 124deg
+  );
+}
+
+body.dark .vc-panel:not(.vc-stat)::after {
+  background: conic-gradient(
+    from calc(var(--glow-angle) - 30deg),
+    transparent 0deg,
+    color-mix(in srgb, var(--color-primary) 36%, transparent) 12deg,
+    rgba(255, 255, 255, 0.86) 30deg,
+    color-mix(in srgb, var(--color-primary) 36%, transparent) 48deg,
+    transparent 60deg
+  );
+}
+
+/* ---------- 6. 降级 ---------- */
+
+@media (hover: none), (pointer: coarse) {
+  /* 触屏没有"靠近"，聚光保持熄灭 */
+  .vc-bookmark::after,
+  .vc-panel:not(.vc-stat)::after,
+  .ant-modal .ant-modal-content::after,
+  .ant-modal .ant-modal-content::before {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 亮度仍跟随指针（那是必要反馈），只是不再补间 */
+  .vc-bookmark::after,
+  .vc-panel:not(.vc-stat)::after,
+  .ant-modal .ant-modal-content::after,
+  .ant-modal .ant-modal-content::before {
+    transition: none !important;
+  }
+}

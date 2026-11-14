@@ -24,8 +24,8 @@
   --color-surface-overlay: rgba(255, 255, 255, 0.85);
 
   /* 文本层级 */
-  --color-text-secondary: #6B7280;
-  --color-text-tertiary: #9CA3AF;
+  --color-text-secondary: #4B5563;
+  --color-text-tertiary: #66707E;
   --color-text-inverse: #ffffff;
 
   /* 边框与分割 */
@@ -95,6 +95,14 @@
   --sheen-opacity: 0.55;
   --sheen-duration: 860ms;
 
+  /* 环境光与常驻流光（page.css 的 .vc-shell__canvas::before / .vc-page-head::after / .vc-stat::before） */
+  --ambient-opacity: 0.55;    /* 内容卡底部环境光总强度（0.4~0.7 之间微调） */
+  --ambient-duration: 9s;     /* 呼吸周期，越慢越"静" */
+  --ambient-tint: 26%;        /* 光斑中心色浓度，靠 opacity 再乘一次 */
+  --flow-duration: 11s;       /* 页头流光走完一遍的时间 */
+  --flow-opacity: 0.9;        /* 流光高光峰值 */
+  --flow-band: 34%;           /* 流光带宽占页头宽度的比例（影响视觉速度） */
+
   /* z-index 层级 */
   --z-dropdown: 1000;
   --z-sticky: 1020;
@@ -109,6 +117,9 @@
 body.dark {
   /* 暗色下流光收敛，避免过曝 */
   --sheen-opacity: 0.26;
+  --ambient-opacity: 0.4;
+  --ambient-tint: 20%;
+  --flow-opacity: 0.62;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);

@@ -24,6 +24,8 @@ import searchIcon from '@iconify-icons/lucide/search';
 import { useTheme } from '@/contexts/ThemeContext';
 import PageHeader from '@/components/PageHeader';
 import LoadingState from '@/components/states/LoadingState';
+import ListSentinel from '@/components/ListSentinel';
+import useInfiniteRows from '@/hooks/useInfiniteRows';
 import {
   createAdminModel,
   deleteAdminModel,
@@ -47,10 +49,6 @@ const ModelsPage: React.FC = () => {
   const [typeFilters, setTypeFilters] = useState<string[]>([]);
   const [vendorFilter, setVendorFilter] = useState<string>('all');
   const [keyword, setKeyword] = useState('');
-
-  /** 表格可视高度：撑满父容器剩余空间，超出后表头固定、表体内部滚动 */
-  const [bodyHeight, setBodyHeight] = useState(400);
-  const tableWrapRef = useRef<HTMLDivElement>(null);
 
   // 新增 / 编辑
   const [formOpen, setFormOpen] = useState(false);
@@ -119,27 +117,7 @@ const ModelsPage: React.FC = () => {
     );
   }, [rows, filter, typeFilters, vendorFilter, keyword]);
 
-  // 表体高度跟随容器：窗口缩放 / 数据量变化后重新测量
-  useEffect(() => {
-    const el = tableWrapRef.current;
-    if (!el) {
-      return;
-    }
-    const measure = () => {
-      const bar = el.querySelector('.vc-table-card__bar') as HTMLElement | null;
-      const header = el.querySelector('.ant-table-thead') as HTMLElement | null;
-      const chrome = (bar?.offsetHeight ?? 0) + (header?.offsetHeight ?? 48) + 1;
-      setBodyHeight(Math.max(160, Math.floor(el.clientHeight - chrome)));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    const timer = window.setTimeout(measure, 120);
-    return () => {
-      observer.disconnect();
-      window.clearTimeout(timer);
-    };
-  }, [loading, filtered.length]);
+  const { visible, hasMore, total, sentinelRef } = useInfiniteRows(filtered, { pageSize: 20 });
 
   const openCreate = () => {
     setEditing(null);
@@ -366,8 +344,8 @@ const ModelsPage: React.FC = () => {
   ];
 
   return (
-    <div className="vc-page">
-      <div className="vc-page__body vc-page__body--fill">
+    <div className="vc-page vc-page--list">
+      <div className="vc-page__body">
         {(busy || syncing) && (
           <div className="vc-slim-progress">
             <div className="vc-slim-progress__bar" />
@@ -377,7 +355,7 @@ const ModelsPage: React.FC = () => {
         <PageHeader
           eyebrow="Admin / Models"
           title="模型目录"
-          description="目录是唯一真源：用户看到的、能绑定的模型都来自这里。可手工增删改查，也可从供应商拉取模型（含类型）。"
+          description="目录是唯一真源：用户看到的、能绑定的模型都来自这里。"
           extra={
             <Space>
               <Button icon={<Icon icon={refreshIcon} width={15} />} onClick={() => setSyncOpen(true)}>
@@ -433,11 +411,7 @@ const ModelsPage: React.FC = () => {
           </span>
         </div>
 
-        <section
-          ref={tableWrapRef}
-          className="vc-panel vc-panel--flush vc-table-card vc-fill"
-          style={{ overflow: 'hidden' }}
-        >
+        <section className="vc-panel vc-panel--flush vc-table-card vc-table-card--fill">
           <div className="vc-table-card__bar">
             <span className="vc-table-card__title">模型列表</span>
             <span className="vc-table-card__side vc-meta">
@@ -448,27 +422,29 @@ const ModelsPage: React.FC = () => {
           {loading ? (
             <LoadingState tip="加载模型目录…" />
           ) : (
-            <Table<AdminLlmModel>
-              className="admin-table"
-              rowKey="id"
-              size="middle"
-              columns={columns}
-              dataSource={filtered}
-              pagination={false}
-              scroll={{ y: bodyHeight }}
-              onChange={(_, filters) => {
-                const nextTypeFilters = Array.isArray(filters.modalities)
-                  ? filters.modalities.map(String)
-                  : [];
-                setTypeFilters(nextTypeFilters);
+            <div className="vc-table-fill">
+              <Table<AdminLlmModel>
+                className="admin-table"
+                rowKey="id"
+                size="middle"
+                columns={columns}
+                dataSource={visible}
+                pagination={false}
+                onChange={(_, filters) => {
+                  const nextTypeFilters = Array.isArray(filters.modalities)
+                    ? filters.modalities.map(String)
+                    : [];
+                  setTypeFilters(nextTypeFilters);
 
-                const nextStatus = Array.isArray(filters.enabled) && filters.enabled.length > 0
-                  ? String(filters.enabled[0])
-                  : 'all';
-                setFilter(nextStatus === 'on' || nextStatus === 'off' ? nextStatus : 'all');
-              }}
-              locale={{ emptyText: '暂无模型，点击「新增模型」或「从供应商同步」补齐' }}
-            />
+                  const nextStatus = Array.isArray(filters.enabled) && filters.enabled.length > 0
+                    ? String(filters.enabled[0])
+                    : 'all';
+                  setFilter(nextStatus === 'on' || nextStatus === 'off' ? nextStatus : 'all');
+                }}
+                locale={{ emptyText: '暂无模型，点击「新增模型」或「从供应商同步」补齐' }}
+              />
+              <ListSentinel total={total} shown={visible.length} hasMore={hasMore} sentinelRef={sentinelRef} />
+            </div>
           )}
         </section>
 

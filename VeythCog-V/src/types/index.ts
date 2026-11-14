@@ -1,5 +1,16 @@
 // 预设主题名称
-export type PresetName = 'amethyst' | 'amber' | 'emerald' | 'indigo' | 'rose' | 'slate';
+export type PresetName =
+  | 'amethyst'
+  | 'emerald'
+  | 'indigo'
+  | 'rose'
+  | 'slate'
+  | 'tide'
+  | 'sprout'
+  | 'cobalt'
+  | 'lime'
+  | 'sunset'
+  | 'mist';
 
 // 外观模式
 export type AppearanceMode = 'light' | 'dark' | 'system';

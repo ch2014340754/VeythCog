@@ -9,6 +9,7 @@ import '@fontsource/space-grotesk/500.css';
 import '@fontsource/space-grotesk/600.css';
 import '@fontsource/space-grotesk/700.css';
 import App from './App';
+import { installPointerGlow } from './utils/pointerGlow';
 import './styles/global.css';
 import './styles/page.css';
 
@@ -17,3 +18,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
   </React.StrictMode>,
 );
+
+// 指针聚光：书签卡与弹窗边缘「鼠标靠近才亮」——全局单实例，不跟 React 生命周期走
+installPointerGlow();

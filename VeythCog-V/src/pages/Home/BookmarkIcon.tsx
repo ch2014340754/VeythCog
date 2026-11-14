@@ -8,8 +8,6 @@ import React from 'react';
 
 interface Props {
   bookmark: NavBookmark;
-  onEdit?: (b: NavBookmark) => void;
-  onDelete?: (b: NavBookmark) => void;
   onContextMenu?: (b: NavBookmark, e: React.MouseEvent) => void;
 }
 
@@ -117,7 +115,7 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
  * 图标地址按「本地缓存 → 后端 DB（S3 直链）」两级解析，不再实时请求对方网站 favicon。
  * 右键菜单由 Home 页面全局统一管理（避免多个菜单同时弹出）。
  */
-const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMenu }) => {
+const BookmarkIcon: React.FC<Props> = ({ bookmark, onContextMenu }) => {
   const signature = iconSignature(bookmark);
   const [icon, setIcon] = React.useState<NavIcon | null>(() => getCachedIcon(bookmark));
 
@@ -190,32 +188,6 @@ const BookmarkIcon: React.FC<Props> = ({ bookmark, onEdit, onDelete, onContextMe
     >
       <IconPreview icon={icon} title={bookmark.title} size={58} />
       <span className="vc-bookmark__label">{bookmark.title}</span>
-      {(onEdit || onDelete) && (
-        <div className="vc-bookmark__actions" onClick={(e) => e.stopPropagation()}>
-          {onEdit && (
-            <button
-              type="button"
-              className="vc-bookmark__action"
-              title="编辑图标"
-              aria-label="编辑图标"
-              onClick={() => onEdit(bookmark)}
-            >
-              ✎
-            </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              className="vc-bookmark__action is-danger"
-              title="删除书签"
-              aria-label="删除书签"
-              onClick={() => onDelete(bookmark)}
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 };
