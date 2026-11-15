@@ -62,12 +62,12 @@ export interface IconSyncResult {
   failed: number;
 }
 
-/** 新建 / 更新书签的图标字段 */
+/** 新建 / 更新书签的图标字段（iconType 省略 = 保持原图标，后端语义如此） */
 export interface BookmarkSaveInput {
   categoryId?: number;
   title: string;
   url: string;
-  iconType: NavIconType;
+  iconType?: NavIconType;
   iconKey?: string | null;
   iconText?: string | null;
   iconColor?: string | null;

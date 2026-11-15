@@ -14,7 +14,7 @@ const PRESET_OPTIONS = [
   { value: 'tide', label: '潮汐' },
   { value: 'sprout', label: '新芽' },
   { value: 'cobalt', label: '钴蓝' },
-  { value: 'lime', label: '青柠' },
+  { value: 'mono', label: '曜石' },
   { value: 'sunset', label: '落日' },
   { value: 'mist', label: '薄雾' },
 ];

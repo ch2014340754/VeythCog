@@ -6,7 +6,10 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useNavStore } from '@/stores/navStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { clearCachedIcon } from '@/utils/iconCache';
+import { moveBookmarksToCategory } from '@/utils/bookmarkMove';
+import { categoryIconFor } from '@/utils/categoryIcon';
 import externalLinkIcon from '@iconify-icons/lucide/external-link';
+import folderInputIcon from '@iconify-icons/lucide/folder-input';
 import imageIcon from '@iconify-icons/lucide/image';
 import pencilIcon from '@iconify-icons/lucide/pencil';
 import plusIcon from '@iconify-icons/lucide/plus';
@@ -78,9 +81,14 @@ const HomePage: React.FC = () => {
   /** 右键菜单：书签菜单 / 空白区菜单，同一时间只允许一个 */
   const [menu, setMenu] = React.useState<
     | { kind: 'bookmark'; bookmark: NavBookmark; x: number; y: number }
+    | { kind: 'bookmark-move'; bookmark: NavBookmark; x: number; y: number }
     | { kind: 'blank'; x: number; y: number }
     | null
   >(null);
+  /** 框选 / Ctrl 点选中的书签 id */
+  const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
+  /** 正在被拖动的书签 id：非空时右栏强制展开并进入"可放下"状态 */
+  const [draggingIds, setDraggingIds] = React.useState<number[]>([]);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 进入页面：本地缓存先渲染，bootstrap 聚合接口静默刷新并带回壁纸
@@ -118,6 +126,30 @@ const HomePage: React.FC = () => {
     }, 1500);
     return () => clearTimeout(timer);
   }, []);
+
+  // 兜底：拖拽在页面外结束 / 被 Esc 取消时，元素上的 dragend 不一定触发，
+  // 挂一层 window 监听，避免右栏一直停在"可放下"状态。
+  React.useEffect(() => {
+    const clearDrag = () => setDraggingIds([]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') clearDrag();
+    };
+    window.addEventListener('dragend', clearDrag);
+    window.addEventListener('drop', clearDrag);
+    window.addEventListener('mouseup', clearDrag);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('dragend', clearDrag);
+      window.removeEventListener('drop', clearDrag);
+      window.removeEventListener('mouseup', clearDrag);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  // 切分类 / 换页时清掉多选，避免"选中的是上一分类的 id"
+  React.useEffect(() => {
+    setSelectedIds([]);
+  }, [activeCategoryId]);
 
   // 点击任意位置关闭右键菜单
   // 1) 不监听 contextmenu，否则右键打开新菜单会被同一次事件立刻关掉
@@ -196,6 +228,36 @@ const HomePage: React.FC = () => {
     setMenu(null);
   };
 
+  /**
+   * 把书签搬到另一个分类（右键菜单与拖拽共用同一入口）。
+   * 补齐后刷新当前分类：搬走的图标会从当前网格消失。
+   */
+  const handleMoveBookmarks = async (ids: number[], targetCategoryId: number) => {
+    setMenu(null);
+    setDraggingIds([]);
+    if (ids.length === 0) return;
+    if (targetCategoryId === activeCategoryId) {
+      setSelectedIds([]);
+      return;
+    }
+    const target = categories.find((c) => c.id === targetCategoryId);
+    const all = useNavStore.getState().bookmarks;
+    const movable = all.filter((b) => ids.includes(b.id));
+    if (movable.length === 0) return;
+
+    try {
+      const moved = await moveBookmarksToCategory(ids, targetCategoryId, all);
+      message.success(`已移动 ${moved} 个图标到「${target?.name ?? '目标分类'}」`);
+    } catch (err) {
+      console.error('移动书签失败', err);
+      message.error('移动失败，请稍后重试');
+    } finally {
+      setSelectedIds([]);
+      const { activeCategoryId: cid, loadBookmarks } = useNavStore.getState();
+      if (cid) loadBookmarks(cid);
+    }
+  };
+
   const handleDeleteBookmark = async (b: NavBookmark) => {
     setMenu(null);
     if (!confirm(`删除书签「${b.title}」？`)) return;
@@ -236,12 +298,20 @@ const HomePage: React.FC = () => {
             <BookmarkGrid
               onAddBookmark={handleAddBookmark}
               onContextMenu={(b, e) => setMenu({ kind: 'bookmark', bookmark: b, x: e.clientX, y: e.clientY })}
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              onDragStartIds={setDraggingIds}
+              onDragEnd={() => setDraggingIds([])}
             />
           </div>
         </div>
       </div>
 
-      <CategorySidebar onAddCategory={() => setCategoryManageOpen(true)} />
+      <CategorySidebar
+        onAddCategory={() => setCategoryManageOpen(true)}
+        draggingIds={draggingIds}
+        onDropBookmarks={(categoryId, ids) => handleMoveBookmarks(ids, categoryId)}
+      />
       <QuoteBar />
       <HomeDock gridVisible={gridVisible} onToggleGrid={() => setGridVisible((v) => !v)} />
 
@@ -251,7 +321,7 @@ const HomePage: React.FC = () => {
           className="vc-home-menu"
           style={{
             left: Math.min(menu.x, window.innerWidth - 200),
-            top: Math.min(menu.y, window.innerHeight - 220),
+            top: Math.min(menu.y, window.innerHeight - (menu.kind === 'bookmark-move' ? 300 : 220)),
           }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -266,6 +336,18 @@ const HomePage: React.FC = () => {
                   setMenu(null);
                 }}
               />
+              <MenuItem
+                label={
+                  selectedIds.length > 1 && selectedIds.includes(menu.bookmark.id)
+                    ? `移动到分类（${selectedIds.length}）`
+                    : '移动到分类'
+                }
+                icon={folderInputIcon}
+                // 就地切换到分类子菜单，坐标保持不变
+                onSelect={() =>
+                  setMenu({ kind: 'bookmark-move', bookmark: menu.bookmark, x: menu.x, y: menu.y })
+                }
+              />
               <MenuItem label="编辑图标" icon={pencilIcon} onSelect={() => handleEditBookmark(menu.bookmark)} />
               <MenuItem
                 label="删除"
@@ -273,6 +355,30 @@ const HomePage: React.FC = () => {
                 danger
                 onSelect={() => handleDeleteBookmark(menu.bookmark)}
               />
+            </>
+          ) : menu.kind === 'bookmark-move' ? (
+            <>
+              <div className="vc-home-menu__group">移动到分类</div>
+              {categories.filter((c) => c.id !== activeCategoryId).length === 0 ? (
+                <div className="vc-home-menu__group">暂无其它分类</div>
+              ) : (
+                categories
+                  .filter((c) => c.id !== activeCategoryId)
+                  .map((c) => {
+                    const ids =
+                      selectedIds.length > 0 && selectedIds.includes(menu.bookmark.id)
+                        ? selectedIds
+                        : [menu.bookmark.id];
+                    return (
+                      <MenuItem
+                        key={c.id}
+                        label={c.name}
+                        icon={categoryIconFor(c.icon, c.name)}
+                        onSelect={() => handleMoveBookmarks(ids, c.id)}
+                      />
+                    );
+                  })
+              )}
             </>
           ) : (
             <>

@@ -8,7 +8,7 @@ export type PresetName =
   | 'tide'
   | 'sprout'
   | 'cobalt'
-  | 'lime'
+  | 'mono'
   | 'sunset'
   | 'mist';
 
@@ -34,6 +34,11 @@ export interface ColorPreset {
   surfaceElevated?: string;
   /** 暗色模式下的遮罩/毛玻璃底色 */
   surfaceOverlay?: string;
+  /** 可选：暗色模式下的次级/辅助文字色，缺省沿用紫灰默认值（黑白类预设用它把紫调去掉） */
+  textSecondary?: string;
+  textTertiary?: string;
+  textTertiary15?: string;
+  textInverse?: string;
 }
 
 // 主题配置

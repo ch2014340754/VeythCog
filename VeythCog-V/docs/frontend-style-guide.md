@@ -35,11 +35,12 @@
 | tide | 潮汐 | `#0F7370` | `#D2EEEE` | `#1DC8C1` | `#173534` |
 | sprout | 新芽 | `#0B772F` | `#D0F0DB` | `#16CF53` | `#163621` |
 | cobalt | 钴蓝 | `#273BF6` | `#CED1F3` | `#6D8DFF` | `#161A40` |
-| lime | 青柠 | `#4D7C0F` | `#F8FCF3` | `#7CC912` | `#293715` |
+| mono | 曜石 | `#2563EB` | `#F6F7F9` | `#5B8CFF` | `#0F1216` |
 | sunset | 落日 | `#B45309` | `#FCF8F3` | `#F2A018` | `#382B14` |
 | mist | 薄雾 | `#0369A1` | `#F5F8FA` | `#64BBD9` | `#1A2C32` |
 
-> 后六套（潮汐/新芽/钴蓝/青柠/落日/薄雾）来自用户提供的六组「类似色」色板：背景与文字沿用原值，`primary` / `accent` 保留原色相、只调明度与饱和度，使 `primary` 对 `bg` 的对比度亮色 ≥4.5、暗色 ≥7；`accent` 与 `primary` 至少保持 25° 色相差并叠加明度差，供 Logo 飘带做异色对撞。
+> 潮汐/新芽/钴蓝/落日/薄雾来自用户提供的「类似色」色板：背景与文字沿用原值，`primary` / `accent` 保留原色相、只调明度与饱和度，使 `primary` 对 `bg` 的对比度亮色 ≥4.5、暗色 ≥7；`accent` 与 `primary` 至少保持 25° 色相差并叠加明度差，供 Logo 飘带做异色对撞。>
+> **mono（曜石）** 是 2026-11-15 替换掉「青柠」的极简预设：黑白主基调 + 一支科技蓝（亮 `#2563EB` / 暗 `#5B8CFF`）。规矩是**只允许一种彩色**——`secondary` 用中性灰、`accent` 只在蓝—青同色相内延伸（`#38BDF8`，与 primary 差 25° 供 Logo 飘带对撞），不再引入第二种彩色。暗色下它额外用预设级 `textSecondary/textTertiary/textInverse` 把默认的紫灰辅助文字换成中性灰，否则「黑白」会被紫调破掉。旧值 `lime` 在老用户 localStorage 里由 `LEGACY_PRESETS`（`ThemeContext.tsx`）映射到 `mono`。
 
 **禁止**：在组件里写死 `#7C3AED`、`rgba(124,58,237,...)`。需要主色透明度时用 `colors.primary10/15/30/40` 或 `--color-primary-10/15/30/40`。
 
@@ -163,6 +164,23 @@ const cssVars = {
 
 ## 6. 布局骨架
 
+**左右两条边栏必须同族**（2026-11-15 统一）：左侧 `.vc-rail` 与右侧分类栏 `.vc-catnav` 都按「悬浮玻璃小板」画——`top/right(or left)/bottom: 10px` 内缩、宽 **72px**、`border-radius: var(--radius-xl)`、`1px var(--glass-border)`、`background: var(--glass-bg)`、`box-shadow: var(--shadow-sm)`、`overflow: hidden`（裁圆角）、滑入 `transform 0.3s var(--ease-out) + opacity`。右侧原有实现在 `page.css` 里贴满屏幕右边、只有一条左边框、无底色，和左 rail 差得像两个产品；统一规则写在 `global.css`，用 `.vc-catnav.vc-catnav` 双类名压过 `page.css`（后者加载在后）。分类项几何随之调整：栏宽 72、项 48 → `ITEM_LEFT = 12`、列表 `LIST_PAD_TOP = 24`（TSX 常量，勿只改 CSS）。两条边栏都接同一个指针引擎（`RAIL_SELECTOR = '.vc-rail, .vc-catnav'`），所以聚光与按钮内高光参数天然一致；激活态也统一为「`--color-primary-15` 底 + 左侧 2px `--color-primary` 竖条」，不用整块实色滑块。
+
+**右栏的两条特殊约定**（左 rail 没有，别照抄回左栏）：
+- **分类名默认隐藏，hover 才出**：`.vc-catnav__label` 绝对定位在项底（`bottom: 8px`）、默认 `opacity: 0 + translateY(4px)`，hover 时淡入；图标同步 `translateY(-6px) scale(1.06)` 让出位置。平时是纯图标列，和左 rail 的节奏一致；常显文字会让 60px 高的项里图标+文字挤成两行。
+- **激活条 5px + 同色柔光**（`inset 5px 0 0 primary` + `0 0 10px primary 34%` + `1px primary 18%` 外圈）：右栏在屏幕最右侧、离视线远，2px 的细条扫一眼认不出来。这里比左 rail 粗是刻意的，不是不一致。
+- 分类多到溢出时右栏内部滚动（`overflow-y: auto` + 隐藏滚动条），面板不会被撑破；`.vc-catnav__add` hover 走 `rotate(90deg) scale(1.04)`，不再用位移。
+- **选中项要补偿 5px 左内边距**：激活条占的是左侧空间，图标若仍按 48px 居中会显得偏左（未选中项没有条，所以只有选中那颗"不居中"）。`[aria-pressed='true'] { padding-left: 5px }` 让图标落在「去掉激活条后的可见区域」正中。另外滑块 `left` 必须是 **11px** 不是 12px——栏宽 72 含 1px 边框，内容区居中算下来是 11，差这 1px 整块会偏右。
+- **分类图标一律渲染成单色 Lucide，不用 emoji**：库里 `category.icon` 仍存自由文本（历史数据是 🏠 / 🛠 / `</>` 这类），渲染前必须过 `src/utils/categoryIcon.ts` 的 `categoryIconFor(icon, name)`——emoji → 图标映射、文本 token 兜底、认不出时按分类名猜，最后落到 `folder`。颜色**只在 CSS 里定**（未选中 `primary` 68%、选中/hover 满血 `primary`），所以换主题、切明暗自动跟随，不要在映射表里写死色值。
+- **新增分类不许再让用户敲 emoji**：`CATEGORY_ICON_OPTIONS` 提供 50 个预设图标（`{ key, label, icon }`），分类管理弹窗点「图标」按钮展开 `.vc-icongrid` 网格挑选，**写库的是 key**（如 `server` / `palette`），由 `categoryIconFor` 优先按 key 解析，老数据的 emoji 继续兼容；列表行里的小图标也能点开同一个网格换图标。
+- **拖拽进行中**：右栏强制 `is-visible`，所有分类项挂 `is-drop-candidate` 并临时亮出分类名（平时只 hover 出字），鼠标所悬那一项挂 `is-drop-target` 高亮。拖拽状态由 Home 的 `draggingIds` 驱动，`dragend / drop / mouseup / Esc` 四路兜底清理——元素上的 `dragend` 在拖到页面外时不一定触发，不兜底会让右栏一直卡在"可放下"。
+
+**书签搬家（移动到分类）**：两个入口、一个动作——`PUT /nav/bookmarks/{id}` 带 `categoryId`（后端 `BookmarkUpdateRequest.categoryId` 与当前分类不同时先校验目标归属再改）。
+- **图标不会因为搬家丢**：`iconType` 不传 = 保持原图标，所以移动请求只发 `title / url / categoryId`。`BookmarkSaveInput.iconType` 已改为可选，别顺手补 `auto`，那会触发重新抓图标。
+- **右键菜单**：书签菜单里点「移动到分类」就地切成同坐标的分类子菜单（`menu.kind = 'bookmark-move'`），自动排除当前分类；右键那颗若在多选集合里，移的是整批（菜单文案带数量）。
+- **框选 + 拖拽**：网格空白处按下拖出 `.vc-bookmark-band`，松手选中相交图标；空白单击清空。图标上按 `Ctrl / Cmd / Shift` 是加选而不是打开链接。拖一个已选中图标 = 整批走，拖未选中的只走它自己。
+- 切分类自动清空 `selectedIds`；后端不改 `sortOrder`，来回搬一次顺序能原样恢复（已实测）。
+
 ```
 App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter → GlobalMusic → ErrorBoundary → Suspense → Routes)
  └─ MainLayout：左侧 72px 悬浮毛玻璃 rail（fixed top/left/bottom 10, radius --radius-xl）
@@ -203,6 +221,15 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 }
 ```
 
+**弹窗（Modal）**
+- **标题区不要背景**：主题 token 里 `Modal.headerBg = surface`，玻璃模式下 surface 是半透白，会在深色玻璃弹窗上贴出一条浅色 header 带，标题右侧还被关闭按钮压住（真实踩过）。`global.css` 已统一覆盖为 `.ant-modal .ant-modal-header { background: transparent }`，并给 `.ant-modal-title` 留 `padding-right: 44px` 的安全距离。以后不要再用 token 给 header 上色。
+- 关闭按钮保持 antd 默认（`absolute; top/right 8px`、40×40）；要拉开距离靠标题内边距，别单独挪关闭按钮，否则窄弹窗会贴到圆角。
+
+**Toast（antd `message`）**
+- antd 的 message 走 CSS-in-JS，注入时机在 `global.css` 之后；**同权重规则会被它盖掉**，光写 `body.dark .ant-message-notice-content` 只能改到文字色，底色仍是 antd 的白色 → 深色主题下变成“白底浅字”，几乎看不见（真实踩过）。
+- 现在由 `global.css` 末尾一段统一锁死（`!important`）：底 `--color-surface-elevated`、字 `--color-text`、边 `--color-border`、`border-radius: 10px`，图标按类型单独上色（success `--color-success` / error `--color-error` / warning / info+loading `--color-primary`）。改主题、切明暗自动跟随，别在组件里给 message 写死颜色。
+- 新增别的 antd 浮层（notification / dropdown）时同理：先假设 CSS-in-JS 会压过全局样式，用 `!important` 或更高权重（双类名）验证过再说。
+
 **Segmented / Tab（胶囊）**
 - 容器 `padding 4` + `radius 999` + `colors.surface`；滑块 `position absolute; left 4; width calc(50% - 4px); background colors.primary; transform translateX(100%)`；`transition transform .28s cubic-bezier(.4,0,.2,1)`；激活项文字在亮色 `#fff`、暗色 `#14102B`。
 - 面板切换用 `.vc-tab-pane`（`global.css` 已有入场动画），不要自造。
@@ -241,6 +268,10 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 **时长表**：hover 150ms / 状态切换 250ms / 面板进出 400ms / 环境光漂移 4–12s（多段 keyframes，首尾同值才能无缝循环）。
 
 **首屏书签悬停上浮（2026-11-15）**：`.vc-bookmark:hover .vc-iconpreview` → `translateY(-6px) scale(1.04)`，`transition: transform var(--duration-fast) var(--ease-out)`；只动图标不动底块背景，否则整块会跳。规则写在 `styles/global.css`（`page.css` 由用户维护，不插）。`prefers-reduced-motion` 下关闭。注意 `.vc-iconpreview` 只在此处位移，弹窗预览（`--plain`）不受影响。
+
+**悬停时底块不能“框住”上浮的图标**：图标抬起 6px 后会顶到 hover 底块的上边缘，看着像撞框。所以 hover 不铺实底，改成 `linear-gradient(to top)`：底部保留原浓度（普通模式 `primary 10%`、壁纸模式 `rgba(255,255,255,.13)`），30% 起渐隐、78% 处全透明，图标像从底部的光雾里浮出来。必须用双类名 `.vc-bookmark.vc-bookmark:hover` / `body.has-bg .vc-bookmark.vc-bookmark:hover` 才压得住 `page.css` 里等权重的 `.vc-bookmark:hover`。
+
+**左侧 rail 边缘流光（2026-11-15 二次修正）**：**不要用 `conic-gradient` 转角度给细长容器画流光**。rail 是 72×870，conic 的角度映射到实际边长极不均匀——顶/底那两条 72px 短边几度就被扫完，整条短边一次全亮，看着像“流光在顶部/底部被拉长”，只有左右长边是正常渐变光带（真实踩过）。改成“按边跑”：`::after` 保留 `content-box` XOR 的 1px 环遮罩，`background-image` 三层——① 整圈 `color-mix(primary 32%, transparent)` 底光（顶/底只靠这层，不扫动）；②③ 沿左右长边的 1px 光带，`background-size: 1px 300%` 撑出 3 倍高画布、band 放在画布 34%~45%，靠 `background-position` 百分比位移（`p × (容器高 − 画布高) = −2pH`）把 band 从下沿送到上沿，左向下、右向上，`@keyframes vc-rail-beam` 只动 `background-position`。因为 band 长度按像素定死，所以走到哪儿都一样长。hover 仍走 `opacity: 1` + `animation-duration: 2.8s`。
 
 **左侧 rail 聚光跟随（2026-11-15）**：复用 `utils/pointerGlow.ts` 的指针引擎（不另起监听），新增第三种目标 `rail`：`.vc-rail` 上写 `--glow`（强度）/`--glow-x`/`--glow-y`（元素内 px，钳制在栏内），CSS 用 `.vc-rail::before` 画 `132px` 主色 radial（核心 38% → 44% 处 16% → 74% 透明），`opacity: calc(var(--glow) * 0.95)`。**`::after` 已被流光描边占用，聚光只能用 `::before`**；`z-index:0` + 按钮自身 `position:relative`，光在按钮底下、玻璃底之上。指针在栏内满亮、出栏 40px 内渐隐（避免贴边忽明忽暗）；壁纸模式补一层白晕。**被压住的那颗按钮再单独打一层内侧高光**：引擎命中 `.vc-rail__btn` 后写 `--btn-glow` / `--btn-x` / `--btn-y`（按钮内 px），CSS 用 `.vc-rail__btn::before` 画 `58px` radial + `inset 0 0 0 1px primary 26%` 内描边；换按钮时把上一颗的 `--btn-glow` 归零（不能只靠 `:hover`，光点要在按钮内跟着指针走）。
 

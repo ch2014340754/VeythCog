@@ -3,7 +3,7 @@ import { ColorPreset, PresetName } from '@/types';
 /**
  * 亮色预设：surface 统一白色系，不在这里指定
  *
- * 后六套（潮汐/新芽/钴蓝/青柠/落日/薄雾）按用户提供的六组色板取色：
+ * 潮汐/新芽/钴蓝/落日/薄雾按用户提供的色板取色；mono（曜石）是「黑白主基调 + 科技蓝点缀」：
  * 背景/文字沿用截图；primary 与 accent 在保持截图色相的前提下压深到对背景可读；
  * accent 与 primary 至少保持 25° 色相差 + 明度差，保证 Logo 飘带两端可辨。
  */
@@ -17,7 +17,8 @@ const lightPresets: Record<PresetName, Omit<ColorPreset, 'name' | 'label' | 'sur
   tide:     { primary: '#0F7370', secondary: '#B9F3D4', cta: '#117741', accent: '#2188E2', bg: '#D2EEEE', text: '#2A3C3C', border: '#BEE5E3' },
   sprout:   { primary: '#0B772F', secondary: '#C1F6B7', cta: '#1E770D', accent: '#0E967F', bg: '#D0F0DB', text: '#2A3C30', border: '#BCE6CA' },
   cobalt:   { primary: '#273BF6', secondary: '#B6DDF7', cta: '#085E96', accent: '#924EF8', bg: '#CED1F3', text: '#2A2C3C', border: '#B9BEE9' },
-  lime:     { primary: '#4D7C0F', secondary: '#F7F2B6', cta: '#7E740B', accent: '#1AA90D', bg: '#F8FCF3', text: '#353C2A', border: '#D5E7BB' },
+  // 黑白极简：底近白、字近黑、面纯中性灰；primary 一支科技蓝，其余装饰色只做同色相延伸，不加第二种彩色
+  mono:     { primary: '#2563EB', secondary: '#E6E9EF', cta: '#1D4ED8', accent: '#38BDF8', bg: '#F6F7F9', text: '#0B0D12', border: '#D9DDE4' },
   sunset:   { primary: '#B45309', secondary: '#F7BDB6', cta: '#DC240C', accent: '#889907', bg: '#FCF8F3', text: '#3C352A', border: '#E9D7BA' },
   mist:     { primary: '#0369A1', secondary: '#BFEDE3', cta: '#1F7E68', accent: '#738CDF', bg: '#F5F8FA', text: '#2A373C', border: '#C2D9E1' },
 };
@@ -43,8 +44,9 @@ const darkPresets: Record<PresetName, Omit<ColorPreset, 'name' | 'label'>> = {
               surface: '#163621', surfaceElevated: '#1F472C', surfaceOverlay: 'rgba(22, 54, 33, 0.85)' },
   cobalt:   { primary: '#6D8DFF', secondary: '#1371AE', cta: '#29A4F4', accent: '#B486F9', bg: '#0B0D23', text: '#E3E5F7', border: '#28307C',
               surface: '#161A40', surfaceElevated: '#1F2450', surfaceOverlay: 'rgba(22, 26, 64, 0.85)' },
-  lime:     { primary: '#7CC912', secondary: '#AEA213', cta: '#B9AC10', accent: '#20C411', bg: '#19220C', text: '#EFF7E3', border: '#58792A',
-              surface: '#293715', surfaceElevated: '#36471F', surfaceOverlay: 'rgba(41, 55, 21, 0.85)' },
+  mono:     { primary: '#5B8CFF', secondary: '#232933', cta: '#3B82F6', accent: '#38BDF8', bg: '#08090C', text: '#EDF0F4', border: '#2A303A',
+              textSecondary: '#B4BBC6', textTertiary: '#8A929E', textTertiary15: 'rgba(138, 146, 158, 0.15)', textInverse: '#0B0D12',
+              surface: '#0F1216', surfaceElevated: '#161A21', surfaceOverlay: 'rgba(15, 18, 22, 0.85)' },
   sunset:   { primary: '#F2A018', secondary: '#AE2513', cta: '#F78576', accent: '#9DAF0A', bg: '#231A0B', text: '#F7F0E3', border: '#7B5C28',
               surface: '#382B14', surfaceElevated: '#49381D', surfaceOverlay: 'rgba(56, 43, 20, 0.85)' },
   mist:     { primary: '#64BBD9', secondary: '#2A987E', cta: '#2DB897', accent: '#8DA2E3', bg: '#0F1B1F', text: '#E3F2F7', border: '#365F6D',
@@ -60,7 +62,7 @@ const presetLabels: Record<PresetName, string> = {
   tide: '潮汐',
   sprout: '新芽',
   cobalt: '钴蓝',
-  lime: '青柠',
+  mono: '曜石',
   sunset: '落日',
   mist: '薄雾',
 };
@@ -70,4 +72,4 @@ export function getPreset(name: PresetName, isDark: boolean): ColorPreset {
   return { name, label: presetLabels[name], ...colors };
 }
 
-export const presetNames: PresetName[] = ['amethyst', 'emerald', 'indigo', 'rose', 'slate', 'tide', 'sprout', 'cobalt', 'lime', 'sunset', 'mist'];
+export const presetNames: PresetName[] = ['amethyst', 'emerald', 'indigo', 'rose', 'slate', 'tide', 'sprout', 'cobalt', 'mono', 'sunset', 'mist'];

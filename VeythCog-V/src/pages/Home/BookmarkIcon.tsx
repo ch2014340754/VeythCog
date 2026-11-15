@@ -9,6 +9,15 @@ import React from 'react';
 interface Props {
   bookmark: NavBookmark;
   onContextMenu?: (b: NavBookmark, e: React.MouseEvent) => void;
+  /** 是否处于框选/多选状态 */
+  selected?: boolean;
+  /** 当前多选集合（拖动时决定带几个走） */
+  selectedIds?: number[];
+  /** 按住 Ctrl / Shift / Cmd 点图标：切换选中而不是打开链接 */
+  onToggleSelect?: (id: number) => void;
+  /** 开始拖拽时上报要移动的 id 列表（右栏据此强制展开并进入可放置态） */
+  onDragStartIds?: (ids: number[]) => void;
+  onDragEnd?: () => void;
 }
 
 interface PreviewProps {
@@ -117,7 +126,15 @@ export const IconPreview: React.FC<PreviewProps> = ({ icon, title, size = 58, pl
  * 图标地址按「本地缓存 → 后端 DB（S3 直链）」两级解析，不再实时请求对方网站 favicon。
  * 右键菜单由 Home 页面全局统一管理（避免多个菜单同时弹出）。
  */
-const BookmarkIcon: React.FC<Props> = ({ bookmark, onContextMenu }) => {
+const BookmarkIcon: React.FC<Props> = ({
+  bookmark,
+  onContextMenu,
+  selected = false,
+  selectedIds = [],
+  onToggleSelect,
+  onDragStartIds,
+  onDragEnd,
+}) => {
   const signature = iconSignature(bookmark);
   const [icon, setIcon] = React.useState<NavIcon | null>(() => getCachedIcon(bookmark));
 
@@ -165,21 +182,38 @@ const BookmarkIcon: React.FC<Props> = ({ bookmark, onContextMenu }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookmark.id, signature]);
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    // 按住 Ctrl / Cmd / Shift 点是"选中"，不打开链接——多选后可以整体拖到右栏分类
+    if (e.metaKey || e.ctrlKey || e.shiftKey) {
+      e.preventDefault();
+      onToggleSelect?.(bookmark.id);
+      return;
+    }
     window.open(bookmark.url, '_blank', 'noopener,noreferrer');
   };
 
   return (
     <div
-      className="vc-bookmark"
+      className={`vc-bookmark${selected ? ' is-selected' : ''}`}
       role="link"
       tabIndex={0}
       title={bookmark.title}
+      data-bookmark-id={bookmark.id}
+      draggable
       onClick={handleClick}
+      onDragStart={(e) => {
+        // 拖一个已选中的图标 = 把整批选中项一起搬走；拖未选中的只搬它自己
+        const ids = selected && selectedIds.length > 0 ? selectedIds : [bookmark.id];
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/x-vc-bookmarks', ids.join(','));
+        e.dataTransfer.setData('text/plain', ids.join(','));
+        onDragStartIds?.(ids);
+      }}
+      onDragEnd={() => onDragEnd?.()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          handleClick();
+          handleClick(e as unknown as React.MouseEvent);
         }
       }}
       onContextMenu={(e) => {

@@ -49,11 +49,17 @@ const PRESET_KEY = 'theme-preset';
 const APPEARANCE_KEY = 'theme-appearance';
 
 // 白名单直接取 presetNames：增删预设只需改 presets.ts，这里不用跟着维护
+/** 已下线的预设名 → 替代预设（老用户的 localStorage 里还留着旧值） */
+const LEGACY_PRESETS: Record<string, PresetName> = {
+  lime: 'mono',
+};
+
 function getStoredPreset(): PresetName {
   try {
     const stored = localStorage.getItem(PRESET_KEY);
-    if (stored && (presetNames as string[]).includes(stored)) {
-      return stored as PresetName;
+    const mapped = stored ? LEGACY_PRESETS[stored] ?? stored : null;
+    if (mapped && (presetNames as string[]).includes(mapped)) {
+      return mapped as PresetName;
     }
   } catch {
     // localStorage 不可用时忽略
@@ -119,11 +125,11 @@ function computeThemeColors(presetName: PresetName, isDark: boolean, glassEnable
       accent: preset.accent,
       bg: preset.bg,
       text: preset.text,
-      textSecondary: '#C4C0DA',
+      textSecondary: preset.textSecondary ?? '#C4C0DA',
       // 暗色下辅助文字提亮，避免在深底上对比不足
-      textTertiary: '#A8A4C2',
-      textTertiary15: 'rgba(168, 164, 194, 0.15)',
-      textInverse: '#1E1B4B',
+      textTertiary: preset.textTertiary ?? '#A8A4C2',
+      textTertiary15: preset.textTertiary15 ?? 'rgba(168, 164, 194, 0.15)',
+      textInverse: preset.textInverse ?? '#1E1B4B',
       border: preset.border,
       divider: hexToRgba(preset.border, 0.4),
       surface: glassSurface,
@@ -203,10 +209,10 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean, glassEnabled
     root.style.setProperty('--color-surface-overlay', surfaceOverlay);
     // 暗色下正文与次级文字在毛玻璃 / 壁纸上会被再压一层对比度，
     // 次级色往 text 提亮一档（原 #9CA3AF / #8A8FA3 在深紫面板上发灰）。
-    root.style.setProperty('--color-text-secondary', '#C4C0DA');
-    root.style.setProperty('--color-text-tertiary', '#A8A4C2');
-    root.style.setProperty('--color-text-tertiary-15', 'rgba(168, 164, 194, 0.15)');
-    root.style.setProperty('--color-text-inverse', '#1E1B4B');
+    root.style.setProperty('--color-text-secondary', preset.textSecondary ?? '#C4C0DA');
+    root.style.setProperty('--color-text-tertiary', preset.textTertiary ?? '#A8A4C2');
+    root.style.setProperty('--color-text-tertiary-15', preset.textTertiary15 ?? 'rgba(168, 164, 194, 0.15)');
+    root.style.setProperty('--color-text-inverse', preset.textInverse ?? '#1E1B4B');
     root.style.setProperty('--color-divider', hexToRgba(preset.border, 0.4));
     root.style.setProperty('--color-success', '#34D399');
     root.style.setProperty('--color-warning', '#FBBF24');

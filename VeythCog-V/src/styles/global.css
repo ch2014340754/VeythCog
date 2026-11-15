@@ -765,43 +765,61 @@ body.dark .composer-model-select.ant-select-focused .ant-select-selector {
 
 
 /* ── 左侧导航 rail 的流光描边（border beam） ──────────────────────────
-   与页面内按钮（Knowledge 侧栏 .vc-kb-action）共用同一套光带原语：
-   @property 注册角度变量才能对 conic-gradient 的角度做动画。
-   浏览器不支持 @property 时该层背景失效、角度不动，rail 回落到原有 1px 描边，不影响布局。 */
-@property --vc-beam-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes vc-beam-spin {
-  to {
-    --vc-beam-angle: 360deg;
-  }
-}
-
+   早前用的是 conic-gradient 转角度：rail 是 72×870 的细高条，conic 的角度
+   映射到长宽比上极不均匀——顶/底那两条 72px 短边几度就被扫完，整条边一次
+   全亮（看着像"流光在顶部/底部被拉长"），而左右长边才是正常的渐变光带。
+   现在改成"按边跑"：底色给整圈一层同色微光，再让两条 1px 光带分别沿左/右
+   长边匀速走完（左向下、右向上，对称收口），速度按边长算，顶/底不再参与
+   扫动，所以任何地方的光带长度都一致。光带用 background-size: 1px 300%
+   撑出比元素高 3 倍的画布，band 放在画布 34%~45% 处，靠 background-position
+   的百分比位移（p × (容器高 - 画布高) = -2pH）把 band 从下沿送到上沿。 */
 .vc-rail::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1px;
+  padding: 2px;
   pointer-events: none;
-  background: conic-gradient(
-    from var(--vc-beam-angle),
-    transparent 0deg,
-    var(--color-primary) 40deg,
-    var(--color-accent, var(--color-primary)) 95deg,
-    transparent 150deg,
-    transparent 360deg
-  );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  background-repeat: no-repeat;
+  background-image:
+    /* ① 整圈底光（顶/底短边只有这层，不扫动） */
+    linear-gradient(
+      color-mix(in srgb, var(--color-primary) 32%, transparent),
+      color-mix(in srgb, var(--color-primary) 32%, transparent)
+    ),
+    /* ② 左边光带：向下走 */
+    linear-gradient(
+      180deg,
+      transparent 34%,
+      var(--color-primary) 38%,
+      var(--color-accent, var(--color-primary)) 40.5%,
+      transparent 45%,
+      transparent 100%
+    ),
+    /* ③ 右边光带：向上走 */
+    linear-gradient(
+      180deg,
+      transparent 34%,
+      var(--color-primary) 38%,
+      var(--color-accent, var(--color-primary)) 40.5%,
+      transparent 45%,
+      transparent 100%
+    );
+  background-size: 100% 100%, 2px 300%, 2px 300%;
+  background-position: 0 0, 0 100%, 100% 0%;
   opacity: 0.5;
-  animation: vc-beam-spin 9s linear infinite;
+  animation: vc-rail-beam 9s linear infinite;
   transition: opacity 240ms var(--ease-out);
+}
+
+@keyframes vc-rail-beam {
+  to {
+    background-position: 0 0, 0 0%, 100% 100%;
+  }
 }
 
 /* 悬停整条 rail（或键盘焦点进入）时：光带提亮、加速、叠一圈同色外发光 */
@@ -816,7 +834,7 @@ body.dark .composer-model-select.ant-select-focused .ant-select-selector {
   box-shadow: var(--shadow-sm), 0 0 26px -10px var(--color-primary-40);
 }
 
-/* 系统开启「减少动态效果」时保留静态高光边，不转圈 */
+/* 系统开启「减少动态效果」时保留静态高光边，不跑光带 */
 @media (prefers-reduced-motion: reduce) {
   .vc-rail::after {
     animation: none;
@@ -973,7 +991,7 @@ body.has-bg .vc-rail::before {
   pointer-events: none;
   opacity: var(--btn-glow, 0);
   transition: opacity 140ms var(--ease-out);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 32%, transparent);
   background:
     radial-gradient(
       58px 58px at var(--btn-x, 50%) var(--btn-y, 50%),
@@ -987,4 +1005,418 @@ body.has-bg .vc-rail::before {
   .vc-rail__btn::before {
     transition: none;
   }
+}
+/* 弹窗标题区：主题 token 给 Modal.headerBg = surface，在玻璃模式下是一条半透白带，
+   和玻璃弹窗本身的深色底踩不到一起，标题右侧还会被关闭按钮压住。
+   这里统一把 header 背景去掉，只留玻璃底；再给标题留出右侧安全距离。 */
+.ant-modal .ant-modal-header {
+  background: transparent;
+}
+.ant-modal .ant-modal-title {
+  padding-right: 44px;
+}
+/* ============ 右侧分类栏：改成和左侧 rail 同一块「悬浮玻璃小板」 ============
+   原样式在 page.css（贴满屏幕右边、只有一条左边框、无背景），和左 rail 的
+   「10px 内缩 + 全圆角 + 玻璃底 + 1px 描边」差得太远，看着像两块不同产品。
+   这里用双类名提高优先级压过 page.css，不改用户维护的那个文件。 */
+.vc-catnav.vc-catnav {
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  width: 72px;
+  padding: 24px 0 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transform: translateX(calc(100% + 12px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s var(--ease-out), opacity 0.3s ease;
+}
+.vc-catnav.vc-catnav.is-visible {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 分类项：让出层级给聚光，图标与文字压一档（原来是 22/12，整栏偏满） */
+.vc-catnav__item.vc-catnav__item,
+.vc-catnav__add.vc-catnav__add {
+  position: relative;
+  z-index: 1;
+}
+.vc-catnav__emoji.vc-catnav__emoji {
+  font-size: 20px;
+}
+.vc-catnav__label.vc-catnav__label {
+  margin-top: 3px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+}
+
+/* 激活态：与 rail 同语言——primary-15 底 + 左侧 2px 竖条，不用整块实色滑块 */
+.vc-catnav__thumb.vc-catnav__thumb {
+  background: var(--color-primary-15);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
+
+/* 跟随指针的柔光（与 .vc-rail::before 同一套参数） */
+.vc-catnav.vc-catnav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: calc(var(--glow, 0) * 0.95);
+  transition: opacity 160ms var(--ease-out);
+  background:
+    radial-gradient(
+      132px 132px at var(--glow-x, 50%) var(--glow-y, 0%),
+      color-mix(in srgb, var(--color-primary) 38%, transparent) 0%,
+      color-mix(in srgb, var(--color-primary) 16%, transparent) 44%,
+      transparent 74%
+    );
+}
+
+/* 被指针压住的那一项：内侧高光 */
+.vc-catnav__item.vc-catnav__item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--btn-glow, 0);
+  transition: opacity 140ms var(--ease-out);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 32%, transparent);
+  background:
+    radial-gradient(
+      58px 58px at var(--btn-x, 50%) var(--btn-y, 50%),
+      color-mix(in srgb, var(--color-primary) 30%, transparent) 0%,
+      color-mix(in srgb, var(--color-primary) 12%, transparent) 46%,
+      transparent 76%
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-catnav.vc-catnav {
+    transition: none;
+  }
+  .vc-catnav.vc-catnav::before,
+  .vc-catnav__item.vc-catnav__item::before {
+    transition: none;
+  }
+}
+/* ============ 右栏细节：分类名改为 hover 才出现 + 激活条加宽 ============
+   page.css 的 .vc-catnav__label 是常显的（12px/opacity .8），项里图标+文字挤成两行；
+   这里用双类名压过它：标签绝对定位在底部、默认透明，hover 时才淡入上浮，
+   图标同步上移——只在 hover 时"展开"，平时是纯图标，和左 rail 的节奏一致。 */
+.vc-catnav__item.vc-catnav__item {
+  justify-content: center;
+  overflow: hidden;
+}
+.vc-catnav__emoji.vc-catnav__emoji {
+  transition: transform 0.22s var(--ease-out);
+  transform: translateY(0);
+}
+.vc-catnav__item.vc-catnav__item:hover .vc-catnav__emoji {
+  transform: translateY(-6px) scale(1.06);
+}
+.vc-catnav__label.vc-catnav__label {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 8px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.18s ease, transform 0.22s var(--ease-out);
+  pointer-events: none;
+}
+.vc-catnav__item.vc-catnav__item:hover .vc-catnav__label,
+.vc-catnav__item.vc-catnav__item[aria-pressed='true']:focus-visible .vc-catnav__label {
+  opacity: 0.92;
+  transform: translateY(0);
+}
+
+/* 激活条：2px → 5px，并在条外侧补一层同色柔光，短距离一眼能认出"当前在哪一栏" */
+.vc-catnav__thumb.vc-catnav__thumb {
+  background: var(--color-primary-15);
+  border-radius: var(--radius-md);
+  box-shadow:
+    inset 5px 0 0 var(--color-primary),
+    0 0 10px color-mix(in srgb, var(--color-primary) 34%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+/* 新建分类：hover 时轻轻转正 + 提亮，别再用位移跟其它按钮抢动作 */
+.vc-catnav__add.vc-catnav__add {
+  font-weight: 500;
+}
+.vc-catnav__add.vc-catnav__add:hover {
+  transform: rotate(90deg) scale(1.04);
+  background: var(--color-primary-10, rgba(0, 0, 0, 0.04));
+  color: var(--color-primary);
+}
+
+/* 分类多到溢出时：右栏内部滚动，滚动条隐藏，避免把面板撑破 */
+.vc-catnav.vc-catnav {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.vc-catnav.vc-catnav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-catnav__emoji.vc-catnav__emoji,
+  .vc-catnav__label.vc-catnav__label,
+  .vc-catnav__add.vc-catnav__add {
+    transition: none;
+  }
+  .vc-catnav__add.vc-catnav__add:hover {
+    transform: none;
+  }
+}
+/* 选中项补偿：激活条 5px 占的是左侧空间，图标若仍按 48px 居中会显得偏左
+   （未选中项没有这条，所以只有选中那颗看着"不居中"）。给选中项补 5px 左内边距，
+   让图标落在"去掉激活条之后那块可见区域"的正中，视觉重心才回正。 */
+.vc-catnav__item.vc-catnav__item[aria-pressed='true'] {
+  padding-left: 5px;
+}
+
+/* ============ 右栏分类图标：单色 Lucide + 主题 primary 填充 ============
+   原来直接渲染库里存的 emoji（🏠 / 🛠 / ✨），彩色 + 各平台字形不一，
+   放在玻璃板上很跳。现在统一走 src/utils/categoryIcon.ts 映射成 Lucide 单色图标，
+   颜色只由这里决定：未选中是 primary 的 55%，选中与 hover 走满血 primary。 */
+.vc-catnav__emoji.vc-catnav__emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 32px;
+  color: color-mix(in srgb, var(--color-primary) 68%, transparent);
+  transition: color 0.5s ease, transform 0.22s var(--ease-out);
+}
+.vc-catnav__item.vc-catnav__item[aria-pressed='true'] .vc-catnav__emoji {
+  color: var(--color-primary);
+}
+.vc-catnav__item.vc-catnav__item:hover .vc-catnav__emoji {
+  color: var(--color-primary);
+}
+/* ============ 分类图标选择器（分类管理弹窗） ============
+   新增分类不再让你手敲 emoji，而是点开 50 个单色图标挑一个；
+   存进库的是键名（如 server / palette），渲染时由 categoryIconFor 解析。
+   颜色全部走 primary 变量，明暗主题自动跟随。 */
+.vc-iconpick-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-primary) 80%, transparent);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.vc-iconpick-trigger:hover,
+.vc-iconpick-trigger.is-open {
+  color: var(--color-primary);
+  border-color: var(--color-primary-40);
+  background: var(--color-primary-10);
+}
+
+.vc-icongrid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-surface);
+  max-height: 232px;
+  overflow-y: auto;
+}
+.vc-icongrid__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-primary) 62%, transparent);
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.vc-icongrid__cell:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-10);
+}
+.vc-icongrid__cell.is-active {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  background: var(--color-primary-15);
+}
+
+/* 列表行里的小图标：原来是个 span，现在点一下就能换图标，所以补按钮重置 */
+.vc-cat-row__icon.vc-cat-row__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+.vc-cat-row__icon.vc-cat-row__icon:hover,
+.vc-cat-row__icon.vc-cat-row__icon.is-open {
+  color: var(--color-primary);
+  border-color: var(--color-primary-30);
+  background: var(--color-primary-10);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-iconpick-trigger,
+  .vc-icongrid__cell,
+  .vc-cat-row__icon.vc-cat-row__icon {
+    transition: none;
+  }
+}
+/* ============ 书签搬家：框选 + 拖拽到右栏分类 ============
+   两套入口共用同一个后端动作（PUT /nav/bookmarks/{id} 带 categoryId）：
+   ① 图标右键菜单「移动到分类」—— 精确，分类再多也好找；
+   ② 框选（或 Ctrl 点选）后拖到右栏分类 —— 直觉、批量。
+   颜色都走 primary 变量。 */
+.vc-bookmark.vc-bookmark {
+  cursor: grab;
+}
+.vc-bookmark.vc-bookmark.is-selected {
+  background: var(--color-primary-10);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+.vc-bookmark.vc-bookmark:active {
+  cursor: grabbing;
+}
+
+/* 框选矩形：跟着鼠标在网格上画出来的那个框 */
+.vc-bookmark-band {
+  position: absolute;
+  z-index: 5;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* 右键菜单里的分组标题 / 分类列表容器限高 */
+.vc-home-menu__group {
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
+/* 拖拽经过右栏时的两个状态：可放下 / 正悬停 */
+.vc-catnav__item.vc-catnav__item.is-drop-candidate {
+  cursor: grabbing;
+}
+.vc-catnav__item.vc-catnav__item.is-drop-target {
+  background: var(--color-primary-15);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent);
+  transform: scale(0.96);
+  color: var(--color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-catnav__item.vc-catnav__item.is-drop-target {
+    transform: none;
+  }
+}
+/* 拖拽进行中：所有分类项临时亮出名字（平时 hover 才出），
+   否则用户看不出自己正悬在哪个目标上 */
+.vc-catnav__item.vc-catnav__item.is-drop-candidate .vc-catnav__label {
+  opacity: 0.92;
+  transform: translateY(0);
+}
+.vc-catnav__item.vc-catnav__item.is-drop-candidate .vc-catnav__emoji {
+  transform: translateY(-6px) scale(1.06);
+}
+/* ============ 全局 toast（antd message）配色 ============
+   antd 的 message 用 CSS-in-JS 注入，注入时机在 global.css 之后，
+   同权重规则会被它盖掉：之前 body.dark 那条只改到了文字色，
+   底色仍是 antd 的白色 → 深色主题下变成"白底浅字"，基本看不清。
+   这里用 !important 锁死底色与文字色，主题切换靠 CSS 变量自动跟随。 */
+.ant-message .ant-message-notice-content {
+  background: var(--color-surface-elevated) !important;
+  color: var(--color-text) !important;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+.ant-message .ant-message-custom-content {
+  color: var(--color-text) !important;
+  font-size: 13px;
+  font-weight: 500;
+}
+/* 图标按类型着色，别再跟文字一个色 */
+.ant-message .ant-message-success .anticon {
+  color: var(--color-success) !important;
+}
+.ant-message .ant-message-error .anticon {
+  color: var(--color-error) !important;
+}
+.ant-message .ant-message-warning .anticon {
+  color: var(--color-warning) !important;
+}
+.ant-message .ant-message-info .anticon,
+.ant-message .ant-message-loading .anticon {
+  color: var(--color-primary) !important;
+}
+/* ── 首屏书签 hover：底色改成"自下而上淡出" ────────────────────────────
+   图标 hover 会 translateY(-6px)，原先是整块半透明底色，上浮后图标头顶会
+   直接压住底块的上边缘，看起来像"撞到框"。所以 hover 时不铺实底，改成
+   linear-gradient(to top)：底部保留原浓度的同色/白雾，往上渐隐到全透明，
+   图标像是从底部的光雾里浮出来，而不是被一个方块框着。 */
+.vc-bookmark.vc-bookmark:hover,
+.vc-bookmark.vc-bookmark:focus-visible {
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-primary) 10%, transparent) 0%,
+    color-mix(in srgb, var(--color-primary) 10%, transparent) 30%,
+    color-mix(in srgb, var(--color-primary) 4%, transparent) 55%,
+    transparent 78%
+  );
+}
+body.has-bg .vc-bookmark.vc-bookmark:hover,
+body.has-bg .vc-bookmark.vc-bookmark:focus-visible {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.13) 0%,
+    rgba(255, 255, 255, 0.13) 30%,
+    rgba(255, 255, 255, 0.05) 55%,
+    rgba(255, 255, 255, 0) 78%
+  );
 }

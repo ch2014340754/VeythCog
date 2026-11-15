@@ -24,8 +24,8 @@
 const CARD_SELECTOR = '.vc-bookmark';
 /** 面板：内页分区 + 弹窗。`.vc-stat` 有自己的脉搏与扫光，不参与（伪元素会打架） */
 const SURFACE_SELECTOR = '.vc-panel:not(.vc-stat), .ant-modal .ant-modal-content';
-/** 左侧导航 rail：按钮区上一团跟着鼠标走的聚光 */
-const RAIL_SELECTOR = '.vc-rail';
+/** 导航栏（左 rail / 右分类栏）：按钮区上一团跟着鼠标走的聚光 */
+const RAIL_SELECTOR = '.vc-rail, .vc-catnav';
 
 /** 卡片：多远还能感觉到（px） */
 const CARD_RADIUS = 130;
@@ -175,7 +175,7 @@ function highlightButton(it: GlowItem, x: number, y: number) {
   let target: HTMLElement | null = null;
 
   if (x > -9000) {
-    for (const btn of it.el.querySelectorAll<HTMLElement>('.vc-rail__btn')) {
+    for (const btn of it.el.querySelectorAll<HTMLElement>('.vc-rail__btn, .vc-catnav__item')) {
       const br = btn.getBoundingClientRect();
       if (x >= br.left && x <= br.right && y >= br.top && y <= br.bottom) {
         target = btn;
