@@ -247,20 +247,9 @@
 }
 
 /* ── 侧栏主按钮的流光描边（border beam） ─────────────────────────────
-   用伪元素画 1px 的 conic-gradient 环，mask 掉中间内容区，只留边。
-   @property 注册 --vc-beam-angle 才能对角度做动画（Chrome/Edge/Safari 16+ 支持；
-   不支持时角度为语法错误 → 该层背景失效，按钮回落到 antd 自带描边，不炸版）。 */
-@property --vc-beam-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes vc-beam-spin {
-  to {
-    --vc-beam-angle: 360deg;
-  }
-}
+   @property --vc-beam-angle 与 @keyframes vc-beam-spin 统一注册在 global.css，
+   rail 和这里的按钮共用；此处只写描边环本身。
+   不在支持 @property 的浏览器里 → 该层背景失效，按钮回落到 antd 自带描边，不炸版。 */
 
 .vc-kb-action .ant-btn {
   width: 100%;

@@ -763,3 +763,63 @@ body.dark .composer-model-select.ant-select-focused .ant-select-selector {
 }
 
 
+
+/* ── 左侧导航 rail 的流光描边（border beam） ──────────────────────────
+   与页面内按钮（Knowledge 侧栏 .vc-kb-action）共用同一套光带原语：
+   @property 注册角度变量才能对 conic-gradient 的角度做动画。
+   浏览器不支持 @property 时该层背景失效、角度不动，rail 回落到原有 1px 描边，不影响布局。 */
+@property --vc-beam-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes vc-beam-spin {
+  to {
+    --vc-beam-angle: 360deg;
+  }
+}
+
+.vc-rail::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--vc-beam-angle),
+    transparent 0deg,
+    var(--color-primary) 40deg,
+    var(--color-accent, var(--color-primary)) 95deg,
+    transparent 150deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.5;
+  animation: vc-beam-spin 9s linear infinite;
+  transition: opacity 240ms var(--ease-out);
+}
+
+/* 悬停整条 rail（或键盘焦点进入）时：光带提亮、加速、叠一圈同色外发光 */
+.vc-rail:hover::after,
+.vc-rail:focus-within::after {
+  opacity: 1;
+  animation-duration: 2.8s;
+}
+
+.vc-rail:hover,
+.vc-rail:focus-within {
+  box-shadow: var(--shadow-sm), 0 0 26px -10px var(--color-primary-40);
+}
+
+/* 系统开启「减少动态效果」时保留静态高光边，不转圈 */
+@media (prefers-reduced-motion: reduce) {
+  .vc-rail::after {
+    animation: none;
+    opacity: 0.75;
+  }
+}
