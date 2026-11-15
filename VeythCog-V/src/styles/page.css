@@ -1672,8 +1672,10 @@ body.dark .vc-dialog-scrim {
 }
 
 .vc-doc-item {
+  position: relative;
   width: 100%;
-  padding: 10px 12px;
+  /* 右侧留出一列给"已向量化"闪电，标签/时间再长也不会压到它 */
+  padding: 10px 28px 10px 12px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
@@ -1716,8 +1718,16 @@ body.dark .vc-dialog-scrim {
 
 .vc-doc-item.is-active .vc-doc-item__title { color: var(--color-primary); }
 
+/* 已向量化闪电：脱离文本流，贴列表项右侧、整条垂直居中。
+   以前是文档流里的 inline-block，被挤到时间下面单独一行、还靠左。 */
 .vc-doc-item__zap {
+  position: absolute;
+  top: 50%;
+  right: 10px;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
   flex-shrink: 0;
   color: var(--color-success);
 }

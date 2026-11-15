@@ -1,0 +1,426 @@
+/* ----------------------------------------------
+   知识库目录树（P1 文件夹管理）
+   与 page.css 里的 .vc-knowledge-nav / .vc-doc-item 共用同一套主题变量，
+   但独立成文件，避免与正在调整的 page.css 互相干扰。
+   ---------------------------------------------- */
+
+.vc-knowledge-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 2px var(--space-md);
+}
+
+.vc-knowledge-tree .ant-tree {
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-treenode {
+  width: 100%;
+  padding: 0;
+  margin: 0 0 2px;
+  align-items: center;
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-indent-unit {
+  width: 12px;
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-switcher {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  min-width: 18px;
+  color: var(--color-text-tertiary);
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
+  font-size: 11px;
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-node-content-wrapper {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+/* 悬停 / 选中：与文档列表项保持同一视觉语言 */
+.vc-knowledge-tree .ant-tree .ant-tree-node-content-wrapper:hover {
+  background: var(--color-primary-10);
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
+  background: var(--color-primary-10);
+  border-color: var(--color-primary-30);
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-node-content-wrapper .ant-tree-title {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ------------------------------ 行内布局 ------------------------------ */
+
+.vc-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.vc-tree-row__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.vc-tree-row__folder {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.vc-tree-row__folder--root {
+  color: var(--color-text-secondary);
+}
+
+.vc-tree-row__file {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.vc-tree-row__badge {
+  flex-shrink: 0;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-text-tertiary-15, rgba(102, 112, 126, 0.12));
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.vc-tree-row__zap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--color-success);
+}
+
+.vc-tree-row__time {
+  flex-shrink: 0;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  color: var(--color-text-tertiary);
+  opacity: 0.8;
+}
+
+/* 搜索命中高亮 */
+.vc-tree__hit {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ------------------------------ 拖拽反馈 ------------------------------ */
+
+/* 「拖进目录内部」时整行高亮 */
+.vc-knowledge-tree .ant-tree .ant-tree-treenode.drag-over > .ant-tree-node-content-wrapper {
+  background: var(--color-primary-15);
+  border-color: var(--color-primary-30);
+}
+
+/* 被拖动的源节点淡出 */
+.vc-knowledge-tree .ant-tree .ant-tree-treenode.dragging > .ant-tree-node-content-wrapper {
+  opacity: 0.45;
+}
+
+/* 「插到两者之间」的落点线 */
+.vc-knowledge-tree .ant-tree .ant-tree-drop-indicator {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-primary);
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-drop-indicator::after {
+  width: 6px;
+  height: 6px;
+  border: none;
+  background: var(--color-primary);
+}
+
+/* ------------------------------ 右键菜单 ------------------------------ */
+
+.vc-tree-menu {
+  position: fixed;
+  z-index: 1050;
+  min-width: 168px;
+  padding: 5px;
+  border-radius: 12px;
+  background-color: var(--color-bg);
+  background-image: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated));
+  border: 1px solid var(--glass-border, var(--color-border));
+  box-shadow: var(--shadow-lg);
+  animation: vc-tree-menu-in 120ms var(--ease-out);
+}
+
+@keyframes vc-tree-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.vc-tree-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.vc-tree-menu__item:hover {
+  background: var(--color-primary-10);
+}
+
+.vc-tree-menu__item.is-danger {
+  color: var(--color-error);
+}
+
+.vc-tree-menu__item.is-danger:hover {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+.vc-tree-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-tertiary);
+}
+
+.vc-tree-menu__item.is-danger .vc-tree-menu__icon {
+  color: var(--color-error);
+}
+
+/* ----------------------------------------------
+   侧栏头部「新建 / 导入」双按钮 + 悬停滑出菜单
+   只保留两个主按钮，次级动作（新建文件夹 / 批量导出）收进滑出面板，
+   避免第三个图标按钮被压成 24px 的小方块。
+   ---------------------------------------------- */
+
+.vc-knowledge-nav__actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.vc-kb-action {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* ── 侧栏主按钮的流光描边（border beam） ─────────────────────────────
+   用伪元素画 1px 的 conic-gradient 环，mask 掉中间内容区，只留边。
+   @property 注册 --vc-beam-angle 才能对角度做动画（Chrome/Edge/Safari 16+ 支持；
+   不支持时角度为语法错误 → 该层背景失效，按钮回落到 antd 自带描边，不炸版）。 */
+@property --vc-beam-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes vc-beam-spin {
+  to {
+    --vc-beam-angle: 360deg;
+  }
+}
+
+.vc-kb-action .ant-btn {
+  width: 100%;
+  position: relative;
+  isolation: isolate;
+}
+
+.vc-kb-action .ant-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  /* 光带：亮弧 + 两侧渐隐，绕圈跑 */
+  background: conic-gradient(
+    from var(--vc-beam-angle),
+    transparent 0deg,
+    var(--color-primary) 45deg,
+    var(--color-accent, var(--color-primary)) 105deg,
+    transparent 165deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.5;
+  animation: vc-beam-spin 7s linear infinite;
+  transition: opacity 220ms var(--ease-out);
+}
+
+/* 主按钮是实心紫底，边缘用同色光带几乎看不见 → 换成提亮白 */
+.vc-kb-action .ant-btn-primary::after {
+  background: conic-gradient(
+    from var(--vc-beam-angle),
+    transparent 0deg,
+    rgba(255, 255, 255, 0.75) 45deg,
+    rgba(255, 255, 255, 0.95) 105deg,
+    transparent 165deg,
+    transparent 360deg
+  );
+  opacity: 0.35;
+}
+
+/* 悬停：光带变亮 + 加速一圈，同时给按钮一层同色外发光，手感有反馈 */
+.vc-kb-action:hover .ant-btn::after {
+  opacity: 1;
+  animation-duration: 2.4s;
+}
+
+.vc-kb-action .ant-btn:hover {
+  box-shadow: 0 0 0 1px var(--color-primary-30), 0 4px 14px -6px var(--color-primary-40);
+}
+
+/* 面板项也给一点点细节：左侧 2px 高光条 + 悬停时点亮，避免整块面板太素 */
+.vc-kb-action__item {
+  position: relative;
+}
+
+.vc-kb-action__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.vc-kb-action__item:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.vc-kb-action__panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  padding-top: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out),
+    visibility 140ms var(--ease-out);
+  z-index: 14;
+}
+
+.vc-kb-action--end .vc-kb-action__panel {
+  left: auto;
+  right: 0;
+  min-width: 168px;
+}
+
+.vc-kb-action:hover .vc-kb-action__panel,
+.vc-kb-action:focus-within .vc-kb-action__panel,
+.vc-kb-action__panel:hover {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+}
+
+.vc-kb-action__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  /* 底色用实心 --color-bg 打底，再叠一层半透明 elevated，
+     最终是不透明的「抬升面」：下面的树行文字不会透上来，面板里的小字才清晰 */
+  background-color: var(--color-bg);
+  background-image: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+}
+
+.vc-kb-action__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12.5px;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.vc-kb-action__item svg {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.vc-kb-action__item:hover {
+  background: var(--color-primary-10);
+  color: var(--color-primary);
+}
+
+.vc-kb-action__item:hover svg {
+  color: var(--color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-kb-action__panel {
+    transition: none;
+  }
+}

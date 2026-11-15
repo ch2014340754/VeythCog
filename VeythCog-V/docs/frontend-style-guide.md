@@ -215,6 +215,19 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 **图标**
 - 一律 `@iconify/react` + `@iconify-icons/lucide`（已安装）；尺寸 16（行内）/ 20（rail、工具卡）/ 22（大按钮）。不要引第二套图标库。
 
+**知识库目录树（`pages/Knowledge/DocTree.tsx` + `tree.css`，2026-11-15）**
+- 结构：antd `Tree`（`blockNode` + `titleRender`），虚拟根节点「全部文档」常展开、不可拖；目录行 = folder 图标 + 名称 + 递归 `docCount` 徽标；文档行 = file 图标 + 标题 + `zap` 向量标记 + 相对时间。
+- 行高 **30px**、缩进 14px、圆角 `--radius-sm`；选中态用 `--color-primary-15` 底 + 左侧 2px `--color-primary` 竖条（不用实底填充，避免和玻璃层打架）。
+- 拖拽落点：拖到目录内部 → 整行 `--color-primary-15` 高亮 + 1px `--color-primary-30` 描边；拖到 gap → `.ant-tree-drop-indicator` 画的 2px 插入线（只动 `transform/opacity`，禁止改 `layout`）；被拖节点 `opacity: .5`。
+- 右键菜单（`TreeContextMenu.tsx`）是**独立 fixed 浮层**（挂在 body 外），不是 antd `Dropdown`：`--glass-bg` + `--glass-border` + `--shadow-lg`，行高 32、120ms `--ease-out` 入场（`opacity + translateY(-4px)`），贴视口边缘自动翻转。
+- 文本命中高亮 `.vc-tree__hit`：`--color-primary-30` 底 + `--color-primary` 字，只高亮标题内的关键词片段。
+- ⚠️ 样式写在独立 `tree.css` 并 `.vc-tree` 作用域，**不往 `page.css` 里加**（该文件体量大、多人同时在改）。
+- **侧栏头部只放两个主按钮**（新建 / 导入），次级动作走悬停滑出面板（`.vc-kb-action`）：面板定位在按钮下方 6px、`opacity + translateY(-6px)` 140ms 滑出，`visibility` 参与过渡以免闪现；面板与按钮之间用 `padding-top` 留出「悬停桥」，鼠标下移不会中断；右侧按钮的面板加 `--end` 修饰类右对齐，避免越出 280px 侧栏。第三个图标按钮被压成 24px 方块是反例，不要再加。
+- **浮层必须不透明**：`--glass-bg` / `--color-surface-elevated` 在毛玻璃模式下都是半透明的，浮层叠在密排文字（树行、列表）上会透底、小字发糊。标准做法是「实心打底 + 半透明抬升」——
+  `background-color: var(--color-bg); background-image: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated));`
+  合成结果不透明但保留抬升质感，两种主题都成立。右键菜单（`.vc-tree-menu`）同理。
+- **多选与批量动作**：树开启 antd `multiple`，普通点击仍是单选 + 打开文档，Ctrl / ⌘ 点击追加选中；`activeDocId` 变化时把新文档并入 `selectedKeys` 而不是整体覆盖，否则一打开文档就把多选清空。批量导出的「选中文件」由 `DocTreeHandle.getSelectedDocIds()` 读取 `d:` 前缀 keys，不额外维护一份状态。
+
 ---
 
 ## 8. 动效

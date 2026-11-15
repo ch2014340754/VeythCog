@@ -543,6 +543,76 @@ CSS 侧（`page.css`，写在通用 hover/active 规则**之后**）：
 
 `build` ✓ 8.54s。
 
+### 10.13 知识库编辑器：代码块底色改深色玻璃
+
+反馈：知识库文本编辑页里代码块是"全黑的一块"，放在深色页面上很硬。
+
+根因不在我们的样式：BlockNote 自带一条写死的规则（`@blocknote/mantine/dist/style.css`，`core/dist/style.css` 里也一样）：
+
+```css
+.bn-block-content[data-content-type=codeBlock]{background-color:#161616;color:#fff;border-radius:8px}
+```
+
+`#161616` 在深紫页面上就是一块黑洞，而且它是实心的，后面的玻璃/环境光完全透不上来。
+
+改法（`src/pages/Knowledge/doc-editor.css`）：用它自己在编辑区内的后代选择器覆盖（`.doc-editor-scroll .bn-block-content[...]` 特异性 0,2,1 > 0,1,1，不需要 `!important`）。
+
+| 主题 | 底色 | 描边 |
+|---|---|---|
+| 亮色（默认） | `rgba(18,16,32,.9)` —— 仍偏实，白底上语法高亮的内联色才不会糊 | `rgba(255,255,255,.08)` 内描边 |
+| 暗色 | `color-mix(主色 12%, rgba(12,10,24,.5))`，实测 alpha ≈ 0.56 的深紫玻璃 | 主色 20% |
+| 壁纸 | `color-mix(主色 12%, rgba(8,8,16,.42))`，照片上透得更多 | 白 16% |
+
+三条注意：
+
+1. **只动底、不动 `color`**。语法高亮是 Shiki 在 `<span style="color:...">` 里内联写的，改 `color` 等于把高亮废掉。
+2. **没加 `backdrop-filter`**。一篇文档里 36 个代码块（这份 `Vue3面试题` 实测 36 个），逐个模糊会明显拖慢滚动；半透明底已经够用。
+3. 语言选择 `select` 仍是 BlockNote 写死的 `color:#fff`，深底上照旧可用，不用动。
+
+复测（dev server `:3000`，真实文档 `Vue3面试题`）：
+
+- 暗色：computed `background-color: color(srgb .177 .147 .283 / .562)`、`border-color: color(srgb .655 .545 .980 / .2)`，代码块从"黑洞"变成深紫玻璃，页面的环境光能透上来，`<!-- -->` 注释、模板标签仍然清晰；
+- 亮色：`rgba(18,16,32,.9)`，与改前观感基本一致（只是多了 1px 内描边与更大圆角）。
+
+验证时临时把该站点的外观切到暗色看过一次，随后已切回亮色（用户原设置）。
+
+### 10.14 知识库列表项：已向量化图标改到右侧居中
+
+反馈：文档列表项里那个绿色闪电（`isVectorized`）落在时间下面单独一行、还靠左，看着像文案跑出来了。
+
+原因是它是文档流里的一个 `inline-block`（`<span className="vc-doc-item__zap" style={{ display: 'inline-block' }}>`），排在 `__time` 之后，自然折到下一行并从左侧 12px 内边距起排。
+
+改法：让它脱离文本流，挂到列表项自己的盒子上。
+
+```css
+.vc-doc-item {
+  position: relative;
+  padding: 10px 28px 10px 12px;   /* 右侧留一列给它，标签/时间再长也压不到 */
+}
+.vc-doc-item__zap {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+}
+```
+
+`padding-right` 从 12px 提到 28px 是关键：闪电脱离文档流后不再占位，如果不留白，`__tags` 换行或标题过长时会从它下面穿过去。
+
+顺带把 JSX 里那句 `style={{ display: 'inline-block' }}` 删了（位置由 CSS 决定），并补了 `title="已向量化"` 便于悬停识别。
+
+实测（列表项 105–360 × 197–258）：
+
+| 量 | 值 |
+|---|---|
+| 闪电右边缘到列表项右边缘 | 11px |
+| 闪电垂直中心 | 227.1px |
+| 列表项垂直中心 | 227.1px |
+
+两者完全重合，即"水平靠右 + 垂直居中"。`build` ✓ 10.82s。
+
+
+
 
 #### 验证
 

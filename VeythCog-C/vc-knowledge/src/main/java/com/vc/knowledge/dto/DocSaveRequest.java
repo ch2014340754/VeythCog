@@ -18,6 +18,9 @@ public class DocSaveRequest implements Serializable {
 
     private String summary = "";
 
+    /** 所属目录 id（新建时生效；更新走 /doc/{id}/move，本字段在更新时忽略）；null = 根级 */
+    private Long folderId;
+
     private List<String> tags = new ArrayList<>();
 
     /** 块结构 JSON（权威源） */

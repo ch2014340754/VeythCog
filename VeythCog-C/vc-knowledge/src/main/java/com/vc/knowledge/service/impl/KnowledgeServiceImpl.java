@@ -14,6 +14,7 @@ import com.vc.knowledge.entity.KnowledgeDoc;
 import com.vc.knowledge.entity.KnowledgeEmbedding;
 import com.vc.knowledge.mapper.KnowledgeDocMapper;
 import com.vc.knowledge.service.KnowledgeEmbeddingService;
+import com.vc.knowledge.service.KnowledgeFolderService;
 import com.vc.knowledge.service.KnowledgeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,16 +36,21 @@ import java.util.UUID;
 public class KnowledgeServiceImpl implements KnowledgeService {
 
     private static final int SUMMARY_LENGTH = 200;
+    /** 标题最大长度（与 DDL 的 title VARCHAR(255) 一致） */
+    private static final int TITLE_LENGTH = 255;
 
     private final KnowledgeDocMapper docMapper;
     private final KnowledgeEmbeddingService embeddingService;
+    private final KnowledgeFolderService folderService;
     private final ObjectMapper objectMapper;
 
     public KnowledgeServiceImpl(KnowledgeDocMapper docMapper,
                                 KnowledgeEmbeddingService embeddingService,
+                                KnowledgeFolderService folderService,
                                 ObjectMapper objectMapper) {
         this.docMapper = docMapper;
         this.embeddingService = embeddingService;
+        this.folderService = folderService;
         this.objectMapper = objectMapper;
     }
 
@@ -72,9 +78,13 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     @Override
     @Transactional
     public Long create(Long userId, DocSaveRequest req) {
+        if (req.getFolderId() != null) {
+            folderService.requireFolder(req.getFolderId());
+        }
         KnowledgeDoc doc = new KnowledgeDoc();
         doc.setTitle(req.getTitle());
         doc.setSummary(emptyIfNull(req.getSummary()));
+        doc.setFolderId(req.getFolderId());
         doc.setTags(toArray(req.getTags()));
         doc.setBlockData(emptyIfNull(req.getBlockData(), "[]"));
         doc.setMarkdownText(emptyIfNull(req.getMarkdownText()));
@@ -149,6 +159,36 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         docMapper.updateById(doc);
     }
 
+    @Override
+    @Transactional
+    public void moveDoc(Long userId, Long docId, Long folderId) {
+        requireDoc(docId);
+        if (folderId != null) {
+            folderService.requireFolder(folderId);
+        }
+        // 只改归属：不置 isVectorized=false、不动 updated_at（移动不是内容修改）
+        docMapper.updateFolderId(docId, folderId);
+    }
+
+    @Override
+    @Transactional
+    public void renameTitle(Long userId, Long docId, String title) {
+        requireDoc(docId);
+        String next = title == null ? "" : title.trim();
+        if (next.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "标题不能为空");
+        }
+        if (next.length() > TITLE_LENGTH) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "标题不能超过 " + TITLE_LENGTH + " 字");
+        }
+        // 只改标题：不动正文 / 摘要 / 标签，也不置 isVectorized=false
+        KnowledgeDoc patch = new KnowledgeDoc();
+        patch.setId(docId);
+        patch.setTitle(next);
+        patch.setUpdatedAt(OffsetDateTime.now());
+        docMapper.updateById(patch);
+    }
+
     // ---------------- 私有辅助 ----------------
 
     private KnowledgeDoc requireDoc(Long docId) {
@@ -185,6 +225,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         item.setId(doc.getId());
         item.setTitle(doc.getTitle());
         item.setSummary(doc.getSummary());
+        item.setFolderId(doc.getFolderId());
         item.setTags(doc.getTags() == null ? List.of() : Arrays.asList(doc.getTags()));
         item.setIsVectorized(doc.getIsVectorized());
         item.setUpdatedAt(toEpochMilli(doc.getUpdatedAt()));
@@ -196,6 +237,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         d.setId(doc.getId());
         d.setTitle(doc.getTitle());
         d.setSummary(doc.getSummary());
+        d.setFolderId(doc.getFolderId());
         d.setTags(doc.getTags() == null ? List.of() : Arrays.asList(doc.getTags()));
         d.setBlockData(doc.getBlockData());
         d.setMarkdownText(doc.getMarkdownText());

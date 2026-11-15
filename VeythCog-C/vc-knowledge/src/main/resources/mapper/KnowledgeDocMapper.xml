@@ -6,6 +6,7 @@
         <id property="id" column="id"/>
         <result property="title" column="title"/>
         <result property="summary" column="summary"/>
+        <result property="folderId" column="folder_id"/>
         <result property="tags" column="tags" typeHandler="com.vc.knowledge.handler.StringArrayTypeHandler"/>
         <result property="blockData" column="block_data" typeHandler="com.vc.knowledge.handler.JsonbTypeHandler"/>
         <result property="markdownText" column="markdown_text"/>
@@ -16,7 +17,7 @@
     </resultMap>
 
     <select id="selectDocList" resultMap="KnowledgeDocMap">
-        SELECT id, title, summary, tags, block_data, markdown_text,
+        SELECT id, title, summary, folder_id, tags, block_data, markdown_text,
                is_vectorized, created_at, updated_at, deleted
         FROM knowledge_doc
         WHERE deleted = false
@@ -39,4 +40,31 @@
             <otherwise>DESC</otherwise>
         </choose>
     </select>
+
+    <!-- 树查询：轻量元信息，不含 block_data / markdown_text（侧栏一次拉全量不能带重字段） -->
+    <select id="selectTreeDocs" resultMap="KnowledgeDocMap">
+        SELECT id, title, summary, folder_id, tags,
+               is_vectorized, updated_at, deleted
+        FROM knowledge_doc
+        WHERE deleted = false
+        <if test="keyword != null and keyword != ''">
+          <!-- PG 'simple' 分词不切中文（整串当一个词），中文标题会搜不出来，
+               故标题/摘要走 ILIKE 子串匹配，正文仍用 tsvector + GIN 兜住长文本 -->
+          AND (
+            title ILIKE '%' || #{keyword} || '%'
+            OR coalesce(summary, '') ILIKE '%' || #{keyword} || '%'
+            OR to_tsvector('simple',
+                 title || ' ' || coalesce(summary, '') || ' ' || coalesce(markdown_text, ''))
+               @@ plainto_tsquery('simple', #{keyword})
+          )
+        </if>
+        ORDER BY updated_at DESC, id DESC
+    </select>
+
+    <!-- 移动文档：只改归属；folderId 允许为 null（移回根级），故不能用 updateById 的非空策略 -->
+    <update id="updateFolderId">
+        UPDATE knowledge_doc
+           SET folder_id = #{folderId}
+         WHERE id = #{id} AND deleted = false
+    </update>
 </mapper>

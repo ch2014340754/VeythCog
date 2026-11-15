@@ -125,6 +125,29 @@
   background: transparent;
 }
 
+/* 代码块：BlockNote 默认是写死的 #161616 实心块（core/dist/style.css），
+   深色页面上看着像"挖了个黑窟窿"。改成由主色 + 透明黑混合出的深色玻璃：
+   后面的面板/壁纸能透一点上来，边界用一条细描边交代清楚。
+   语法高亮是内联色，所以不改 color，只动底。 */
+.doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] {
+  background-color: rgba(18, 16, 32, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+}
+
+/* 暗色下才是"全黑"最刺眼的地方：底色改成主色 + 透明黑混出的深色玻璃，
+   面板/壁纸能透一点点上来，边界交给一条主色描边。
+   注意不加 backdrop-filter —— 一篇文档几十个代码块，逐个模糊会拖垮滚动。 */
+body.dark .doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] {
+  background-color: color-mix(in srgb, var(--color-primary) 12%, rgba(12, 10, 24, 0.5));
+  border-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+body.has-bg .doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] {
+  background-color: color-mix(in srgb, var(--color-primary) 12%, rgba(8, 8, 16, 0.42));
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
 .doc-editor-scroll .bn-editor {
   padding: 20px 48px 120px;
   min-height: 100%;

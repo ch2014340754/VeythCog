@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vc.knowledge.mapper.KnowledgeFolderMapper">
+
+    <!--
+      递归后代集合（含自身）。
+      ⚠️ 自定义 XML 不经过 MyBatis-Plus 的 @TableLogic，必须显式带 deleted = false。
+    -->
+    <select id="selectDescendantIds" resultType="java.lang.Long">
+        WITH RECURSIVE sub AS (
+            SELECT id FROM knowledge_folder
+             WHERE id = #{folderId} AND deleted = false
+            UNION ALL
+            SELECT f.id FROM knowledge_folder f
+              JOIN sub s ON f.parent_id = s.id
+             WHERE f.deleted = false
+        )
+        SELECT id FROM sub
+    </select>
+
+    <select id="selectDocIdsByFolderIds" resultType="java.lang.Long">
+        SELECT id FROM knowledge_doc
+         WHERE deleted = false
+           AND folder_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="countDocsByFolderIds" resultType="long">
+        SELECT COUNT(*) FROM knowledge_doc
+         WHERE deleted = false
+           AND folder_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <update id="softDeleteDocsByFolderIds">
+        UPDATE knowledge_doc
+           SET deleted = true,
+               updated_at = now()
+         WHERE deleted = false
+           AND folder_id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <update id="softDeleteFolders">
+        UPDATE knowledge_folder
+           SET deleted = true,
+               updated_at = now()
+         WHERE deleted = false
+           AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <!-- 移动目录：只改归属，不动 updated_at -->
+    <update id="updateParent">
+        UPDATE knowledge_folder
+           SET parent_id = #{parentId}
+         WHERE id = #{id} AND deleted = false
+    </update>
+</mapper>

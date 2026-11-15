@@ -103,6 +103,49 @@
 **5. 删除文档** `DELETE /api/knowledge/doc/{docId}`
 - 语义：软删除 `deleted=true` + **显式清理** `knowledge_embedding`（事务内）
 
+### 3.1.1 目录树（P1 · `p1-knowledge-folder-tree`）
+
+数据模型：`knowledge_folder`（自引用 `parent_id`，软删）+ `knowledge_doc.folder_id`（可空 = 根级）。目录表无 `user_id`，知识库全站共享（与 `knowledge_doc` 现状一致）。
+
+**T1. 树查询** `GET /api/knowledge/tree?keyword=`
+- 返回：`data = { folders: FolderNode[], docs: DocNode[], total, matchedCount }`（**扁平**结构，父子关系靠 `parentId`，前端组装树）
+- `FolderNode = { id, parentId, name, sortOrder }`；`DocNode = { id, folderId, title, summary, tags, isVectorized, updatedAt }`（轻量：**不含** `blockData/markdownText`）
+- `total` = 全部未删文档数；`matchedCount` = 本次命中文档数
+- 关键词：`title`/`summary` 走 `ILIKE` 子串匹配，正文仍走 `to_tsvector('simple', ...)`（PG `simple` 不切中文，纯 tsquery 会漏中文标题）；命中时只返回命中文档及其**祖先目录链**
+- 孤儿防御：`parentId` 指向已删目录时按根级返回，不中断整棵树
+
+**T2. 新建目录** `POST /api/knowledge/folder`
+- body：`{ parentId?, name }` → `data = folderId`
+- 校验：`name` 去空格后非空、≤100 字、不含 `/` 与控制字符；同级同名 40000；层级 ≤8；`parentId` 不存在 40400
+
+**T3. 重命名目录** `PUT /api/knowledge/folder/{folderId}`
+- body：`{ name }`；校验同上（排除自身做同级查重）；目录不存在 40400
+
+**T4. 删除目录** `DELETE /api/knowledge/folder/{folderId}?recursive=`
+- `recursive=false` 且目录非空 → 40000「目录非空，请先清空或选择递归删除」
+- `recursive=true` → 递归软删该目录及全部后代目录 + 其下文档，并**先清 `knowledge_embedding`**（与单文档删除一致）
+
+**T5. 目录统计** `GET /api/knowledge/folder/{folderId}/stats`
+- 返回：`data = { docCount, folderCount }`（含全部后代，用于删除前二次确认）
+
+**T6. 移动目录** `POST /api/knowledge/folder/{folderId}/move`
+- body：`{ parentId? }`（null = 移到根级）
+- 校验：目标不得是自身或自身后代（递归 CTE 判定）；层级 ≤8；目标同级重名 40000
+
+**T7. 移动文档** `POST /api/knowledge/doc/{docId}/move`
+- body：`{ folderId? }`（null = 移回根级）；目标目录不存在 40400
+- 说明：**不改** `is_vectorized`（内容未变，与 T8 同理）
+
+**T8. 重命名文档标题** `PUT /api/knowledge/doc/{docId}/title`
+- body：`{ title }`；≤255 字
+- 说明：只改 `title`，**不动** `markdownText/blockData`、**不置** `is_vectorized=false`（与 §3.1-4 的全量更新区分，避免误废向量）
+
+**T9. 批量导出** `GET /api/knowledge/export/zip?folderId=&docIds=`
+- 优先级：`docIds`（逗号分隔，前端 Ctrl/⌘ 多选的文档）> `folderId`（该目录及全部子目录）> 都不传（全部未删文档）
+- 返回：`application/zip` 下载流，条目为「目录路径/标题.md」（UTF-8 文件名，重名自动追加 `-2`；文件名非法字符替换为 `_`）
+- 错误：目录不存在 40400（注意 `BaseResponse` 仍是 HTTP 200 + JSON，前端须按 `content-type` 判别，不能只看 `resp.ok`）
+
+
 ### 3.2 导入导出
 
 **6. 导入 Markdown** `POST /api/knowledge/import/md`

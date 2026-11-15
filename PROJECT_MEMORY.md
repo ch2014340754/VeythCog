@@ -2,7 +2,7 @@
 
 > **本文件用途**：给未来的 AI Agent（以及协作者）快速恢复项目心智模型，减少每次迭代重新摸底的成本。
 > **维护规则**：每次项目迭代（改架构、加接口、换库、迁移模块）后，由 Agent 在本文件同步更新，并保持与真实代码一致。
-> **信息基准**：2026-11-13，依据对仓库源码与配置的实际遍历（非仅凭 README）。
+> **信息基准**：2026-11-15，依据对仓库源码与配置的实际遍历（非仅凭 README）。
 
 ---
 
@@ -142,6 +142,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - `service/KnowledgeService` + `impl/KnowledgeServiceImpl`：文档 CRUD / 导入导出（普通 CRUD 用 MP BaseMapper + LambdaWrapper）；关键词列表检索（`to_tsvector('simple', ...)` + `plainto_tsquery`）与 tags 数组过滤收拢到 XML。
 - `service/VectorizeService` + `impl/VectorizeServiceImpl`：自定义 `RecursiveCharacterTextSplitter`（512/64，优先保留代码块）→ `EmbeddingProvider` 批量编码（qwen3.7-text-embedding-flash，维度 1024）→ pgvector `<->` L2 检索（IVFFlat）；先删后插幂等（`doc_id` 为幂等键）+ `embedding_model` 标识校验。⚠️ L2 阈值配置 1.2（原 0.8 会过滤掉全部候选）；阈值无命中时回退 topN 并打 WARN。
 - `knowledge_doc.lib_type` 列已**物理删除**（`011` 新版 `DROP COLUMN`，需在库上重跑一次）；「私有库/演示库」概念彻底废弃。本模块**先不做按用户隔离**（见 §10.1）。
+- **目录树能力（2026-11-15，P1 `p1-knowledge-folder-tree`）**：`entity/KnowledgeFolder`（自引用 `parent_id`、`@TableLogic`）+ `mapper/KnowledgeFolderMapper`(+XML：递归 CTE `selectDescendantIds`、`countDocsByFolderIds`、`softDeleteDocsByFolderIds`、`softDeleteFolders`、`updateParent`)；`service/KnowledgeFolderService` + `impl`（`tree(keyword)` 扁平返回 `folders+docs`、`create/rename/delete/stats/move`，`normalizeName` 校验空/≤100/`/`/控制字符，`ensureSiblingNameFree` 同级查重，`depthOf` 层级 ≤8 带环保护，`partition` 批量 200）；`KnowledgeDocMapper.selectTreeDocs`（**轻量**：不含 `block_data/markdown_text`）+ `updateFolderId`（允许置 NULL）；`KnowledgeService.moveDoc/renameTitle`（改名只动 `title`，**不**置 `is_vectorized=false`）。目录表**无 `user_id`**，与文档一致为全站共享。⚠️ `selectDocList`（旧 `/list`）仍是纯 `tsquery`，中文关键词命中差；树查询已改为「title/summary `ILIKE` + 正文 `tsquery`」。
 
 **vc-learn**（`com.vc.learn`）—— **Spring AI 学习沙箱**：独立可运行、只连 DashScope、与业务模块零依赖。含 `examples/chat`（`ChatDemo` / `ChatController` / Advisor：`RereadingAdvisor` / `SimpleLoggerAdvisor`）、结构化输出测试（`StructuredOutTest`）等。**git status 有未提交改动**（ChatController 修改 + 新增 service/ 与测试）。
 
@@ -178,7 +179,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | `user_llm_model_verify` | 单模型校验记录（`018_model_type_and_verify.sql`） | unique(user_id, vendor_code, model_code)；is_valid / `key_fingerprint`（SHA-256 前 8 位） / verify_error / last_verify_at；与绑定解耦，指纹为「AK + workspace + region」复合值（`019`），换 AK 或换业务空间/地域即失效 |
 | `chat_message` | 对话记忆（Spring AI JDBC 落库） | unique(conversation_id, seq)；conversation_id=`userId:conversationId`；压缩摘要以 `role=system` 存在此处，回显时过滤 |
 | `chat_session` | 会话级配置（2026-11-13，`017_p0_verify_and_session.sql`） | unique(user_id, conversation_id)；session_title / vendor_code + model_code / rag_doc_ids（逗号分隔）/ enable_context_compress / deleted 软删除；与 `chat_message` 通过 conversation_id 关联 |
-| `knowledge_doc` | 知识库文档 | 无 `lib_type`（历史列已由 `011` 删除）；block_data JSONB 权威源；markdown_text 派生缓存；tags text[]；deleted 软删除；summary ≤500。新库按 `009→010→011` 执行 |
+| `knowledge_doc` | 知识库文档 | 无 `lib_type`（历史列已由 `011` 删除）；`folder_id`（`021`）可空外键 → 根级 = NULL；block_data JSONB 权威源；markdown_text 派生缓存；tags text[]；deleted 软删除；summary ≤500。新库按 `009→010→011→021` 执行 |
+| `knowledge_folder` | 知识库目录（2026-11-15，`021_knowledge_folder.sql`） | 自引用 `parent_id`（NULL = 根级）；`name`；`sort_order`；`deleted` 软删；索引 `idx_knowledge_folder_parent(parent_id, deleted)`、`idx_knowledge_doc_folder(folder_id, deleted)`；部分唯一索引 `uk_knowledge_folder_sibling_name (COALESCE(parent_id,0), name) WHERE deleted=false`；**无 `user_id`**（全站共享） |
 | `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ `embedding_model` 标识（禁止不同模型向量混查）；doc_id 外键（软删除时显式清理，不依赖级联）。⚠️ `embedding_model` 由 `010` 补充，服务器库已执行 |
 | `nav_category` | 导航分类（iTab 右侧竖栏） | 按 user_id 隔离；sort_order 排序 |
 | `nav_bookmark` | 导航书签 | `icon_type`（auto/upload/text，CHECK 约束）、`icon_key`（`public-icons` 对象 key）、`icon_text`、`icon_color`、`icon_synced_at`；`013_nav_bookmark_icon.sql` 幂等增量 |
@@ -236,6 +238,15 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | POST | `/knowledge/doc/{docId}/metadata/regenerate` | - | 是（辅助模型显式覆盖摘要/标签，只改元数据不动正文） |
 | POST | `/knowledge/doc/{docId}/unvectorize` | - | 是 |
 | POST | `/knowledge/rag/retrieve` | {docIds, query, topN?} | 是（限定 docIds + embedding_model + L2 阈值 1.2；阈值无命中自动回退 topN；禁止全库向量搜索） |
+| GET | `/knowledge/tree` | query: keyword? | 是（**扁平** `{folders:[{id,parentId,name,sortOrder}], docs:[{id,folderId,title,summary,tags,isVectorized,updatedAt}], total, matchedCount}`，轻量字段不含正文；keyword 命中只返回命中文档 + 祖先目录链；中文走 ILIKE） |
+| POST | `/knowledge/folder` | {parentId?, name} | 是（返回 folderId；空/超 100/含 `/` 或控制字符 40000；同级重名 40000；层级 >8 40000） |
+| PUT | `/knowledge/folder/{folderId}` | {name} | 是（重命名，同级查重排除自身） |
+| DELETE | `/knowledge/folder/{folderId}?recursive=` | - | 是（非空且 `recursive=false` → 40000；递归软删目录子树 + 文档，并先清 embedding） |
+| GET | `/knowledge/folder/{folderId}/stats` | - | 是（递归 `{docCount, folderCount}`，用于删除二次确认） |
+| POST | `/knowledge/folder/{folderId}/move` | {parentId?} | 是（null=根级；自身/后代环 → 40000；层级 ≤8；目标同级重名 40000） |
+| POST | `/knowledge/doc/{docId}/move` | {folderId?} | 是（null=根级；目录不存在 40400；**不改** `is_vectorized`） |
+| PUT | `/knowledge/doc/{docId}/title` | {title} | 是（≤255 字；只改标题，不动正文与向量化标记） |
+| GET | `/knowledge/export/zip` | query: folderId?、docIds? | 是（优先级 docIds(逗号分隔) > folderId(含全部子目录) > 全库。返回 `application/zip`，条目「目录路径/标题.md」，重名追加序号。⚠️ 出错时是 HTTP 200 + JSON，前端按 `content-type` 判别） |
 | GET | `/nav/bookmarks` | query: categoryId | 是（返回 `BookmarkView`，含图标字段 + `hasIcon`） |
 | POST/PUT/DELETE | `/nav/bookmarks`、`/nav/bookmarks/{id}` | {categoryId?, title, url, iconType?, iconKey?, iconText?, iconColor?} | 是（图标字段服务端校验；auto 无 key 异步补同步） |
 | PUT | `/nav/bookmarks/reorder` | {categoryId, items:[{id,sortOrder}]} | 是 |
@@ -293,6 +304,10 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 同一文档重复点击不重新拉取（`selectDoc` 内置去重），避免无意义 loading。
 - **切换明细/详情时不清空当前内容**：保留上一条内容继续显示，只在右上角显示细进度条（`vc-slim-progress`，见 `styles/global.css`）；禁止整块 `<Spin />` 替换。加载期间禁用保存 / 向量化 / 导出 / 删除，避免误操作到上一篇文档。
 - 以上为**全站前端通用规范**，新开发的列表、详情、表单页一律遵循。
+- **知识库树形侧栏（2026-11-15）**：`pages/Knowledge/DocTree.tsx`（antd `Tree` 原生 `draggable`，不引 dnd-kit；扁平 `folders+docs` 由 `buildTree` 组装，虚拟根节点「全部文档」承接拖回根）+ `TreeContextMenu.tsx`（fixed 玻璃浮层，`useLayoutEffect` 贴边翻转，外部点击/Esc/scroll 关闭）+ `tree.css`（未改用户维护中的 `page.css`，颜色只取 `--color-*` / `--glass-*`）。
+  - **默认全展开**用受控 `expandedKeys`：antd `defaultExpandAll` 在异步数据下失效，首次拿到树时填全部 key，新建目录自动展开父链。
+  - 拖拽为**乐观更新**：先本地改树，接口失败再回滚 + `message.error` + `onRefresh({silent:true})`；搜索态禁用拖拽，清空关键词直接回放 `fullTreeRef` 快照（不重新请求）。
+  - 目录删除前先 `GET /folder/{id}/stats`，非空才弹 `Modal.confirm` 列级联数量；改名只改标题走 `PUT /doc/{id}/title`（**禁止**用 `PUT /doc/{id}` 全量更新，那会废掉向量化）。
 
 ### 7.4 会话模型绑定策略（生产策略，已实现）
 新建会话可选模型并写入 `chat_session.vendor_code/model_code`；进入已有会话后**下拉禁用**（会话内禁切）。会话的模型 / 知识库文档集合 / 上下文压缩开关都持久化在后端，刷新不丢；`docIds` 或压缩开关改动即时 PUT。无有效模型（未绑定、非对话类型或未通过校验）→ 空态引导去模型配置页逐行校验。
@@ -348,6 +363,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 模型类型与校验脚本：`018_model_type_and_verify.sql`（`llm_model.model_type` + `user_llm_model_verify` 表、唯一索引，幂等）。开发库已执行（`OK executed=7`）。存量绑定旧的 `is_valid` 不迁移，需在模型配置页重新逐行校验。
 - 业务空间脚本：`019_llm_workspace_region.sql`（`user_llm_binding.workspace_id/region` + `(user_id,vendor_code,workspace_id)` 索引，幂等）。开发库已执行（`OK executed=5`）。旧校验记录为 key-only 指纹，升级后需重新校验。
 - 多模态脚本：`020_llm_model_modalities.sql`（`llm_model.modalities` + 按 `model_type` 回填，幂等）。开发库已执行（`OK executed=3`，373 行全部有值）。
+- 知识库目录脚本：`021_knowledge_folder.sql`（`knowledge_folder` 建表 + `knowledge_doc.folder_id` + 3 个索引/部分唯一索引，全部幂等）。开发库已执行（`OK executed=10`）；复跑安全。
 
 ---
 
@@ -373,7 +389,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 
 **待办/演进**（源自架构文档 + 现状）：
 1. ~~会话元数据持久化~~ ✅ 2026-11-13 已完成（`chat_session` + 前后端会话配置；`chatStore` 仍未接入，页面用 `useState`）。
-2. ~~RAG 知识库实现~~ ✅ 已完成 P0；**RAG 引用已收归后端**（`RagChatOrchestrator` 检索 + 注入 prompt + SSE `event: references`，前端不再自行 retrieve）。P1 待办：① 文档更新时清理旧向量（当前只置 `is_vectorized=false`，检索端已过滤，旧向量仅占空间）；② 批量向量化/移动/打标；③ `importMd` 的 md→block 结构与 BlockNote 块结构对齐（当前靠前端降级解析）；④ `vectorize` 长事务拆分、`dimensions` 校验、IVFFlat/阈值调参、单测；⑤ 辅助模型选型收敛（当前为可用性妥协的 `deepseek-v4-pro-0813`，带 reasoning 成本偏高），rerank 需补端到端回归与失败用例。
+2. ~~RAG 知识库实现~~ ✅ 已完成 P0；**RAG 引用已收归后端**（`RagChatOrchestrator` 检索 + 注入 prompt + SSE `event: references`，前端不再自行 retrieve）。**P1 已完成「树形目录管理」（2026-11-15）**：`knowledge_folder` + 树形侧栏（默认全展开、目录间拖拽移动、右键新建/重命名/删除、搜索命中 + 祖先链）。P1 剩余：① 文档更新时清理旧向量（当前只置 `is_vectorized=false`，检索端已过滤，旧向量仅占空间）；② 批量向量化/移动/打标（`/knowledge/batch/*` 仍未做）；③ `importMd` 的 md→block 结构与 BlockNote 块结构对齐（当前靠前端降级解析）；④ `vectorize` 长事务拆分、`dimensions` 校验、IVFFlat/阈值调参、单测；⑤ 辅助模型选型收敛（当前为可用性妥协的 `deepseek-v4-pro-0813`，带 reasoning 成本偏高），rerank 需补端到端回归与失败用例；⑥ `/knowledge/list` 的中文关键词仍是纯 tsquery（命中差），可参照 `selectTreeDocs` 改 ILIKE。
 3. Admin 后台：用户/角色管理、**模型目录**、**系统监控**已接真后端（`/admin/users`、`/admin/roles`、`/admin/llm-models`、`/admin/monitor/*`）；审计/系统配置/定时任务仍 mock。
    - 监控口径（2026-11-13 已定）：存储 ③双写（`sys_api_sample` 明细 + `sys_api_metric_minute` 分钟桶）；会话 ②会话表 + JWT `sid`；Token ①供应商 usage 优先、缺失估算并标 `usage_source`。资源监控用 JDK MXBean，无额外依赖。
    - 已知取舍：明细保留期由 `monitor.retention` 控制（每日 03:30 清理）；P95 由分钟桶直方图估算，不做全量明细分位；LLM usage 在错误/中断调用上只能估算。

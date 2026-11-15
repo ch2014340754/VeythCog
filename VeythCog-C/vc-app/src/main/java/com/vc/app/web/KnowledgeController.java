@@ -9,10 +9,18 @@ import com.vc.common.exception.BusinessException;
 import com.vc.common.exception.ErrorCode;
 import com.vc.knowledge.dto.DocDetail;
 import com.vc.knowledge.dto.DocListItem;
+import com.vc.knowledge.dto.DocMoveRequest;
 import com.vc.knowledge.dto.DocSaveRequest;
+import com.vc.knowledge.dto.DocTitleRequest;
+import com.vc.knowledge.dto.FolderCreateRequest;
+import com.vc.knowledge.dto.FolderMoveRequest;
+import com.vc.knowledge.dto.FolderRenameRequest;
+import com.vc.knowledge.dto.FolderStats;
+import com.vc.knowledge.dto.KnowledgeTree;
 import com.vc.knowledge.dto.PageResult;
 import com.vc.knowledge.dto.RetrieveChunk;
 import com.vc.knowledge.dto.RetrieveRequest;
+import com.vc.knowledge.service.KnowledgeFolderService;
 import com.vc.knowledge.service.KnowledgeService;
 import com.vc.knowledge.service.VectorizeService;
 import jakarta.validation.Valid;
@@ -48,16 +56,81 @@ public class KnowledgeController {
     private static final long MAX_MD_SIZE = 500 * 1024L;
 
     private final KnowledgeService knowledgeService;
+    private final KnowledgeFolderService folderService;
     private final VectorizeService vectorizeService;
     private final KnowledgeMetadataOrchestrator metadataOrchestrator;
 
     public KnowledgeController(KnowledgeService knowledgeService,
+                               KnowledgeFolderService folderService,
                                VectorizeService vectorizeService,
                                KnowledgeMetadataOrchestrator metadataOrchestrator) {
         this.knowledgeService = knowledgeService;
+        this.folderService = folderService;
         this.vectorizeService = vectorizeService;
         this.metadataOrchestrator = metadataOrchestrator;
     }
+
+    // ===================== 目录树（P1） =====================
+
+    /** 11. 知识树：目录 + 文档扁平返回，keyword 非空时只返回命中文档及其祖先目录 */
+    @GetMapping("/tree")
+    public BaseResponse<KnowledgeTree> tree(@RequestParam(required = false) String keyword) {
+        return ResultUtils.success(folderService.tree(keyword));
+    }
+
+    /** 12. 新建目录（parentId 为空 = 根级） */
+    @PostMapping("/folder")
+    public BaseResponse<Long> createFolder(@Valid @RequestBody FolderCreateRequest body) {
+        return ResultUtils.success(folderService.create(body.getParentId(), body.getName()));
+    }
+
+    /** 13. 重命名目录 */
+    @PutMapping("/folder/{folderId}")
+    public BaseResponse<Void> renameFolder(@PathVariable Long folderId,
+                                           @Valid @RequestBody FolderRenameRequest body) {
+        folderService.rename(folderId, body.getName());
+        return ResultUtils.success(null);
+    }
+
+    /** 14. 删除目录：非空需 recursive=true（级联软删子目录与文档并清理向量） */
+    @DeleteMapping("/folder/{folderId}")
+    public BaseResponse<Void> deleteFolder(@PathVariable Long folderId,
+                                           @RequestParam(defaultValue = "false") boolean recursive) {
+        folderService.delete(folderId, recursive);
+        return ResultUtils.success(null);
+    }
+
+    /** 15. 目录影响范围统计（删除二次确认用） */
+    @GetMapping("/folder/{folderId}/stats")
+    public BaseResponse<FolderStats> folderStats(@PathVariable Long folderId) {
+        return ResultUtils.success(folderService.stats(folderId));
+    }
+
+    /** 16. 移动目录（parentId 为空 = 移到根级） */
+    @PostMapping("/folder/{folderId}/move")
+    public BaseResponse<Void> moveFolder(@PathVariable Long folderId,
+                                         @RequestBody FolderMoveRequest body) {
+        folderService.move(folderId, body.getParentId());
+        return ResultUtils.success(null);
+    }
+
+    /** 17. 移动文档（folderId 为空 = 移到根级；只改归属，不废向量） */
+    @PostMapping("/doc/{docId}/move")
+    public BaseResponse<Void> moveDoc(@PathVariable Long docId,
+                                      @RequestBody DocMoveRequest body) {
+        knowledgeService.moveDoc(currentUserIdOrNull(), docId, body.getFolderId());
+        return ResultUtils.success(null);
+    }
+
+    /** 18. 重命名文档（只改标题，不动正文、不废向量） */
+    @PutMapping("/doc/{docId}/title")
+    public BaseResponse<Void> renameDoc(@PathVariable Long docId,
+                                        @Valid @RequestBody DocTitleRequest body) {
+        knowledgeService.renameTitle(currentUserIdOrNull(), docId, body.getTitle());
+        return ResultUtils.success(null);
+    }
+
+    // ===================== 文档 CRUD =====================
 
     /** 1. 文档列表（关键词走 PG simple 文本检索） */
     @GetMapping("/list")
@@ -137,8 +210,24 @@ public class KnowledgeController {
                 .body(bytes);
     }
 
-    /** 8. 向量化：embedding 与元数据生成并行，只补齐空值，失败不阻断 */
-    @PostMapping("/doc/{docId}/vectorize")
+    /**
+     * 19. 批量导出：把目录（含全部子目录）、指定文档集合或全库文档打成 zip。
+     * <p>docIds 优先（前端勾选的文档，逗号分隔）；folderId 为空且无 docIds = 导出全部未删文档。</p>
+     */
+    @GetMapping("/export/zip")
+    public ResponseEntity<byte[]> exportZip(@RequestParam(required = false) Long folderId,
+                                            @RequestParam(required = false) List<Long> docIds) {
+        byte[] zip = folderService.exportZip(folderId, docIds);
+        String name = docIds != null && !docIds.isEmpty()
+                ? "knowledge-selected.zip"
+                : (folderId == null ? "knowledge-all.zip" : "knowledge-folder-" + folderId + ".zip");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + "\"")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(zip);
+    }
+
+    /** 8. 向量化：embedding 与元数据生成并行，只补齐空值，失败不阻断 */    @PostMapping("/doc/{docId}/vectorize")
     public BaseResponse<VectorizeResult> vectorize(@PathVariable Long docId) {
         Long userId = currentUserIdOrNull();
         // 摘要/标签生成与 embedding 并行，减少用户等待；落库放在向量化完成之后，避免并发覆盖

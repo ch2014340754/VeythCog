@@ -2,21 +2,24 @@ import {
     createDoc,
     deleteDoc,
     exportMd,
+    exportZip,
     getDoc,
+    getTree,
     importMd,
-    listDocs,
+    moveDoc,
     regenerateMetadata,
     unvectorize,
     updateDoc,
     vectorize,
 } from '@/api/knowledge';
 import EmptyState from '@/components/states/EmptyState';
-import type { DocDetail, DocListItem } from '@/types';
-import { formatRelativeTime } from '@/utils/formatTime';
+import type { DocDetail, KnowledgeTree } from '@/types';
 import alignLeftIcon from '@iconify-icons/lucide/align-left';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import downloadIcon from '@iconify-icons/lucide/download';
 import fileTextIcon from '@iconify-icons/lucide/file-text';
+import filesIcon from '@iconify-icons/lucide/files';
+import folderPlusIcon from '@iconify-icons/lucide/folder-plus';
 import plusIcon from '@iconify-icons/lucide/plus';
 import saveIcon from '@iconify-icons/lucide/save';
 import searchIcon from '@iconify-icons/lucide/search';
@@ -26,9 +29,10 @@ import uploadIcon from '@iconify-icons/lucide/upload';
 import zapIcon from '@iconify-icons/lucide/zap';
 import zapOffIcon from '@iconify-icons/lucide/zap-off';
 import { Icon } from '@iconify/react';
-import { Button, Input, message, Modal, Popconfirm, Spin, Tag, Tooltip, Upload } from 'antd';
+import { Button, Input, message, Modal, Popconfirm, Tag, Tooltip, Upload } from 'antd';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DocEditor, { type DocEditorHandle } from './DocEditor';
+import DocTree, { type DocTreeHandle } from './DocTree';
 
 /** 切换文档时的顶部细进度条：不遮挡内容，仅在右上角提示加载中 */
 const SlimProgress: React.FC = () => (
@@ -38,11 +42,15 @@ const SlimProgress: React.FC = () => (
 );
 
 const KnowledgePage: React.FC = () => {
-  const [docs, setDocs] = useState<DocListItem[]>([]);
-  const [total, setTotal] = useState<number>(0);
+  const [tree, setTree] = useState<KnowledgeTree | null>(null);
+  /** 全量树快照：清空搜索框时直接复用，不必再打一次接口 */
+  const fullTreeRef = useRef<KnowledgeTree | null>(null);
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeDocId, setActiveDocId] = useState<number | null>(null);
+  /** 当前选中的目录：新建文档 / 导入的默认落点 */
+  const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
+  const docTreeRef = useRef<DocTreeHandle>(null);
 
   const [detail, setDetail] = useState<DocDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -60,32 +68,98 @@ const KnowledgePage: React.FC = () => {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  /** 新建文档的目标目录（打开弹窗时锁定，避免途中选中变化） */
+  const [createFolderId, setCreateFolderId] = useState<number | null>(null);
 
   /**
-   * 拉取文档列表。
-   * @param opts.silent 静默刷新：不切换 loading（侧栏不闪 Spin），仅在原列表上原地更新，
-   *                    用于保存 / 向量化 / 删除后的数据同步
+   * 拉取全量知识树。
+   * @param opts.silent 静默刷新：不切换 loading（侧栏不闪 Spin），
+   *                    用于保存 / 向量化 / 删除 / 拖拽后的数据同步
    */
-  const loadDocs = useCallback(async (opts?: { silent?: boolean }) => {
+  const loadFullTree = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
     if (!silent) setLoading(true);
     try {
-      const page = await listDocs({ keyword: keyword.trim() || undefined, current: 1, pageSize: 100 });
-      setDocs(page.records ?? []);
-      setTotal(page.total ?? 0);
+      const data = await getTree();
+      fullTreeRef.current = data;
+      setTree(data);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '加载文档失败');
+      message.error(e instanceof Error ? e.message : '加载知识库失败');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [keyword]);
+  }, []);
 
-  /** 静默同步列表（不闪加载态） */
-  const refreshDocsSilently = useCallback(() => loadDocs({ silent: true }), [loadDocs]);
+  /** 关键词检索：后端只返回命中文档 + 其祖先目录 */
+  const searchTree = useCallback(async (kw: string) => {
+    if (!kw) return;
+    setLoading(true);
+    try {
+      const data = await getTree({ keyword: kw });
+      setTree(data);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '搜索失败');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /** 静默同步树（不闪加载态） */
+  const refreshTreeSilently = useCallback(() => {
+    void loadFullTree({ silent: true });
+  }, [loadFullTree]);
 
   useEffect(() => {
-    loadDocs();
-  }, [loadDocs]);
+    void loadFullTree();
+  }, [loadFullTree]);
+
+  // 搜索防抖 300ms；清空关键词直接回放全量快照，无网络往返
+  useEffect(() => {
+    const kw = keyword.trim();
+    if (!kw) {
+      if (fullTreeRef.current) setTree(fullTreeRef.current);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void searchTree(kw);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [keyword, searchTree]);
+
+  /** 树组件回调：先落全量快照，再静默刷新 */
+  const handleTreeRefresh = useCallback(
+    (opts?: { silent?: boolean }) => {
+      if (keyword.trim()) {
+        void searchTree(keyword.trim());
+        return;
+      }
+      void loadFullTree(opts);
+    },
+    [keyword, loadFullTree, searchTree]
+  );
+
+  /** 树里删除的文档若正打开着，清空编辑区 */
+  const handleDocsRemoved = useCallback(
+    (docIds: number[]) => {
+      if (activeDocId != null && docIds.includes(activeDocId)) {
+        setActiveDocId(null);
+        setDetail(null);
+      }
+    },
+    [activeDocId]
+  );
+
+  /** 树里改名后同步头部标题，不必重拉详情 */
+  const handleDocRenamed = useCallback((docId: number, nextTitle: string) => {
+    setDetail((prev) => (prev && prev.id === docId ? { ...prev, title: nextTitle } : prev));
+    setTitle((prev) => prev || nextTitle);
+  }, []);
+
+  const openCreateDoc = useCallback((folderId: number | null) => {
+    setCreateFolderId(folderId);
+    setNewTitle('');
+    setCreateOpen(true);
+  }, []);
 
   /**
    * 打开文档。
@@ -143,18 +217,11 @@ const KnowledgePage: React.FC = () => {
       setDetail((prev) =>
         prev ? { ...prev, title: payload.title, summary: payload.summary, tags, isVectorized: false } : prev
       );
-      setDocs((prev) =>
-        prev.map((d) =>
-          d.id === detail.id
-            ? { ...d, title: payload.title, summary: payload.summary, tags, isVectorized: false }
-            : d
-        )
-      );
       setTitle(payload.title);
       setSummary(summaryValue);
       setTagsText(tags.join(', '));
       message.success('已保存（内容变更后需重新向量化）');
-      void refreshDocsSilently();
+      void refreshTreeSilently();
       return true;
     } catch (e) {
       message.error(e instanceof Error ? e.message : '保存失败');
@@ -174,6 +241,7 @@ const KnowledgePage: React.FC = () => {
       blockData: '[]',
       // 种子：首个 H1 即文档标题，顶部标题与正文同步
       markdownText: `# ${docTitle}\n`,
+      folderId: createFolderId,
     };
     setSaving(true);
     try {
@@ -181,7 +249,7 @@ const KnowledgePage: React.FC = () => {
       message.success('已创建');
       setCreateOpen(false);
       setNewTitle('');
-      await loadDocs({ silent: true });
+      await loadFullTree({ silent: true });
       await selectDoc(id);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '创建失败');
@@ -198,18 +266,14 @@ const KnowledgePage: React.FC = () => {
         setActiveDocId(null);
         setDetail(null);
       }
-      await loadDocs({ silent: true });
+      await loadFullTree({ silent: true });
     } catch (e) {
       message.error(e instanceof Error ? e.message : '删除失败');
     }
   };
 
   /** 应用后端生成的元数据：只改摘要/标签等元信息，不碰 blockData，避免编辑器重解析 */
-  const applyGeneratedMetadata = (
-    docId: number,
-    nextSummary?: string | null,
-    nextTags?: string[] | null
-  ) => {
+  const applyGeneratedMetadata = (nextSummary?: string | null, nextTags?: string[] | null) => {
     const hasSummary = !!nextSummary;
     const hasTags = !!nextTags && nextTags.length > 0;
     if (!hasSummary && !hasTags) return;
@@ -228,17 +292,6 @@ const KnowledgePage: React.FC = () => {
           }
         : prev
     );
-    setDocs((prev) =>
-      prev.map((d) =>
-        d.id === docId
-          ? {
-              ...d,
-              summary: hasSummary ? (nextSummary as string) : d.summary,
-              tags: hasTags ? (nextTags as string[]) : d.tags,
-            }
-          : d
-      )
-    );
   };
 
   const handleRegenerateMetadata = async () => {
@@ -246,7 +299,7 @@ const KnowledgePage: React.FC = () => {
     setMetaGenerating(true);
     try {
       const meta = await regenerateMetadata(detail.id);
-      applyGeneratedMetadata(detail.id, meta.summary, meta.tags);
+      applyGeneratedMetadata(meta.summary, meta.tags);
       message.success('已重新生成摘要与标签');
     } catch (e) {
       message.error(e instanceof Error ? e.message : '生成失败');
@@ -263,10 +316,9 @@ const KnowledgePage: React.FC = () => {
       message.success(`已向量化，共 ${result.chunkCount} 个分片`);
       // 原地更新标记，不重拉详情（重拉会重解析编辑器内容造成闪动）
       setDetail((prev) => (prev ? { ...prev, isVectorized: true } : prev));
-      setDocs((prev) => prev.map((d) => (d.id === detail.id ? { ...d, isVectorized: true } : d)));
       // 后端已按"仅填空值"补齐摘要/标签，这里直接应用，避免额外拉详情
-      applyGeneratedMetadata(detail.id, result.summary, result.tags);
-      void refreshDocsSilently();
+      applyGeneratedMetadata(result.summary, result.tags);
+      void refreshTreeSilently();
     } catch (e) {
       message.error(e instanceof Error ? e.message : '向量化失败');
     } finally {
@@ -281,8 +333,7 @@ const KnowledgePage: React.FC = () => {
       await unvectorize(detail.id);
       message.success('已取消向量化');
       setDetail((prev) => (prev ? { ...prev, isVectorized: false } : prev));
-      setDocs((prev) => prev.map((d) => (d.id === detail.id ? { ...d, isVectorized: false } : d)));
-      void refreshDocsSilently();
+      void refreshTreeSilently();
     } catch (e) {
       message.error(e instanceof Error ? e.message : '取消向量化失败');
     } finally {
@@ -299,37 +350,88 @@ const KnowledgePage: React.FC = () => {
     }
   };
 
-  const handleImport = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.md')) {
+  /** 批量导入：支持一次选多个 .md，逐个建档并挂到当前目录 */
+  const handleImport = async (files: File[]) => {
+    const mdFiles = files.filter((f) => f.name.toLowerCase().endsWith('.md'));
+    if (mdFiles.length === 0) {
       message.error('仅支持 .md 文件');
       return;
     }
-    if (file.size > 500 * 1024) {
+    const valid = mdFiles.filter((f) => f.size <= 500 * 1024);
+    const oversize = mdFiles.length - valid.length;
+    if (valid.length === 0) {
       message.error('文件超过 500KB');
       return;
     }
-    try {
-      const id = await importMd(file, file.name.replace(/\.md$/i, ''));
-      message.success('已导入');
-      await loadDocs({ silent: true });
-      await selectDoc(id);
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : '导入失败');
+    let ok = 0;
+    let fail = 0;
+    let lastId: number | null = null;
+    for (const file of valid) {
+      try {
+        const id = await importMd(file, file.name.replace(/\.md$/i, ''));
+        // 导入接口不带目录参数：先进根级，再挂到当前选中的目录
+        if (activeFolderId != null) {
+          await moveDoc(id, activeFolderId);
+        }
+        ok += 1;
+        lastId = id;
+      } catch {
+        fail += 1;
+      }
+    }
+    const tail = [oversize > 0 ? `跳过 ${oversize} 个超 500KB` : '', fail > 0 ? `失败 ${fail} 篇` : '']
+      .filter(Boolean)
+      .join('，');
+    if (ok > 0) {
+      message.success(`已导入 ${ok} 篇${tail ? `（${tail}）` : ''}`);
+      await loadFullTree({ silent: true });
+      if (lastId != null) await selectDoc(lastId);
+    } else {
+      message.error(`导入失败${tail ? `（${tail}）` : ''}`);
     }
   };
 
-  const importUpload = (
-    <Upload
-      showUploadList={false}
-      accept=".md"
-      beforeUpload={(file) => {
-        void handleImport(file as File);
-        return false;
-      }}
-    >
-      <Button icon={<Icon icon={uploadIcon} width={14} />}>导入</Button>
-    </Upload>
-  );
+  /** 批量导出：当前目录（含子目录）或全库打 zip；用后端算目录路径，前端不拼 */
+  const handleExportZip = async () => {
+    const label =
+      activeFolderId != null
+        ? tree?.folders.find((f) => f.id === activeFolderId)?.name ?? '当前目录'
+        : '全部文档';
+    try {
+      await exportZip(
+        activeFolderId,
+        undefined,
+        activeFolderId != null ? `knowledge-${label}.zip` : 'knowledge-all.zip'
+      );
+      message.success(`已导出：${label}`);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '批量导出失败');
+    }
+  };
+
+  /** 批量导出选中：左侧 Ctrl / ⌘ 多选出来的文档（至少含当前打开的一篇） */
+  const handleExportSelected = async () => {
+    const ids = docTreeRef.current?.getSelectedDocIds() ?? [];
+    if (ids.length === 0) {
+      message.warning('先在左侧选中要导出的文档（Ctrl / ⌘ 可多选）');
+      return;
+    }
+    try {
+      await exportZip(null, ids, `knowledge-selected-${ids.length}.zip`);
+      message.success(`已导出 ${ids.length} 篇选中文档`);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '批量导出失败');
+    }
+  };
+
+  /** 隐藏文件选择器：新建 / 导入两个按钮的「滑出菜单」共用 */
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  /** 新建弹窗里显示的落点目录名 */
+  const createFolderName =
+    createFolderId == null
+      ? '根目录'
+      : tree?.folders.find((f) => f.id === createFolderId)?.name ?? '根目录';
 
   return (
     <div className="vc-subnav-layout vc-knowledge">
@@ -338,7 +440,10 @@ const KnowledgePage: React.FC = () => {
           <span className="vc-eyebrow">Knowledge</span>
           <div className="vc-knowledge-nav__title">
             <h2 className="vc-subnav__title">知识库</h2>
-            <span className="vc-meta">共 {total} 篇</span>
+            <span className="vc-meta">
+              共 {tree?.total ?? 0} 篇
+              {keyword.trim() && tree ? ` · 命中 ${tree.matchedCount}` : ''}
+            </span>
           </div>
           <Input
             prefix={<Icon icon={searchIcon} width={14} className="vc-search-icon" />}
@@ -348,52 +453,102 @@ const KnowledgePage: React.FC = () => {
             allowClear
           />
           <div className="vc-knowledge-nav__actions">
-            <Button type="primary" icon={<Icon icon={plusIcon} width={14} />} onClick={() => setCreateOpen(true)} block>
-              新建
-            </Button>
-            {importUpload}
+            <div className="vc-kb-action">
+              <Button
+                type="primary"
+                icon={<Icon icon={plusIcon} width={14} />}
+                onClick={() => openCreateDoc(activeFolderId)}
+                block
+              >
+                新建
+              </Button>
+              <div className="vc-kb-action__panel">
+                <div className="vc-kb-action__card">
+                  <button
+                    type="button"
+                    className="vc-kb-action__item"
+                    onClick={() => openCreateDoc(activeFolderId)}
+                  >
+                    <Icon icon={fileTextIcon} width={14} />
+                    <span>新建文档</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="vc-kb-action__item"
+                    onClick={() => docTreeRef.current?.openCreateFolder(activeFolderId)}
+                  >
+                    <Icon icon={folderPlusIcon} width={14} />
+                    <span>新建文件夹</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="vc-kb-action vc-kb-action--end">
+              <Button
+                icon={<Icon icon={uploadIcon} width={14} />}
+                onClick={() => importInputRef.current?.click()}
+                block
+              >
+                导入
+              </Button>
+              <div className="vc-kb-action__panel">
+                <div className="vc-kb-action__card">
+                  <button
+                    type="button"
+                    className="vc-kb-action__item"
+                    onClick={() => importInputRef.current?.click()}
+                  >
+                    <Icon icon={uploadIcon} width={14} />
+                    <span>导入 Markdown（可多选）</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="vc-kb-action__item"
+                    onClick={() => void handleExportZip()}
+                  >
+                    <Icon icon={downloadIcon} width={14} />
+                    <span>批量导出{activeFolderId != null ? '当前目录' : '全部文档'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="vc-kb-action__item"
+                    onClick={() => void handleExportSelected()}
+                  >
+                    <Icon icon={filesIcon} width={14} />
+                    <span>批量导出选中文件</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".md"
+            multiple
+            hidden
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = '';
+              if (files.length > 0) void handleImport(files);
+            }}
+          />
         </div>
 
-        <div className="vc-knowledge-list">
-          {loading ? (
-            <div className="vc-knowledge-list__loading">
-              <Spin />
-            </div>
-          ) : docs.length === 0 ? (
-            <div className="vc-knowledge-list__empty">暂无文档</div>
-          ) : (
-            docs.map((doc) => {
-              const isActive = doc.id === activeDocId;
-              return (
-                <button
-                  key={doc.id}
-                  type="button"
-                  className={'vc-doc-item' + (isActive ? ' is-active' : '')}
-                  onClick={() => selectDoc(doc.id)}
-                >
-                  <span className="vc-doc-item__row">
-                    <Icon icon={fileTextIcon} width={14} className="vc-doc-item__icon" />
-                    <span className="vc-doc-item__title">{doc.title}</span>
-                    {doc.isVectorized && (
-                      <span className="vc-doc-item__zap">
-                        <Icon icon={zapIcon} width={12} />
-                      </span>
-                    )}
-                  </span>
-                  {doc.tags && doc.tags.length > 0 && (
-                    <span className="vc-doc-item__tags">
-                      {doc.tags.slice(0, 3).map((t) => (
-                        <span key={t} className="vc-tag-soft">{t}</span>
-                      ))}
-                    </span>
-                  )}
-                  <span className="vc-doc-item__time">{formatRelativeTime(doc.updatedAt)}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
+        <DocTree
+          ref={docTreeRef}
+          tree={tree}
+          loading={loading}
+          keyword={keyword}
+          activeDocId={activeDocId}
+          onOpenDoc={(id) => void selectDoc(id)}
+          onCreateDoc={openCreateDoc}
+          onRefresh={handleTreeRefresh}
+          onDocsRemoved={handleDocsRemoved}
+          onDocRenamed={handleDocRenamed}
+          onActiveFolderChange={setActiveFolderId}
+        />
       </aside>
 
       <div className="vc-knowledge-main">
@@ -403,14 +558,15 @@ const KnowledgePage: React.FC = () => {
             title="选择或新建一个文档"
             description="从左侧挑选一篇，或者新建 / 导入 Markdown 开始写作。"
           >
-            <Button type="primary" icon={<Icon icon={plusIcon} width={14} />} onClick={() => setCreateOpen(true)}>
+            <Button type="primary" icon={<Icon icon={plusIcon} width={14} />} onClick={() => openCreateDoc(activeFolderId)}>
               新建文档
             </Button>
             <Upload
               showUploadList={false}
               accept=".md"
+              multiple
               beforeUpload={(file) => {
-                void handleImport(file as File);
+                void handleImport([file as File]);
                 return false;
               }}
             >
@@ -591,7 +747,7 @@ const KnowledgePage: React.FC = () => {
             onChange={(e) => setNewTitle(e.target.value)}
             onPressEnter={handleCreate}
           />
-          <div className="vc-hint">创建后可在编辑器中继续填写内容、标签与摘要。</div>
+          <div className="vc-hint">将创建到「{createFolderName}」；创建后可在编辑器中继续填写内容、标签与摘要。</div>
         </div>
       </Modal>
     </div>

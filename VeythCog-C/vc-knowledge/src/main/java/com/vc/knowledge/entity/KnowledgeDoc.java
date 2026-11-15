@@ -26,6 +26,9 @@ public class KnowledgeDoc implements Serializable {
 
     private String summary;
 
+    /** 所属目录 id；null = 根级（移动/删除根时由 XML 显式置空，不参与普通更新） */
+    private Long folderId;
+
     /** 标签数组（PostgreSQL text[]），用 StringArrayTypeHandler 映射 */
     @TableField(typeHandler = StringArrayTypeHandler.class)
     private String[] tags;

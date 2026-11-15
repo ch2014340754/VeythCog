@@ -17,6 +17,9 @@ public class DocListItem implements Serializable {
 
     private String summary;
 
+    /** 所属目录 id；null = 根级 */
+    private Long folderId;
+
     private List<String> tags;
 
     private Boolean isVectorized;

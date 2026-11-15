@@ -33,4 +33,15 @@ public interface KnowledgeService {
      * <p>{@code null} 表示"该字段不动"，用于"仅填充空值"场景。</p>
      */
     void updateMetadata(Long userId, Long docId, String summary, List<String> tags);
+
+    /**
+     * 移动文档归属目录；folderId 为空表示移到根级。
+     * <p>只改归属，不置 {@code isVectorized=false}、不动 updatedAt。</p>
+     */
+    void moveDoc(Long userId, Long docId, Long folderId);
+
+    /**
+     * 仅重命名文档标题：不动正文 / 摘要 / 标签，**不置** {@code isVectorized=false}。
+     */
+    void renameTitle(Long userId, Long docId, String title);
 }

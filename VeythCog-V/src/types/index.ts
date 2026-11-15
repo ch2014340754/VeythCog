@@ -524,6 +524,8 @@ export interface DocListItem {
   id: number;
   title: string;
   summary: string;
+  /** 所属目录 id；null = 根级 */
+  folderId?: number | null;
   tags: string[];
   isVectorized: boolean;
   updatedAt: number;
@@ -534,6 +536,8 @@ export interface DocDetail {
   id: number;
   title: string;
   summary: string;
+  /** 所属目录 id；null = 根级 */
+  folderId?: number | null;
   tags: string[];
   /** 块结构数组（JSON 字符串，权威源） */
   blockData: string;
@@ -570,4 +574,37 @@ export interface DocSavePayload {
   tags?: string[];
   blockData?: string;
   markdownText?: string;
+  /** 所属目录（仅新建时生效；更新请走 /knowledge/doc/{id}/move） */
+  folderId?: number | null;
+}
+
+/** 知识库目录节点（树接口的扁平返回项） */
+export interface KnowledgeFolderNode {
+  id: number;
+  /** 父目录 id；null = 根级 */
+  parentId: number | null;
+  name: string;
+  sortOrder: number;
+}
+
+/** 知识库文档节点（树接口的轻量文档项，不含正文） */
+export interface KnowledgeDocNode {
+  id: number;
+  /** 所属目录 id；null = 根级 */
+  folderId: number | null;
+  title: string;
+  summary: string;
+  tags: string[];
+  isVectorized: boolean;
+  updatedAt: number;
+}
+
+/** 知识树查询结果 */
+export interface KnowledgeTree {
+  folders: KnowledgeFolderNode[];
+  docs: KnowledgeDocNode[];
+  /** 全库文档数 */
+  total: number;
+  /** 关键词命中数（无关键词时等于 total） */
+  matchedCount: number;
 }
