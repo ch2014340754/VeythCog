@@ -60,9 +60,23 @@
   background: var(--color-primary-10);
 }
 
+/* 导出选集（Ctrl / ⌘ 选中）：整行药丸，明显强于「正在查看」 */
 .vc-knowledge-tree .ant-tree .ant-tree-node-content-wrapper.ant-tree-node-selected {
-  background: var(--color-primary-10);
+  background: var(--color-primary-15);
   border-color: var(--color-primary-30);
+}
+
+/* 正在查看（打开中的文档 / 当前落点目录）：左侧 2px 细竖条，不铺底。
+   注意 antd 把 DataNode.className 打在 treenode（外层 li）上，不是 content-wrapper，
+   选择器必须写成 `.ant-tree-treenode.xxx > .ant-tree-node-content-wrapper`。
+   竖条用 `box-shadow: inset` 画：行有 1px 圆角，阴影会顺着圆角收成一小段弧，
+   贴着行左端的轮廓走——这个是用户明确要的形态，别换成直上直下的 ::before。 */
+.vc-knowledge-tree .ant-tree .ant-tree-treenode.vc-tree-node--current > .ant-tree-node-content-wrapper {
+  box-shadow: inset 2px 0 0 0 var(--color-primary);
+}
+
+.vc-knowledge-tree .ant-tree .ant-tree-treenode.vc-tree-node--current > .ant-tree-node-content-wrapper .vc-tree-row__title {
+  color: var(--color-text);
 }
 
 .vc-knowledge-tree .ant-tree .ant-tree-node-content-wrapper .ant-tree-title {
@@ -328,6 +342,27 @@
 .vc-kb-action__item:hover::before {
   opacity: 1;
   transform: scaleY(1);
+}
+
+/* 「批量导出选中」在没有选集时是不可点的 */
+.vc-kb-action__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vc-kb-action__item:disabled:hover::before,
+.vc-kb-action__item:disabled::before {
+  opacity: 0;
+}
+
+.vc-kb-action__count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-primary-15);
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--color-primary);
 }
 
 .vc-kb-action__panel {

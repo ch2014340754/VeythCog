@@ -44,6 +44,8 @@ export interface DocTreeProps {
   loading: boolean;
   keyword: string;
   activeDocId: number | null;
+  /** 当前落点目录（文件夹行的「正在查看」标记） */
+  activeFolderId: number | null;
   onOpenDoc: (id: number) => void;
   onCreateDoc: (folderId: number | null) => void;
   /** 静默刷新（不闪加载态） */
@@ -52,12 +54,14 @@ export interface DocTreeProps {
   onDocRenamed: (docId: number, title: string) => void;
   /** 当前选中的目录（新建文档 / 导入的默认落点） */
   onActiveFolderChange: (folderId: number | null) => void;
+  /** 导出选集变化（Ctrl / ⌘ 攒出来的文档），供导出面板显示「已选 N 篇」 */
+  onSelectionChange?: (docIds: number[]) => void;
 }
 
 export interface DocTreeHandle {
   /** 在指定目录下新建子目录（不传 = 根级），供侧栏头部按钮调用 */
   openCreateFolder: (parentId?: number | null) => void;
-  /** 当前被选中的文档 id（Ctrl / ⌘ 多选时含多个），供「批量导出选中」使用 */
+  /** 当前选中的文档 id（普通点击 = 单篇，Ctrl / ⌘ 点击 = 多选集合），供「批量导出选中」使用 */
   getSelectedDocIds: () => number[];
 }
 
@@ -212,12 +216,14 @@ const DocTree = forwardRef<DocTreeHandle, DocTreeProps>(function DocTree(props, 
     loading,
     keyword,
     activeDocId,
+    activeFolderId,
     onOpenDoc,
     onCreateDoc,
     onRefresh,
     onDocsRemoved,
     onDocRenamed,
     onActiveFolderChange,
+    onSelectionChange,
   } = props;
 
   const [root, setRoot] = useState<TreeItem | null>(null);
@@ -293,17 +299,40 @@ const DocTree = forwardRef<DocTreeHandle, DocTreeProps>(function DocTree(props, 
     }
   }, [keyword]);
 
-  /* 当前文档变化 → 同步选中行（保留 Ctrl / ⌘ 多选出来的其他文档，否则一开文档就被清空） */
-  useEffect(() => {
-    if (activeDocId == null) return;
-    const activeKey = `d:${activeDocId}`;
-    setSelectedKeys((prev) => {
-      const others = prev
+  /* 选中集只服务于「批量导出」，跟「当前打开哪篇」无关：
+     打开文档靠 vc-tree-node--current 那条竖条区分，不再往选中集里塞东西。
+     这样 Ctrl 攒好一批后随手点开其中一篇复习，集合不会被悄悄改名成一篇。 */
+  const selectedDocIds = useMemo(
+    () =>
+      selectedKeys
         .map((k) => String(k))
-        .filter((k) => k.startsWith('d:') && k !== activeKey);
-      return [activeKey, ...others];
-    });
-  }, [activeDocId]);
+        .filter((k) => k.startsWith('d:'))
+        .map((k) => Number(k.slice(2)))
+        .filter((id) => Number.isFinite(id)),
+    [selectedKeys]
+  );
+
+  useEffect(() => {
+    onSelectionChange?.(selectedDocIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDocIds]);
+
+  /** 给树节点打「正在查看」标记（当前文档 / 当前落点目录） */
+  const decoratedTree = useMemo(() => {
+    if (!root) return [] as DataNode[];
+    const docKey = activeDocId != null ? `d:${activeDocId}` : null;
+    const folderKey = activeFolderId != null ? `f:${activeFolderId}` : null;
+    const walk = (n: TreeItem): TreeItem => {
+      const key = String(n.key);
+      const current = n.itemKind !== 'root' && (key === docKey || key === folderKey);
+      return {
+        ...n,
+        className: current ? 'vc-tree-node--current' : undefined,
+        children: n.children?.map(walk),
+      };
+    };
+    return [walk(root)] as DataNode[];
+  }, [root, activeDocId, activeFolderId]);
 
   const itemMap = useMemo(() => {
     const map = new Map<string, TreeItem>();
@@ -344,14 +373,9 @@ const DocTree = forwardRef<DocTreeHandle, DocTreeProps>(function DocTree(props, 
         setFolderName('');
         setFolderOpen(true);
       },
-      getSelectedDocIds: () =>
-        selectedKeys
-          .map((k) => String(k))
-          .filter((k) => k.startsWith('d:'))
-          .map((k) => Number(k.slice(2)))
-          .filter((id) => Number.isFinite(id)),
+      getSelectedDocIds: () => selectedDocIds,
     }),
-    [selectedKeys]
+    [selectedDocIds]
   );
 
   /* ------------------------------ 拖拽 ------------------------------ */
@@ -581,7 +605,7 @@ const DocTree = forwardRef<DocTreeHandle, DocTreeProps>(function DocTree(props, 
     e.stopPropagation();
     const item = itemMap.get(String(node.key));
     if (!item) return;
-    setSelectedKeys([String(item.key)]);
+    // 右键不动导出选集：Ctrl 攒的一批要能原样留着
     if (item.itemKind === 'doc') {
       onOpenDoc(item.itemId!);
     } else {
@@ -731,15 +755,23 @@ const DocTree = forwardRef<DocTreeHandle, DocTreeProps>(function DocTree(props, 
           virtual={false}
           selectable
           multiple
-          treeData={(root ? [root] : []) as DataNode[]}
+          treeData={decoratedTree}
           titleRender={(node) => renderTitle(node as unknown as TreeItem)}
           selectedKeys={selectedKeys}
           expandedKeys={expandedKeys}
           onExpand={(keys) => setExpandedKeys(keys)}
           onSelect={(keys, info) => {
-            setSelectedKeys(keys);
             const key = String(info.node.key);
             const item = itemMap.get(key);
+            const native = info.nativeEvent as MouseEvent | KeyboardEvent | undefined;
+            const additive = Boolean(native && (native.metaKey || native.ctrlKey));
+            if (additive && item?.itemKind === 'doc') {
+              // Ctrl / ⌘：只动「导出选集」，不切文档——攒批时不该被迫跳转
+              setSelectedKeys(keys.map(String));
+              return;
+            }
+            // 普通点击：清空导出选集，只切换「正在查看」
+            setSelectedKeys([]);
             if (!item) return;
             if (item.itemKind === 'doc') onOpenDoc(item.itemId!);
             else onActiveFolderChange(item.itemKind === 'folder' ? item.itemId ?? null : null);

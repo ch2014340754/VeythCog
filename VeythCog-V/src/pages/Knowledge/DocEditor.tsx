@@ -122,6 +122,11 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [outlineOpen, setOutlineOpen] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // 点目录跳转时把高亮"锁"在目标标题上：平滑滚动期间容器每一帧都触发 onScroll，
+  // 滚动监听会不停重算"当前标题"，高亮就会在中间的标题之间来回闪/跳，
+  // 落地后还可能被上一次滚动算出的值盖掉。锁到滚动停稳（末次 scroll 后 240ms）为止。
+  const lockIdRef = useRef<string | null>(null);
+  const unlockTimerRef = useRef<number | null>(null);
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
 
@@ -173,12 +178,27 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
     (id: string) => {
       const el = editor.domElement?.querySelector<HTMLElement>(`[data-id="${id}"]`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        lockIdRef.current = id;
+        if (unlockTimerRef.current) window.clearTimeout(unlockTimerRef.current);
         setActiveId(id);
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     },
     [editor],
   );
+
+  /** 用户自己滚动/触摸/按键时立刻交还控制权，别让锁把高亮钉住 */
+  const releaseLock = useCallback(() => {
+    lockIdRef.current = null;
+    if (unlockTimerRef.current) {
+      window.clearTimeout(unlockTimerRef.current);
+      unlockTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (unlockTimerRef.current) window.clearTimeout(unlockTimerRef.current);
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -198,6 +218,15 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
 
   // 滚动时高亮当前所在标题
   const handleScroll = useCallback(() => {
+    // 点目录跳转的滚动过程中不动高亮，等它停稳再说
+    if (lockIdRef.current) {
+      if (unlockTimerRef.current) window.clearTimeout(unlockTimerRef.current);
+      unlockTimerRef.current = window.setTimeout(() => {
+        lockIdRef.current = null;
+        unlockTimerRef.current = null;
+      }, 240);
+      return;
+    }
     const container = scrollRef.current;
     const root = editor.domElement;
     if (!container || !root || outline.length === 0) return;
@@ -254,7 +283,13 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
           <span className="doc-editor-hint">输入「/」插入块，拖动块左侧手柄调整顺序</span>
         </div>
 
-        <div ref={scrollRef} className="doc-editor-scroll" onScroll={handleScroll}>
+        <div
+          ref={scrollRef}
+          className="doc-editor-scroll"
+          onScroll={handleScroll}
+          onWheel={releaseLock}
+          onTouchStart={releaseLock}
+        >
           <BlockNoteView
             editor={editor}
             theme={isDark ? 'dark' : 'light'}

@@ -50,6 +50,8 @@ const KnowledgePage: React.FC = () => {
   const [activeDocId, setActiveDocId] = useState<number | null>(null);
   /** 当前选中的目录：新建文档 / 导入的默认落点 */
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
+  /** 树里 Ctrl / ⌘ 攒出来的导出选集（与「当前打开」无关） */
+  const [selectedCount, setSelectedCount] = useState(0);
   const docTreeRef = useRef<DocTreeHandle>(null);
 
   const [detail, setDetail] = useState<DocDetail | null>(null);
@@ -409,11 +411,11 @@ const KnowledgePage: React.FC = () => {
     }
   };
 
-  /** 批量导出选中：左侧 Ctrl / ⌘ 多选出来的文档（至少含当前打开的一篇） */
+  /** 批量导出选中：读左侧树自己的选中集（普通点击单篇，Ctrl / ⌘ 追加多选），与「当前打开的文档」解耦 */
   const handleExportSelected = async () => {
     const ids = docTreeRef.current?.getSelectedDocIds() ?? [];
     if (ids.length === 0) {
-      message.warning('先在左侧选中要导出的文档（Ctrl / ⌘ 可多选）');
+      message.warning('先在左侧选中要导出的文档（Ctrl / ⌘ 可叠加多篇）');
       return;
     }
     try {
@@ -514,9 +516,11 @@ const KnowledgePage: React.FC = () => {
                     type="button"
                     className="vc-kb-action__item"
                     onClick={() => void handleExportSelected()}
+                    disabled={selectedCount === 0}
                   >
                     <Icon icon={filesIcon} width={14} />
                     <span>批量导出选中文件</span>
+                    {selectedCount > 0 && <span className="vc-kb-action__count">已选 {selectedCount} 篇</span>}
                   </button>
                 </div>
               </div>
@@ -542,12 +546,14 @@ const KnowledgePage: React.FC = () => {
           loading={loading}
           keyword={keyword}
           activeDocId={activeDocId}
+          activeFolderId={activeFolderId}
           onOpenDoc={(id) => void selectDoc(id)}
           onCreateDoc={openCreateDoc}
           onRefresh={handleTreeRefresh}
           onDocsRemoved={handleDocsRemoved}
           onDocRenamed={handleDocRenamed}
           onActiveFolderChange={setActiveFolderId}
+          onSelectionChange={(ids) => setSelectedCount(ids.length)}
         />
       </aside>
 

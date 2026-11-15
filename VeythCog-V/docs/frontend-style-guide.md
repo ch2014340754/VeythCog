@@ -256,7 +256,13 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 - **流式回复的打字机**：SSE token 是成批到达的，直接铺 DOM 会「一顿一顿」跳字。统一用 `hooks/useTypewriter.ts`：维护一个与内容长度解耦的播放进度，每帧按时间推进；速率取 `max(基础 70 字/秒, 积压/1.4s)`，即**一次积压至少摊到 1.4 秒吐完**——这条下限是必须的：模型常首 token 慢（4~8s）、随后整段瞬间到达，没有它用户看到的是「等很久 → 一次性显示」。流结束（`active=false`）时不硬对齐：剩余 ≤200 字让循环照常吐完，超过才直接落地。渲染层按 ~30fps 节流（每次 setState 都重解析一遍 Markdown），追平那帧强制落地。末尾挂 `.vc-msg__caret` 闪烁光标（`typing = active || 还在补字`），`prefers-reduced-motion` 下全部关闭。**取消 rAF 后必须把 `rafRef` 置空**，否则 React StrictMode 的 mount→卸载→再 mount 会让循环被误判「已在跑」而不重启，整条回答一直空白到流结束。
 - **SSE 帧安全**：`data:` 里不能出现裸换行。后端 `ChatController` 把 token 编成 `event: token` + `data:{"t":"..."}`（换行成 `\n` 转义），前端按事件名分流、`JSON.parse` 取 `t`，解析失败才回落裸文本。历史上直接 `data(token)` 时，换行 token 写出 `data:\n\n\n` 会切坏帧——多行回答被拼成一整段、正文零星丢字。
 - **单换行保留**：`global.css` 里 `.vc-msg .md-body p/li` 用 `white-space: pre-wrap`。Markdown 语义里单换行等于空格，但对话里模型常用单换行分行，不保留会读成一行长文。
-- **多选与批量动作**：树开启 antd `multiple`，普通点击仍是单选 + 打开文档，Ctrl / ⌘ 点击追加选中；`activeDocId` 变化时把新文档并入 `selectedKeys` 而不是整体覆盖，否则一打开文档就把多选清空。批量导出的「选中文件」由 `DocTreeHandle.getSelectedDocIds()` 读取 `d:` 前缀 keys，不额外维护一份状态。
+- **「正在查看」与「导出选集」是两套状态**（`DocTree.tsx` + `tree.css`，2026-11-15）：
+  - **正在查看** = `activeDocId` / `activeFolderId`，渲染时给对应节点塞 `className: 'vc-tree-node--current'`。⚠️ antd 把 `DataNode.className` 打在 `.ant-tree-treenode`（外层 li）上，不是 content-wrapper，选择器必须写 `.ant-tree-treenode.vc-tree-node--current > .ant-tree-node-content-wrapper`。样式是左侧 2px 竖条 + 标题提亮：**用 `box-shadow: inset 2px 0 0 0 var(--color-primary)` 画**，行有 1px 圆角，阴影会顺着圆角收成一小段弧、贴着行左端轮廓走——这是用户明确拍板的形态（试过直上直下的 `::before` 竖条被否了，别再改回去）。
+  - **导出选集** = `selectedKeys`，只有 Ctrl / ⌘ 点击文档才增删，且 **Ctrl 点击不切换文档**（攒批时别被迫跳来跳去）。普通点击 = 打开文档 + **清空选集**；点文件夹 = 切落点 + 清空选集；右键不动选集。两套状态可同时存在（当前行也能被 Ctrl 选中）。
+  - 选集变化通过 `onSelectionChange` 上报篇数，导出面板那条显示 `已选 N 篇` 徽标，`N=0` 时按钮 `disabled`（`tree.css` 里 `.vc-kb-action__item:disabled` 压到 0.45 + 禁止光标）。
+  - 批量导出「选中文件」由 `getSelectedDocIds()` 直接读这份选集，与「当前打开哪篇」彻底解耦。
+  - 验法：`dispatchEvent(new MouseEvent('click',{bubbles:true,ctrlKey:true,metaKey:true}))` 合成 Ctrl 点击，数 `.ant-tree-node-selected` 与 `.vc-tree-node--current` 各自的条目；导出则真点一次「批量导出选中文件」，看 zip 文件名里的篇数。
+- **目录（TOC）点击跳转不能和滚动监听抢高亮**（`DocEditor.tsx`，2026-11-15）：点目录项 = `setActiveId(id)` + `scrollIntoView({behavior:'smooth'})`，而 `.doc-editor-scroll` 的 `onScroll` 会用「标题距容器顶 > 96px 就 break」的规则逐条重算当前标题。平滑滚动期间 scroll 事件每帧一发，重算会连续覆盖点击设定的目标项 → 高亮在中间几个标题之间来回跳，落地后再被末帧算出的值甩到别的项上。修法：点击时写 `lockIdRef` 并立即 `setActiveId`，`handleScroll` 见锁直接 return（同时把「解锁」计时器每次 scroll 重置 240ms，滚动停稳才放开）；用户 `wheel` / `touchstart` 立刻解锁交还控制权，否则高亮会被钉死，手感更糟。要验这条不能靠自动化标签页——那里 rAF 被暂停，`behavior:'smooth'` 根本不推进；用分段改 `scrollTop` + 手动派发 `scroll` 事件模拟事件流，再挂 `MutationObserver` 记录 `is-active` 变化次数。
 
 ---
 
