@@ -575,6 +575,8 @@ const SearchBar: React.FC = () => {
     <div
       ref={rootRef}
       className={"vc-search" + (dimmed ? " is-dimmed" : "")}
+      // 搜索框（含联想面板）内的滚轮只滚自己，不再触发首页"滚轮切分类"
+      data-nav-wheel-ignore="true"
       onMouseEnter={() => {
         hoverRef.current = true;
         wake();
@@ -831,7 +833,7 @@ const SearchBar: React.FC = () => {
                         key={item.type + "-" + item.text + "-" + index}
                         role="button"
                         tabIndex={0}
-                        className={"vc-suggest" + (active ? " is-active" : "")}
+                        className={"vc-search__sug" + (active ? " is-active" : "")}
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => chooseSuggestion(item)}
                         onKeyDown={(ev) => {
@@ -841,15 +843,15 @@ const SearchBar: React.FC = () => {
                           }
                         }}
                       >
-                        <Icon icon={icon} width={15} color={isBookmark ? accent : undefined} className="vc-suggest__icon" />
-                        <div className="vc-suggest__main">
-                          <div className="vc-suggest__label">{item.text}</div>
-                          {isBookmark && item.url && <div className="vc-suggest__meta">{bookmarkHost(item.url)}</div>}
+                        <Icon icon={icon} width={15} color={isBookmark ? accent : undefined} className="vc-search__sug__icon" />
+                        <div className="vc-search__sug__main">
+                          <div className="vc-search__sug__label">{item.text}</div>
+                          {isBookmark && item.url && <div className="vc-search__sug__meta">{bookmarkHost(item.url)}</div>}
                         </div>
                         {isBookmark ? (
-                          <Icon icon={externalLinkIcon} width={13} className="vc-suggest__tail" />
+                          <Icon icon={externalLinkIcon} width={13} className="vc-search__sug__tail" />
                         ) : (
-                          <span className="vc-suggest__tail">{item.type === 'history' ? '最近搜索' : '搜索'}</span>
+                          <span className="vc-search__sug__tail">{item.type === 'history' ? '最近搜索' : '搜索'}</span>
                         )}
                       </div>
                     );

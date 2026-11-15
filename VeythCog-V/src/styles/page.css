@@ -4760,7 +4760,10 @@ body.has-bg .vc-search__icon-btn {
   overflow-y: auto;
   padding: 6px;
   border-radius: var(--radius-lg);
-  background: var(--color-surface-elevated);
+  /* 玻璃模式下 --color-surface-elevated 只有 0.65 的底，压不住壁纸，
+     联想列表会糊在照片上；再叠一层 overlay（本就是浮层色）把底做实。 */
+  background-color: var(--color-surface-elevated);
+  background-image: linear-gradient(var(--color-surface-overlay), var(--color-surface-overlay));
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(22px) saturate(170%);
@@ -4925,7 +4928,10 @@ body.has-bg .vc-search__icon-btn {
 .vc-search__ghost--end {
   margin-left: auto;
 }
-.vc-suggest {
+/* 联想行：扁平一行（图标 / 文案 / 尾注）。
+   注意不要再叫 .vc-suggest —— 那是 Chat 页「试试这些问题」的竖排块（见 2605 行附近），
+   同名会让这里继承 flex-direction: column + max-width: 520px，整列表变成居中的一摞。 */
+.vc-search__sug {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -4933,21 +4939,26 @@ body.has-bg .vc-search__icon-btn {
   border-radius: var(--radius-sm);
   color: var(--color-text);
   cursor: pointer;
+  transition: background var(--duration-fast) ease;
 }
-.vc-suggest.is-active {
+.vc-search__sug:hover,
+.vc-search__sug.is-active {
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
-.vc-suggest__main {
+.vc-search__sug__icon {
+  flex-shrink: 0;
+}
+.vc-search__sug__main {
   flex: 1;
   min-width: 0;
 }
-.vc-suggest__label {
+.vc-search__sug__label {
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.vc-suggest__meta {
+.vc-search__sug__meta {
   margin-top: 1px;
   color: var(--color-text-tertiary);
   font-size: 11px;
@@ -4955,7 +4966,7 @@ body.has-bg .vc-search__icon-btn {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.vc-suggest__tail {
+.vc-search__sug__tail {
   flex-shrink: 0;
   color: var(--color-text-tertiary);
   font-size: 11px;
@@ -5227,7 +5238,6 @@ body.has-bg .vc-search__icon-btn {
 
 .vc-icon-btn,
 .vc-rail__btn,
-.vc-dock__item,
 .vc-catnav__item,
 .vc-catnav__add,
 .vc-composer-tool,
@@ -5244,7 +5254,6 @@ body.has-bg .vc-search__icon-btn {
 
 .vc-icon-btn:hover,
 .vc-rail__btn:hover,
-.vc-dock__item:hover,
 .vc-catnav__item:hover,
 .vc-catnav__add:hover,
 .vc-composer-tool:hover,
@@ -5256,7 +5265,6 @@ body.has-bg .vc-search__icon-btn {
 
 .vc-icon-btn:active,
 .vc-rail__btn:active,
-.vc-dock__item:active,
 .vc-catnav__item:active,
 .vc-catnav__add:active,
 .vc-composer-tool:active,
@@ -5266,7 +5274,75 @@ body.has-bg .vc-search__icon-btn {
   transform: translateY(0) scale(var(--motion-press-scale));
 }
 
-/* ---------- 拟态玻璃：卡片 / 面板的悬浮与按压 ---------- */
+/* ---------- 底部 Dock：macOS 式磁吸放大 ---------- */
+
+/* HomeDock 逐帧写入 --dock-scale / --dock-dx（距离 → 放大，并把邻居往外推），
+   CSS 只负责落位与缓动；transform-origin 在底边，所以长高是"向上冒"而不是四周撑。
+   注意：这三条必须写在上面那份通用 hover/active 规则之后 —— 那两条已经不再包含
+   .vc-dock__item，这里才是它唯一的 transform 来源。 */
+.vc-dock__item {
+  position: relative;
+  transform-origin: 50% 100%;
+  transform: translateX(var(--dock-dx, 0px)) scale(var(--dock-scale, 1));
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              background-color var(--motion-duration-fast) var(--motion-ease-out),
+              color var(--motion-duration-fast) var(--motion-ease-out),
+              box-shadow var(--motion-duration-fast) var(--motion-ease-out);
+  will-change: transform;
+}
+.vc-dock__item:active {
+  transform: translateX(var(--dock-dx, 0px)) scale(calc(var(--dock-scale, 1) * var(--motion-press-scale)));
+  transition-duration: 90ms;
+}
+/* 键盘 Tab 聚焦时也给一档放大（鼠标不在时 JS 不会写 --dock-scale） */
+.vc-dock__item:focus-visible {
+  --dock-scale: 1.1;
+}
+/* 悬浮反馈：三道很淡的光叠起来 —— 1px 亮边（轮廓浮起来）+ 下方投影（离地）
+   + 外圈柔光（主色，壁纸上换白色）。之前的 0 12px 26px -14px 负扩散太大，
+   全压在图标底下，深色壁纸上基本看不见，等于只有缩放。 */
+.vc-dock__item::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 76%;
+  height: 12px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 60%, transparent);
+  filter: blur(7px);
+  opacity: 0;
+  transition: opacity 180ms var(--motion-ease-out);
+  pointer-events: none;
+}
+.vc-dock__item:hover::after {
+  opacity: 0.85;
+}
+.vc-dock__item:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent),
+    0 12px 24px -12px color-mix(in srgb, var(--color-primary) 55%, transparent),
+    0 0 22px -3px color-mix(in srgb, var(--color-primary) 32%, transparent);
+}
+body.dark .vc-dock__item:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary) 34%, transparent),
+    0 12px 24px -10px rgba(0, 0, 0, 0.55),
+    0 0 24px -3px color-mix(in srgb, var(--color-primary) 38%, transparent);
+}
+/* 壁纸模式放最后：白色光比主色光更能从照片里"拎"出来 */
+body.has-bg .vc-dock__item:hover {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.52),
+    0 14px 26px -12px rgba(0, 0, 0, 0.5),
+    0 0 26px -2px rgba(255, 255, 255, 0.34);
+}
+body.has-bg .vc-dock__item:hover::after {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+
 
 .vc-card,
 .vc-panel,

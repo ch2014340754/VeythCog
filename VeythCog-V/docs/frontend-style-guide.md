@@ -360,6 +360,8 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 | 玻璃侧栏里沿用 `--color-text-secondary` | 暗色 / 壁纸下多层透明叠起来，菜单字发灰、看不清 | 侧栏文字取 `color-mix(--color-text 78%)`，仍低于选中态 |
 | 变量下标硬编码 z-index | 弹层被遮挡、改一处崩一片 | 用 `--z-*` 令牌 |
 | 整页滚动 + 内部再滚动 | 双层滚动条、移动端卡顿 | 外层 `overflow:hidden`，内层单点滚动 |
+| 不同组件复用同一个类名（`.vc-suggest` 既是 Chat 竖排块又是搜索联想行） | 后定义的那份只覆盖一部分，没覆盖的 `flex-direction: column` / `max-width` 全部残留，行变成居中的一摞 | 组件级独享命名空间：`vc-search__sug*`，样式块的注释里写清"不要再叫 X" |
+| Dock 放大只给被 hover 的图标加 `scale` | 放大出来的宽度压到邻居身上，图标互相叠、看着像错版 | 放大与位移分开：高斯衰减算 `scale`，按新宽度重算中心差写 `--dock-dx`，整条对称撑开 |
 
 ---
 

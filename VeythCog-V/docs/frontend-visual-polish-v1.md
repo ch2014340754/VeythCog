@@ -426,3 +426,135 @@ body.has-bg .vc-subnav__item {
 遗留（无法彻底消除的那部分）：**首次**进入某个页面且预取还没跑完时，仍会走一次局部 Suspense，此时只有一条细进度条 + 外壳保持不动，但内容区会短暂空一下。正常情况下预取在首屏后 1 秒内完成，实际很难撞上。
 
 `build` ✓ 7.13s。
+
+### 10.11 搜索框联想面板：排版错乱 + 滚轮带动切分类
+
+用户反馈两点：搜「你好」弹出的联想浮层里，每行是"放大镜 / 标题 / 搜索"三层**上下居中堆叠**，不是扁平列表；而且面板里滚动滚轮会把下面书签页的分类切走。
+
+#### 问题一：两条 CSS 撞了同一个类名
+
+`page.css` 里 `.vc-suggest` 出现了两次：
+
+| 位置 | 谁在用 | 规则 |
+|---|---|---|
+| 2605 行 | Chat 页「试试这些问题」竖排块 | `display:flex; flex-direction: column; gap:8px; max-width:520px` |
+| 4928 行 | Home 搜索联想行 | `display:flex; align-items:center; gap:10px; padding:9px 12px` |
+
+先后顺序决定谁赢，但**没被后者重写的属性会从前者残留下来**。于是联想行实际拿到的是：`flex-direction: column`（来自 2605，4928 从未复位）+ `align-items: center`（4928，在 column 下变成水平居中）+ `max-width: 520px`（来自 2605）。三样叠起来正好就是截图里的样子：三行竖排、整块居中、宽度比面板窄一截。连带 `.vc-suggest__label` 的 `letter-spacing: 0.08em` / `text-transform: uppercase` / `color: tertiary` 也留在了行标题上。
+
+更隐蔽的是**它同时对 Chat 页生效**：4928 那份 `display:flex; align-items:center; padding; cursor:pointer` 也在改 Chat 的「试试这些问题」块（那个块本该是竖排左对齐）。
+
+改法：把 Home 侧的行样式整体换到独立命名空间 `vc-search__sug / __icon / __main / __label / __meta / __tail`，并在 CSS 里留注释"不要再叫 `.vc-suggest`"，避免下次又把两块粘一起。改完两处各归各位：联想行是扁平的 `flex-direction: row`，Chat 的竖排块恢复原样。
+
+同时补了两条小细节：`__icon` 加 `flex-shrink: 0`（长标题不会把图标挤扁），`:hover` 与 `.is-active` 共用同一底色（原来只有键盘选中态有底色，鼠标滑过没有反馈）。
+
+#### 问题二：滚轮冒泡触发首页切分类
+
+首页 `Home/index.tsx` 的 `handleWheel` 是"整页滚轮切分类"（220ms 防抖）。它有一份忽略白名单：
+
+```js
+target?.closest('.ant-modal-root, .ant-drawer-root, .ant-image-preview-root, [data-nav-wheel-ignore]')
+```
+
+弹窗走 portal 渲染时 DOM 不在首页下、但 React 事件仍沿组件树冒泡上来，所以当初加了这份白名单。搜索框和联想面板不在名单里：面板自身 `overflow-y: auto`，滚到底之后 `wheel` 继续冒泡 → 切分类。
+
+改法不改逻辑、只补标记：`SearchBar.tsx` 根节点 `.vc-search` 加 `data-nav-wheel-ignore="true"`，面板是它的后代，`closest()` 一定能命中。以后任何"局部可滚区"沿用同一套：加属性即可，不用再改 `handleWheel`。
+
+#### 顺带：面板底色做实
+
+玻璃模式下 `--color-surface-elevated` 是 `rgba(255,255,255,0.65)`（`ThemeContext` 的 `glassEnabled` 分支），浮层压在壁纸照片上时底太透，联想条目的灰字糊在风景里。给 `.vc-search__panel` 叠一层 `--color-surface-overlay`（本身就是浮层色：亮色 `rgba(255,255,255,0.85)`、暗色 `rgba(26,26,46,0.85)`）：
+
+```css
+background-color: var(--color-surface-elevated);
+background-image: linear-gradient(var(--color-surface-overlay), var(--color-surface-overlay));
+```
+
+保留 `backdrop-filter: blur(22px) saturate(170%)`，玻璃感还在，但文字不再跟背景打架。
+
+#### 文件
+
+| 文件 | 改动 |
+|---|---|
+| `src/pages/Home/SearchBar.tsx` | 联想行 className → `vc-search__sug*`；根节点加 `data-nav-wheel-ignore="true"` |
+| `src/styles/page.css` | 4928 行起整块改名 `vc-search__sug*`（补 `__icon` shrink、hover 同底色、注释警示）；`.vc-search__panel` 底色叠 overlay |
+
+#### 验证
+
+mock 预览拿不到远端联想（`/nav/bookmarks/all` 与 `getSearchSuggest` 都无数据），面板里只有"按 Enter 搜索"空态。于是在 4173 预览的 `.vc-search__panel` 里注入四条同 class 的样例行截图核对：图标在左、标题左对齐、尾注右对齐、行高 9px 上下留白，`.is-active` 一行整条淡紫底——扁平列表成立。
+
+滚轮：确认 `.vc-search__panel.closest('[data-nav-wheel-ignore]')` 命中搜索框根节点（`guard-active`），即 `handleWheel` 在入口就 return；mock 下首页没有书签分类，无法用"切走/没切走"做横向对比，这条靠的是与弹窗同一套已生效的守卫路径。
+
+`build` ✓ 8.58s。
+
+### 10.12 首屏底部工具条：macOS Dock 式磁吸放大
+
+要求：鼠标经过工具条时，图标像 macOS Dock 那样放大，整条被"吸起来"。
+
+#### 为什么不能只用 `:hover { scale }`
+
+单个图标 `transform: scale(1.5)` 只是它自己变大，左右邻居不动，结果就是**压到旁边的图标身上**（44px 间距 24px，放大 50% 要多出 22px，两边邻居各占 11px 就撞上了）。macOS 的做法是：图标变宽的同时**把整条按新宽度重新排**，光标下的那个起峰，左右按距离衰减。
+
+所以这里拆成两件事：**放大由距离算，位移由宽度算**。
+
+#### 实现（`HomeDock.tsx`）
+
+1. **只量一次布局**。挂载与 `resize` 时读 `offsetLeft / offsetWidth`（布局值，不受 transform 影响）缓存成 `{centers, widths, gap, left, dockLeft}`。`pointermove` 里**不读任何 `getBoundingClientRect`**——那是本项目已经记在反模式里的掉帧写法。
+2. **高斯衰减算缩放**。`scale_i = 1 + 0.52 · exp(−((x − c_i)/σ)²)`，σ 跟着图标间距走：`σ = max(46, (宽 + gap) × 1.25)`。指针正下方封顶 1.52 倍，相邻两格分别约 1.27 / 1.04。
+3. **按新宽度重新排**。`width_i = w0 · scale_i`，总宽以原中心为轴左右对称撑开，逐个累加算出新中心，`dx_i = 新中心 − 原中心`，写进 `--dock-dx`。
+4. **逐帧合并**。`pointermove` 只记 `clientX`，用 `requestAnimationFrame` 合并成一次写入（7 个图标 × 2 个变量）。
+5. **离开复位**。`pointerleave` 清空 `--dock-scale / --dock-dx`，交给 CSS 的 140ms 缓动自然回落；`resize` 也先复位再重新测量。
+
+CSS 侧（`page.css`，写在通用 hover/active 规则**之后**）：
+
+```css
+.vc-dock__item {
+  transform-origin: 50% 100%;                       /* 长高只往上冒，不四周撑 */
+  transform: translateX(var(--dock-dx, 0px)) scale(var(--dock-scale, 1));
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.vc-dock__item:active { /* 按压仍生效：scale × --motion-press-scale */ }
+.vc-dock__item:focus-visible { --dock-scale: 1.1; } /* 键盘 Tab 也给一档 */
+```
+
+注意一处改动：`.vc-dock__item` 被**移出**了通用 `hover { translateY(lift) }` / `active { scale(press) }` 两份列表——那两处的 transform 会和这里的 `translateX + scale` 互相覆盖（同特异性、后者赢），Dock 的 transform 只能有一个来源。按压反馈改由 Dock 自己的 `:active` 规则承担。
+
+悬浮时追加一层很淡的主色投影（`0 12px 26px -14px`），壁纸模式下换成黑色投影，不用霓虹光。
+
+#### 补：悬浮光一开始等于没有（用户截图反馈"只看到变大"）
+
+第一版投影是 `0 12px 26px -14px`，负扩散 −14px 把 26px 的模糊几乎全吃掉，剩下的影子整个压在图标底下；壁纸模式那版又是黑色投影打在深色照片上。结果就是**只有缩放、看不出光**。
+
+改成三层叠（都很淡，但各自负责一件事）：
+
+| 层 | 作用 | 亮色 | 壁纸 / 暗色 |
+|---|---|---|---|
+| `0 0 0 1px` | 亮边，让磁贴"浮"出背景 | 主色 30% | 白 52%（壁纸）/ 主色 34%（暗色） |
+| `0 12px 24px -12px` | 离地投影 | 主色 55% | 黑 50% |
+| `0 0 22px -3px` | 外圈柔光 | 主色 32% | 白 34% / 主色 38% |
+
+再加一层 `::after` 地面反光：磁贴正下方 9px 处一个 76% 宽、`blur(7px)` 的椭圆，主色 60%（壁纸白 55%），悬浮时 180ms 淡入到 `opacity .85`。这三样叠起来就是"被托起来 + 落在光台面上"，而不是发光玩具。
+
+注意 `body.has-bg` 那条要写在 `body.dark` **之后**——壁纸 + 暗色同时成立时用白色光，白色光才压得住照片。
+
+复测（真实指针 hover 第 4 格）：
+
+- 亮色：computed `box-shadow` 三段齐全，`::after` opacity `.85`、`background color(srgb .49 .23 .93 / .6)`；
+- 壁纸（`body.has-bg`）：`box-shadow` 首段 `rgba(255,255,255,.52)`、末段 `rgba(255,255,255,.34)`，磁贴底 `rgba(255,255,255,.24)`，照片上能清楚看到白色亮边 + 底部反光，没有任何彩色霓虹。
+
+`build` ✓ 8.54s。
+
+
+#### 验证
+
+预览（4173）里把指针停在中间那一格：
+
+| 图标 | 1 | 2 | 3 | 4（指针下） | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| `--dock-scale` | 1.002 | 1.040 | 1.274 | **1.520** | 1.274 | 1.040 | 1.002 |
+| 实测算宽（px） | 44 | 46 | 56 | **67** | 56 | 46 | 44 |
+| `--dock-dx`（px） | −25.3 | −24.4 | −17.5 | 0 | +17.5 | +24.4 | +25.3 |
+
+位移左右完全对称，中间的峰没有被邻居压住。`pointerleave` 后 7 个图标全部回到 44px、自定义属性清空。`build` ✓ 8.59s。
+
+遗留说明：预览窗口只有 781px 高、`.vc-home` 内容 891px，工具条在这个窗口里落在视口下方（取证时临时把 `bottom` 抬到 150px 才截到图）。这是预览窗口尺寸导致的现象，与本次改动无关。
+
