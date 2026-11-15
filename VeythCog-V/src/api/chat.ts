@@ -223,15 +223,15 @@ export function streamChatMessage(o: StreamChatMessageOptions): AbortController 
         buffer = events.pop() ?? '';
 
         for (const evt of events) {
-          // 取事件名与最后一个 data: 行
+          // 取事件名与所有 data: 行（标准 SSE：多行 data 用换行连接）
           let eventName: string | null = null;
-          let data: string | null = null;
+          const dataLines: string[] = [];
           for (const line of evt.split('\n')) {
             if (line.startsWith('event:')) eventName = line.slice(6).trim();
-            else if (line.startsWith('data:')) data = line.slice(5);
+            else if (line.startsWith('data:')) dataLines.push(line.slice(5));
           }
-          if (data === null) continue;
-          const text = data.trimStart();
+          if (dataLines.length === 0) continue;
+          const text = dataLines.join('\n').trimStart();
           if (eventName === 'error') {
             o.onError?.(new Error(text || '模型调用失败'));
             return;
@@ -243,6 +243,20 @@ export function streamChatMessage(o: StreamChatMessageOptions): AbortController 
             } catch {
               // 引用解析失败不影响正文流
             }
+            continue;
+          }
+          if (eventName === 'token') {
+            // 新格式 {"t":"..."}：换行被 JSON 转义，不再破坏 SSE 帧（否则多行正文会丢字）
+            try {
+              const payload = JSON.parse(text) as { t?: string };
+              if (typeof payload.t === 'string') {
+                if (payload.t) o.onDelta(payload.t);
+                continue;
+              }
+            } catch {
+              // 解析失败 → 按裸文本处理（兼容旧后端）
+            }
+            if (text) o.onDelta(text);
             continue;
           }
           if (text === '[DONE]') {

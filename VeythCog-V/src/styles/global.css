@@ -823,3 +823,168 @@ body.dark .composer-model-select.ant-select-focused .ant-select-selector {
     opacity: 0.75;
   }
 }
+/* ── 对话页流式输出：打字机光标 ───────────────────────────────────
+   打字机本身由 hooks/useTypewriter 控制吐字进度，这里只负责末尾那根闪烁竖线。
+   光标贴在 Markdown 渲染结果末尾，随内容增长自然下移。 */
+.vc-msg .md-body .vc-msg__caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 3px;
+  border-radius: 1px;
+  background: var(--color-primary);
+  box-shadow: 0 0 6px var(--color-primary-40);
+  vertical-align: -0.18em;
+  animation: vc-caret-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes vc-caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-msg .md-body .vc-msg__caret {
+    animation: none;
+  }
+}
+/* 模型输出里的「单换行」在 Markdown 语义里只等于空格（要空行才是新段落），
+   但对话场景下逐行排布更贴阅读习惯，所以段落内保留换行 */
+.vc-msg .md-body p,
+.vc-msg .md-body li {
+  white-space: pre-wrap;
+}
+/* 首 token 未到时的占位呼吸点（模型 TTFT 常 4~8s，气泡不能空着只剩光标） */
+.vc-msg .vc-msg__thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+}
+
+.vc-msg .vc-msg__thinking span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  opacity: 0.35;
+  animation: vc-thinking-dot 1.2s var(--ease-out) infinite;
+}
+
+.vc-msg .vc-msg__thinking span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.vc-msg .vc-msg__thinking span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes vc-thinking-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0) scale(1);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-msg .vc-msg__thinking span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+/* 首屏书签：悬停时图标上浮（只动图标，底块背景保持原样以免整块跳） */
+.vc-bookmark .vc-iconpreview {
+  transition: transform var(--duration-fast) var(--ease-out);
+  will-change: transform;
+}
+
+.vc-bookmark:hover .vc-iconpreview,
+.vc-bookmark:focus-visible .vc-iconpreview {
+  transform: translateY(-6px) scale(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-bookmark .vc-iconpreview {
+    transition: none;
+  }
+  .vc-bookmark:hover .vc-iconpreview,
+  .vc-bookmark:focus-visible .vc-iconpreview {
+    transform: none;
+  }
+}
+/* 左侧导航 rail：按钮区上一团跟着鼠标走的聚光。
+   强度与坐标由 utils/pointerGlow.ts 写入 --glow / --glow-x / --glow-y；
+   画在 rail 的 ::before 上（::after 已被流光描边占用），
+   z-index:0 且按钮本身是 position:relative，所以光在按钮底下、在玻璃底之上。 */
+.vc-rail::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: calc(var(--glow, 0) * 0.95);
+  transition: opacity 160ms var(--ease-out);
+  background:
+    radial-gradient(
+      132px 132px at var(--glow-x, 50%) var(--glow-y, 0%),
+      color-mix(in srgb, var(--color-primary) 38%, transparent) 0%,
+      color-mix(in srgb, var(--color-primary) 16%, transparent) 44%,
+      transparent 74%
+    );
+}
+
+/* 壁纸模式下 rail 是白玻璃，主色光偏冷，补一层极淡白晕让「聚光」更像光 */
+body.has-bg .vc-rail::before {
+  background:
+    radial-gradient(
+      120px 120px at var(--glow-x, 50%) var(--glow-y, 0%),
+      rgba(255, 255, 255, 0.22) 0%,
+      color-mix(in srgb, var(--color-primary) 16%, transparent) 46%,
+      transparent 74%
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-rail::before {
+    transition: none;
+  }
+}
+/* rail 里鼠标正压着的那颗按钮：内侧高光（光点在按钮内跟着指针走 + 一圈内描边）。
+   --btn-glow / --btn-x / --btn-y 由 utils/pointerGlow.ts 写入；
+   ::before 是按钮的第一个子节点，天然画在图标底下。 */
+.vc-rail__btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--btn-glow, 0);
+  transition: opacity 140ms var(--ease-out);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 26%, transparent);
+  background:
+    radial-gradient(
+      58px 58px at var(--btn-x, 50%) var(--btn-y, 50%),
+      color-mix(in srgb, var(--color-primary) 30%, transparent) 0%,
+      color-mix(in srgb, var(--color-primary) 12%, transparent) 46%,
+      transparent 76%
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-rail__btn::before {
+    transition: none;
+  }
+}

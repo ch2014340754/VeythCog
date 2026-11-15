@@ -12,8 +12,11 @@ import com.vc.common.ResultUtils;
 import com.vc.common.exception.BusinessException;
 import com.vc.common.exception.ErrorCode;
 import com.vc.knowledge.dto.RetrieveChunk;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -46,19 +49,25 @@ import java.util.List;
 @RequestMapping("/chat")
 public class ChatController {
 
+    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
+
     private final ChatService chatService;
     private final ChatHistoryService chatHistoryService;
     private final RagChatOrchestrator ragChatOrchestrator;
     private final ChatSessionService chatSessionService;
+    /** 用来把 token 编成 JSON 下发，避免 token 里的换行把 SSE 帧切坏（见 stream 方法注释） */
+    private final ObjectMapper objectMapper;
 
     public ChatController(ChatService chatService,
                           ChatHistoryService chatHistoryService,
                           RagChatOrchestrator ragChatOrchestrator,
-                          ChatSessionService chatSessionService) {
+                          ChatSessionService chatSessionService,
+                          ObjectMapper objectMapper) {
         this.chatService = chatService;
         this.chatHistoryService = chatHistoryService;
         this.ragChatOrchestrator = ragChatOrchestrator;
         this.chatSessionService = chatSessionService;
+        this.objectMapper = objectMapper;
     }
 
     /** 会话列表：来自 chat_message 记忆表（无独立会话表，按账号前缀隔离） */
@@ -137,14 +146,17 @@ public class ChatController {
      */
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@Valid @RequestBody ChatRequest body) {
+        long t0 = System.currentTimeMillis();
         Long userId = currentUserId();
         ChatSessionVO session = chatSessionService.resolveForSend(
                 userId, body.getConversationId(), body.getVendor(), body.getModelCode(),
                 body.getDocIds(), body.getCompressEnabled(), body.getMessage());
+        long tSession = System.currentTimeMillis();
         List<Long> docIds = session.getDocIds();
         // 先检索再建流：召回结果与随后喂给模型的上下文同源，避免前端展示与模型输入不一致
         List<RetrieveChunk> references = ragChatOrchestrator.retrieveSafely(
                 userId, docIds, body.getMessage());
+        long tRetrieve = System.currentTimeMillis();
         String prompt = ragChatOrchestrator.buildAugmentedMessage(body.getMessage(), references);
 
         SseEmitter emitter = new SseEmitter(0L); // 不设超时，由客户端断开控制
@@ -176,11 +188,18 @@ public class ChatController {
             return emitter;
         }
 
+        java.util.concurrent.atomic.AtomicLong firstTokenAt = new java.util.concurrent.atomic.AtomicLong(0);
         Disposable disposable = flux.subscribe(
                 token -> {
                     if (token == null || token.isEmpty()) return;
+                    if (firstTokenAt.compareAndSet(0, System.currentTimeMillis())) {
+                        // 首 token 时延拆解：会话/检索/建流/模型 TTFT，定位「等很久」到底花在哪
+                        log.info("stream 首 token: 会话={}ms 检索={}ms 建流={}ms 模型TTFT={}ms 总={}ms docIds={}",
+                                tSession - t0, tRetrieve - tSession, 0,
+                                firstTokenAt.get() - tRetrieve, firstTokenAt.get() - t0, docIds);
+                    }
                     try {
-                        emitter.send(SseEmitter.event().data(token));
+                        emitter.send(SseEmitter.event().name("token").data(tokenPayload(token)));
                     } catch (IOException e) {
                         // 客户端已断开，取消上游订阅
                         throw new RuntimeException(e);
@@ -207,6 +226,18 @@ public class ChatController {
         emitter.onCompletion(disposable::dispose);
         emitter.onTimeout(disposable::dispose);
         return emitter;
+    }
+
+    /**
+     * 把一个 token 编成 {@code {"t":"..."}} 再下发。
+     *
+     * <p>原因：SSE 帧用「空行」分隔，token 里一旦带换行（模型输出多行/代码块时必然出现），
+     * 直接 {@code data(token)} 会把帧断开——换行 token 变成空帧被前端丢弃，
+     * 于是多行回答被拼成一整段、正文还会零星丢字。编成 JSON 后换行变成 \n 转义，
+     * 单行负载不再破坏帧结构。</p>
+     */
+    private String tokenPayload(String token) throws IOException {
+        return objectMapper.writeValueAsString(java.util.Map.of("t", token));
     }
 
     private Long currentUserId() {

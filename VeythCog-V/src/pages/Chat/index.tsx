@@ -263,6 +263,8 @@ const ChatPage: React.FC = () => {
   };
 
   const streamingMsgIdRef = useRef<string | null>(null);
+  /** 正在流式输出的那条助手消息 id（state 版，供气泡挂打字机效果） */
+  const [streamingId, setStreamingId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // 组件卸载时中断未完成流
@@ -318,6 +320,7 @@ const ChatPage: React.FC = () => {
           const id = streamingMsgIdRef.current;
           streamingMsgIdRef.current = null;
           abortRef.current = null;
+          setStreamingId(null);
           setConversations((prev) =>
             prev.map((c) =>
               c.id === conversationId
@@ -331,6 +334,7 @@ const ChatPage: React.FC = () => {
           const id = streamingMsgIdRef.current;
           streamingMsgIdRef.current = null;
           abortRef.current = null;
+          setStreamingId(null);
           // 失败且未生成任何内容时，移除空的 AI 占位气泡
           setConversations((prev) =>
             prev.map((c) =>
@@ -372,6 +376,7 @@ const ChatPage: React.FC = () => {
     };
     const aiId = `msg-${Date.now()}-ai`;
     streamingMsgIdRef.current = aiId;
+    setStreamingId(aiId);
 
     // 乐观更新：用户消息 + 空 AI 占位立即上屏，随后 SSE 逐 token 填充
     setConversations((prev) =>
@@ -415,6 +420,7 @@ const ChatPage: React.FC = () => {
     setSending(true);
     const aiId = `msg-${Date.now()}-ai`;
     streamingMsgIdRef.current = aiId;
+    setStreamingId(aiId);
     setConversations((prev) =>
       prev.map((c) =>
         c.id === activeConv.id
@@ -658,6 +664,7 @@ const ChatPage: React.FC = () => {
                       message={msg}
                       showAvatar={shouldShowAvatar(idx, activeConv.messages)}
                       onRegenerate={handleRegenerate}
+                      streaming={streamingId === msg.id}
                     />
                   </React.Fragment>
                 ))

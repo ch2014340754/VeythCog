@@ -218,7 +218,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | PUT | `/admin/llm-models/{id}/enabled` | {enabled} | 仅 admin（上架/下架） |
 | POST | `/admin/llm-models/sync` | {vendor, enableNew?} | 仅 admin（从供应商拉取全部模型，补齐缺失并刷新已有主类型/全部模态；不删除，新增默认不上架） |
 | POST | `/chat/message` | {message, vendor, modelCode, conversationId?, docIds?, compressEnabled?} | 是（同步返回 string；先按会话配置解析模型/文档/压缩，docIds 非空时先召回再拼上下文；模型未校验返回 40000） |
-| POST | `/chat/stream` | {message, vendor, modelCode, conversationId?, docIds?, compressEnabled?} | 是（SSE：先 `event: references`（JSON 数组），后 `data: <token>`，末尾 `data: [DONE]`，错误 `event:error`；已建流后的错误不再改写成 JSON） |
+| POST | `/chat/stream` | {message, vendor, modelCode, conversationId?, docIds?, compressEnabled?} | 是（SSE：先 `event: references`（JSON 数组），后逐 token `event: token` + `data:{"t":"..."}`（**换行被 JSON 转义，避免 `data:` 里的裸换行切坏帧**），末尾 `data: [DONE]`，错误 `event:error`；已建流后的错误不再改写成 JSON） |
 | GET | `/chat/conversations` | - | 是（会话列表 = `chat_message` 聚合 + `chat_session` 配置合并，剥离 `userId:` 前缀，按最近活动倒序；未发消息的新会话也返回） |
 | GET | `/chat/conversations/{id}/messages` | - | 是（按 `seq` 升序回显；RAG 落库的「上下文+问题」在返回时剥离为原始问题） |
 | DELETE | `/chat/conversations/{id}` | - | 是（物理删除该会话记忆行 + 软删除会话配置） |
@@ -308,6 +308,12 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
   - **默认全展开**用受控 `expandedKeys`：antd `defaultExpandAll` 在异步数据下失效，首次拿到树时填全部 key，新建目录自动展开父链。
   - 拖拽为**乐观更新**：先本地改树，接口失败再回滚 + `message.error` + `onRefresh({silent:true})`；搜索态禁用拖拽，清空关键词直接回放 `fullTreeRef` 快照（不重新请求）。
   - 目录删除前先 `GET /folder/{id}/stats`，非空才弹 `Modal.confirm` 列级联数量；改名只改标题走 `PUT /doc/{id}/title`（**禁止**用 `PUT /doc/{id}` 全量更新，那会废掉向量化）。
+
+- **对话页 AI 流式打字机（2026-11-15）**：`hooks/useTypewriter.ts` + `MessageBubble` 的 `streaming` prop + `.vc-msg__caret` 光标。
+  - 速率取 `max(70 字/秒, 积压/1.4s)`：**一次积压至少 1.4s 吐完**。模型首 token 常 4~8s、之后整段瞬间到达，没有这条下限用户看到的就是「等很久 → 一次性显示」。收尾（`active=false`）剩余 ≤200 字照常吐完，超过才硬对齐。
+  - **StrictMode 陷阱**：取消 rAF 后必须把 `rafRef.current` 置空，否则 mount→卸载→再 mount 时循环被误判「已在跑」而不重启，整条回答空白到流结束。
+  - **SSE 帧安全**：后端 token 改发 `event: token` + `data:{"t":"..."}`（`ChatController#tokenPayload`）；裸换行 token 会写出 `data:\n\n\n` 切坏帧，导致多行回答拼成一段、正文丢字。前端 `chat.ts` 按事件名分流，`JSON.parse` 失败回落裸文本（兼容旧后端）。
+  - `global.css` 末尾 `.vc-msg .md-body p/li { white-space: pre-wrap }`：Markdown 单换行默认折成空格，对话里要保留换行。
 
 ### 7.4 会话模型绑定策略（生产策略，已实现）
 新建会话可选模型并写入 `chat_session.vendor_code/model_code`；进入已有会话后**下拉禁用**（会话内禁切）。会话的模型 / 知识库文档集合 / 上下文压缩开关都持久化在后端，刷新不丢；`docIds` 或压缩开关改动即时 PUT。无有效模型（未绑定、非对话类型或未通过校验）→ 空态引导去模型配置页逐行校验。

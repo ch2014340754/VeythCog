@@ -226,6 +226,9 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 - **浮层必须不透明**：`--glass-bg` / `--color-surface-elevated` 在毛玻璃模式下都是半透明的，浮层叠在密排文字（树行、列表）上会透底、小字发糊。标准做法是「实心打底 + 半透明抬升」——
   `background-color: var(--color-bg); background-image: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated));`
   合成结果不透明但保留抬升质感，两种主题都成立。右键菜单（`.vc-tree-menu`）同理。
+- **流式回复的打字机**：SSE token 是成批到达的，直接铺 DOM 会「一顿一顿」跳字。统一用 `hooks/useTypewriter.ts`：维护一个与内容长度解耦的播放进度，每帧按时间推进；速率取 `max(基础 70 字/秒, 积压/1.4s)`，即**一次积压至少摊到 1.4 秒吐完**——这条下限是必须的：模型常首 token 慢（4~8s）、随后整段瞬间到达，没有它用户看到的是「等很久 → 一次性显示」。流结束（`active=false`）时不硬对齐：剩余 ≤200 字让循环照常吐完，超过才直接落地。渲染层按 ~30fps 节流（每次 setState 都重解析一遍 Markdown），追平那帧强制落地。末尾挂 `.vc-msg__caret` 闪烁光标（`typing = active || 还在补字`），`prefers-reduced-motion` 下全部关闭。**取消 rAF 后必须把 `rafRef` 置空**，否则 React StrictMode 的 mount→卸载→再 mount 会让循环被误判「已在跑」而不重启，整条回答一直空白到流结束。
+- **SSE 帧安全**：`data:` 里不能出现裸换行。后端 `ChatController` 把 token 编成 `event: token` + `data:{"t":"..."}`（换行成 `\n` 转义），前端按事件名分流、`JSON.parse` 取 `t`，解析失败才回落裸文本。历史上直接 `data(token)` 时，换行 token 写出 `data:\n\n\n` 会切坏帧——多行回答被拼成一整段、正文零星丢字。
+- **单换行保留**：`global.css` 里 `.vc-msg .md-body p/li` 用 `white-space: pre-wrap`。Markdown 语义里单换行等于空格，但对话里模型常用单换行分行，不保留会读成一行长文。
 - **多选与批量动作**：树开启 antd `multiple`，普通点击仍是单选 + 打开文档，Ctrl / ⌘ 点击追加选中；`activeDocId` 变化时把新文档并入 `selectedKeys` 而不是整体覆盖，否则一打开文档就把多选清空。批量导出的「选中文件」由 `DocTreeHandle.getSelectedDocIds()` 读取 `d:` 前缀 keys，不额外维护一份状态。
 
 ---
@@ -236,6 +239,10 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 **禁止**：改 `width/height/top/left` 做动画、`filter: blur()` 大范围动画、无限旋转的装饰元素、同屏 >2 组常驻动画。
 
 **时长表**：hover 150ms / 状态切换 250ms / 面板进出 400ms / 环境光漂移 4–12s（多段 keyframes，首尾同值才能无缝循环）。
+
+**首屏书签悬停上浮（2026-11-15）**：`.vc-bookmark:hover .vc-iconpreview` → `translateY(-6px) scale(1.04)`，`transition: transform var(--duration-fast) var(--ease-out)`；只动图标不动底块背景，否则整块会跳。规则写在 `styles/global.css`（`page.css` 由用户维护，不插）。`prefers-reduced-motion` 下关闭。注意 `.vc-iconpreview` 只在此处位移，弹窗预览（`--plain`）不受影响。
+
+**左侧 rail 聚光跟随（2026-11-15）**：复用 `utils/pointerGlow.ts` 的指针引擎（不另起监听），新增第三种目标 `rail`：`.vc-rail` 上写 `--glow`（强度）/`--glow-x`/`--glow-y`（元素内 px，钳制在栏内），CSS 用 `.vc-rail::before` 画 `132px` 主色 radial（核心 38% → 44% 处 16% → 74% 透明），`opacity: calc(var(--glow) * 0.95)`。**`::after` 已被流光描边占用，聚光只能用 `::before`**；`z-index:0` + 按钮自身 `position:relative`，光在按钮底下、玻璃底之上。指针在栏内满亮、出栏 40px 内渐隐（避免贴边忽明忽暗）；壁纸模式补一层白晕。**被压住的那颗按钮再单独打一层内侧高光**：引擎命中 `.vc-rail__btn` 后写 `--btn-glow` / `--btn-x` / `--btn-y`（按钮内 px），CSS 用 `.vc-rail__btn::before` 画 `58px` radial + `inset 0 0 0 1px primary 26%` 内描边；换按钮时把上一颗的 `--btn-glow` 归零（不能只靠 `:hover`，光点要在按钮内跟着指针走）。
 
 **常驻光效（2026-11-14 新增，v1）**——内页"静止帧也有光"的唯一手段，参数只有一组令牌：
 
