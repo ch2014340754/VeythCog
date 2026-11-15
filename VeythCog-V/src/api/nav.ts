@@ -231,9 +231,3 @@ export const getNavBootstrap = (categoryId?: number | null): Promise<NavBootstra
   bootstrapInFlight.set(key, request);
   return request;
 };
-
-export const getNavSetting = () =>
-  http.get<NavSetting>('/nav/setting');
-
-export const updateNavSetting = (data: { searchEngine?: string; activeCategoryId?: number }) =>
-  http.put<void>('/nav/setting', data);

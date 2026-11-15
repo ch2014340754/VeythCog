@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.vc</groupId>
+        <artifactId>veythcog-c</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vc-user</artifactId>
+    <name>vc-user</name>
+    <description>用户域：用户偏好统一存储（user_setting）；后续 User/Role 也迁入本模块</description>
+
+    <dependencies>
+        <!-- 公共基础（BaseResponse / 异常体系） -->
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-common</artifactId>
+        </dependency>
+        <!-- MyBatis-Plus：user_setting 单表读写 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+        <!-- PostgreSQL 驱动 -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <!-- 参数校验：@NotBlank / @NotNull -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+    </dependencies>
+</project>

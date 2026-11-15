@@ -1,8 +1,8 @@
 package com.vc.nav.dto;
 
 import com.vc.nav.entity.NavCategory;
-import com.vc.nav.entity.NavSetting;
 import com.vc.nav.service.NavWallpaperService;
+import com.vc.user.setting.dto.UserSettingView;
 import lombok.Data;
 
 import java.util.List;
@@ -12,11 +12,12 @@ import java.util.List;
  *
  * <p>前端刷新时只需一个请求即可拿到首页配置、分类、当前分类书签和当前壁纸，
  * 避免 setting / categories / bookmarks / wallpaper 四次串行往返。</p>
+ * <p>{@code setting} 为用户偏好统一视图（user_setting），字段名与旧 NavSetting 一致。</p>
  */
 @Data
 public class NavBootstrapView {
 
-    private NavSetting setting;
+    private UserSettingView setting;
 
     private List<NavCategory> categories;
 

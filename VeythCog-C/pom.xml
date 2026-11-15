@@ -122,6 +122,12 @@
                 <artifactId>vc-knowledge</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- 用户域：用户偏好统一存储（user_setting） -->
+            <dependency>
+                <groupId>com.vc</groupId>
+                <artifactId>vc-user</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.vc</groupId>
                 <artifactId>vc-nav</artifactId>
@@ -140,6 +146,7 @@
         <module>vc-llm</module>
         <module>vc-chat</module>
         <module>vc-knowledge</module>
+        <module>vc-user</module>
         <module>vc-nav</module>
         <module>vc-admin</module>
         <module>vc-app</module>

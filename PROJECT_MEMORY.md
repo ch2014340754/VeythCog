@@ -62,11 +62,12 @@ VeythCog/                      # 仓库根（本项目记忆文档所在）
 
 ```
 vc-common(公共基础) ← vc-llm(LLM 网关) ← vc-chat(对话域) / vc-knowledge(知识库域) → vc-app(唯一可运行)
+vc-common ← vc-user(用户域：用户偏好统一存储) ← vc-nav(导航域) → vc-app
 vc-admin(系统管理域：模型目录/监控/会话) → vc-llm / vc-common；禁止反依赖 vc-app
 vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 ```
 
-- **依赖方向单向**：`common ← llm ← (chat, knowledge) ← app`；`common/llm ← admin ← app`；chat、knowledge、admin 互相不依赖。
+- **依赖方向单向**：`common ← llm ← (chat, knowledge) ← app`；`common/llm ← admin ← app`；`common ← user ← (nav, 未来其它域) ← app`；chat、knowledge、admin、nav 互相不依赖。
 - **仅 `vc-app` 可运行**（端口 8123，`/api`）；其余为纯库（无 boot 插件、无 main）。
 - `vc-admin` 是 2026-11-13 新增的系统管理域（用户建议集中系统管理功能）。受依赖方向限制，`User` / `Role` 实体与用户、角色管理仍在 `vc-app`；模型目录管理、监控采集/查询、登录会话在 `vc-admin`（未来抽 `vc-user` 再迁）。
 - RAG 组合动作规划落在 vc-app 的 `orchestration` 包（当前为空占位）。
@@ -121,18 +122,25 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - `mapper/ChatMessageMapper` + `resources/mapper/ChatMessageMapper.xml`：`chat_message` 的全部 SQL（会话聚合、消息列表、批量写入、删除），供记忆仓库与 `ChatHistoryService` 共用；**本模块不含 Java 内联 SQL**。
 - `ChatHistoryService`：对外会话列表 / 历史回显（剥离 `userId:` 前缀、还原被 RAG prompt 包裹的用户问题），SQL 走上面的 mapper；列表合并 `chat_session` 配置并过滤 system 摘要消息。
 
+**vc-user**（`com.vc.user`）—— 用户域（2026-11-15 新增，首次落地「用户偏好统一存储」）：
+- `setting/UserSetting`（`@TableName("user_setting")`，`user_id` 即主键，一人一行）、`UserSettingMapper`、`UserSettingService`（`get` 默认兜底不落库 / `patch` upsert / `updateWallpaperKey` / `currentWallpaperKey`）。
+- `setting/dto/UserSettingView`（下发结构，字段名与旧 `NavSetting` 一致）、`UserSettingPatch`（`null`/省略=不改，`clear` 数组显式置 NULL，`searchEngine` 白名单 baidu/google/bing）。
+- **新增用户偏好的标准动作**：① `ALTER TABLE user_setting ADD COLUMN` + 新迁移脚本；② 实体 / View / Patch 加字段并登记进 `clear` 白名单；③ 业务服务只调 `UserSettingService`。**不再新建表**。
+- 边界：本表只放偏好（标量、可丢失）；业务数据（知识库文档、对话消息、DB 连接）各自建表并带 `owner_id`，不得塞进本表。
+- `User` / `Role` 仍在 `vc-app`，后续抽出时并入本模块。
+
 **vc-nav**（`com.vc.nav`）—— 导航域（无 Controller，2026-11-12 补图标资产化）：
-- `entity/NavCategory` / `NavBookmark` / `NavSetting`：`nav_bookmark` 自 013 起含 `icon_type`（auto/upload/text）、`icon_key`（S3 key）、`icon_text`、`icon_color`、`icon_synced_at`；图标字段 `updateStrategy=ALWAYS`，保证切换图标类型时能写 NULL。
+- `entity/NavCategory` / `NavBookmark`（**NavSetting 已删除**，2026-11-15 起偏好统一走 `vc-user`）；`nav_bookmark` 自 013 起含 `icon_type`（auto/upload/text）、`icon_key`（S3 key）、`icon_text`、`icon_color`、`icon_synced_at`；图标字段 `updateStrategy=ALWAYS`，保证切换图标类型时能写 NULL。
 - `service/NavBookmarkService`：分类/bookmarks CRUD、排序；列表下发 `BookmarkView`（含 `hasIcon` / `iconKey`，不下发直链）；新增/更新时校验图标字段（文字 1~3 字、颜色 `#RGB/#RRGGBB`、`iconKey` 必须在 `icons/` 前缀且对象存在）；auto 且无 key 的书签异步补同步。
 - `service/SiteIconFetcher`：解析 HTML `<link rel=icon>` + 同源 `/favicon.ico` / apple-touch 回退，最多 6 候选；只允许 http/https，DNS 解析后拒绝回环/私网/link-local/组播（重定向后再复核）；6s / 512KB 上限；文件头魔数识别 png/jpeg/gif/webp/bmp/ico，**拒绝 SVG**；候选图标请求带站点 `Referer`（绕过部分 CDN 防盗链）。
 - `service/NavIconService`：站点抓取/自定义上传 → `public-icons`；`resolve()` 进程内缓存 10 分钟（签名=图标字段+updatedAt）→ DB → `S3PresignService.publicUrl`；`syncMissing()` 只补 `icon_type=auto` 且无 `icon_key`、失败冷却 1 天的书签；2 线程守护池异步执行。上传对 `application/octet-stream` 只信魔数，显式拒绝无魔数文件。
 - `service/NavIconStartupSync`：`ApplicationReadyEvent` 投递后台补同步（`nav.icon.sync-on-startup=false` 可关，单次上限 200）。
 - `scripts/import_itab_backup.py`（在 `VeythCog-C/scripts`）：iTab `navConfig` 容错解析 → 按 URL 归一化去重 → SVG/ICO 用 Chrome 渲染 256px PNG（2 倍窗口截图 + alpha 包围盒裁剪，避免高 DPI 半图）→ `POST /nav/icons/upload` → `POST /nav/bookmarks` / `PUT /nav/bookmarks/{id}`；`state.json` 断点续跑，失败降级文字图标；支持 `--token` / `--chrome` / `--work-dir` / `--dry-run`，线上同步说明见 `scripts/README-nav-import.md`。2026-11-12 导入 249 条、更新 8 条已有图标、245 个唯一 S3 对象被引用。
-- `NavWallpaperService`：壁纸列表/随机/锁定 + 私有桶缩略图代理。
+- `NavWallpaperService`：壁纸列表/随机/锁定 + 私有桶缩略图代理（锁定值写 `user_setting.current_wallpaper_key`，读写经 `UserSettingService`）。
 
 **vc-app**（`com.vc.app`）—— 唯一可运行，装配全部：
 - `auth/*`：JWT 鉴权（`JwtUtil` / `JwtAuthFilter` / `AuthServiceImpl` / `PasswordUtil` / `User`）。JWT 自 2026-11-13 带 `sid`，`JwtAuthFilter` 每次请求校验会话（kicked/expired 即 401）；`AuthServiceImpl.login(request, ip, ua)` 建 `sys_user_session`，`POST /auth/logout` 置 logout。**旧 token 无 sid 会失效，需重新登录**。
-- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE + `/chat/conversations` 三件套 + `/chat/sessions` 会话配置五件套）、`LlmModelController`（含 `POST /llm/models/{vendor}/{modelCode}/verify` 单模型校验）、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`NavBookmarkController` / `NavCategoryController` / `NavWallpaperController` / `NavSettingController`（导航 + `GET /nav/bookmarks/{id}/icon`）、`NavIconController`（`POST /nav/icons/fetch|upload|sync`）、`GlobalExceptionHandler`、`ApiAccessLogFilter`（采集型访问日志：rid/user/ip/方法/**归一化路由**/业务码/HTTP 状态/耗时/流式标记/错误信息，敏感字段不落库，`/api/admin/monitor` 自身不打点）、`BizCodeAdvice`（`ResponseBodyAdvice`：把 `BaseResponse.code` 写进请求属性，供过滤器记录——后端业务错误也是 HTTP 200，只看 status 错误率恒为 0）。
+- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE + `/chat/conversations` 三件套 + `/chat/sessions` 会话配置五件套）、`LlmModelController`（含 `POST /llm/models/{vendor}/{modelCode}/verify` 单模型校验）、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`NavBookmarkController` / `NavCategoryController` / `NavWallpaperController` / `NavSettingController`（导航聚合 `GET /nav/bootstrap` + 壁纸四接口）、`UserSettingController`（`GET/PUT /user/setting`，用户偏好唯一读写入口）、`NavIconController`（`POST /nav/icons/fetch|upload|sync`）、`GlobalExceptionHandler`、`ApiAccessLogFilter`（采集型访问日志：rid/user/ip/方法/**归一化路由**/业务码/HTTP 状态/耗时/流式标记/错误信息，敏感字段不落库，`/api/admin/monitor` 自身不打点）、`BizCodeAdvice`（`ResponseBodyAdvice`：把 `BaseResponse.code` 写进请求属性，供过滤器记录——后端业务错误也是 HTTP 200，只看 status 错误率恒为 0）。
 - `config/*`：`SecurityConfig`（无状态，放行 `/auth/**`、`/health/**`、接口文档、ASYNC 分发）、`CorsConfig`、`DataInitializer`（幂等种子：模型目录 + admin 用户 + 默认绑定 qwen-plus）。
 - `admin/*`：系统管理后端**已实现**（`AdminController` / `RoleController` / `AdminUserServiceImpl`，用户-角色多对多，`/admin/**` 需 `ADMIN` 角色）。
 - `orchestration/*`：`RagChatOrchestrator`（检索 → 拼带编号引用的上下文 → 交 vc-chat 作答；同步/流式共用，召回落空或失败降级为普通对话）。
@@ -184,7 +192,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ `embedding_model` 标识（禁止不同模型向量混查）；doc_id 外键（软删除时显式清理，不依赖级联）。⚠️ `embedding_model` 由 `010` 补充，服务器库已执行 |
 | `nav_category` | 导航分类（iTab 右侧竖栏） | 按 user_id 隔离；sort_order 排序 |
 | `nav_bookmark` | 导航书签 | `icon_type`（auto/upload/text，CHECK 约束）、`icon_key`（`public-icons` 对象 key）、`icon_text`、`icon_color`、`icon_synced_at`；`013_nav_bookmark_icon.sql` 幂等增量 |
-| `nav_setting` | 导航首页配置（一人一行） | `current_wallpaper_key` NULL = 每次随机；activeCategoryId / 搜索引擎 |
+| `user_setting` | 用户偏好统一表（一人一行，PK `user_id`，2026-11-15 起取代 `nav_setting`） | `search_engine`（baidu/google/bing，服务层白名单）/ `current_wallpaper_key`（NULL=随机）/ `active_category_id`（上次选中分类）/ `created_at` / `updated_at`；新增偏好**只加列不加表**（动作见 §3.2 vc-user）；**只放偏好，不放业务数据** |
 | `sys_api_sample` | 接口调用单请求明细（2026-11-13，`016_observability.sql`） | rid / user_id / ip / method / route（归一化 pattern）/ handler / status / biz_code / cost_ms / stream / error_msg；按时间 + 路由检索 |
 | `sys_api_metric_minute` | 接口分钟桶聚合 | unique(bucket, method, route)；calls / errors / 6 档耗时直方图（p95 由直方图估算），采集时 `ON CONFLICT` 累加 |
 | `llm_call_log` | LLM 调用用量 | vendor / model_code / user_id / prompt_tokens / completion_tokens / total_tokens / latency_ms / status / error_msg / usage_source（provider \| estimate） |
@@ -256,7 +264,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | POST | `/nav/icons/sync` | - | 是（补齐当前用户缺失 auto 图标，返回 {total,success,failed}） |
 | GET/POST/PUT/DELETE | `/nav/categories`、`/nav/categories/{id}` | 分类 CRUD | 是 |
 | GET | `/nav/wallpaper/random`、`/list`、`/current`，`PUT /nav/wallpaper/lock` | - | 是（缩略图 `/nav/wallpaper/thumb` permitAll） |
-| GET/PUT | `/nav/setting` | {searchEngine?, activeCategoryId?} | 是 |
+| GET | `/user/setting` | - | 是（当前用户偏好，行不存在返回默认视图不落库；`NavBootstrap` 里 `setting` 同源） |
+| PUT | `/user/setting` | {searchEngine?, activeCategoryId?, clear?:[]} | 是（唯一写入口；null/省略=不改，`clear` 显式置 NULL，未知字段/非法引擎 40000） |
 | POST | `/auth/logout` | - | 是（当前 sid 置 logout，token 立即失效） |
 | GET | `/admin/monitor/overview` | query: hours=24 | 仅 admin（调用量/错误率/P95/Token/会话/LLM 汇总） |
 | GET | `/admin/monitor/timeseries` | query: hours | 仅 admin（≤24h 按小时、>24h 按天） |
@@ -370,6 +379,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 业务空间脚本：`019_llm_workspace_region.sql`（`user_llm_binding.workspace_id/region` + `(user_id,vendor_code,workspace_id)` 索引，幂等）。开发库已执行（`OK executed=5`）。旧校验记录为 key-only 指纹，升级后需重新校验。
 - 多模态脚本：`020_llm_model_modalities.sql`（`llm_model.modalities` + 按 `model_type` 回填，幂等）。开发库已执行（`OK executed=3`，373 行全部有值）。
 - 知识库目录脚本：`021_knowledge_folder.sql`（`knowledge_folder` 建表 + `knowledge_doc.folder_id` + 3 个索引/部分唯一索引，全部幂等）。开发库已执行（`OK executed=10`）；复跑安全。
+- 用户偏好统一表脚本：`022_user_setting.sql`（建 `user_setting` + 部分索引 + `DO` 块迁移 `nav_setting` 并 `DROP`，幂等）。开发库已执行（2026-11-15，admin 行三列一致：baidu / v-27.mp4 / 13）；**022 之后不要再重跑 `012`/`014` 的 `nav_setting` 段**（会重建空表，再跑一次 022 即可清理）。
 
 ---
 

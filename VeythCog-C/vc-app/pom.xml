@@ -35,6 +35,11 @@
             <groupId>com.vc</groupId>
             <artifactId>vc-nav</artifactId>
         </dependency>
+        <!-- 用户域：用户偏好统一接口 -->
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-user</artifactId>
+        </dependency>
         <!-- 管理域：系统监控采集/聚合、会话、模型目录管理 -->
         <dependency>
             <groupId>com.vc</groupId>

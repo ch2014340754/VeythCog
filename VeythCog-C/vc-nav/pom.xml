@@ -19,6 +19,11 @@
             <groupId>com.vc</groupId>
             <artifactId>vc-common</artifactId>
         </dependency>
+        <!-- 用户域：用户偏好统一存储（user_setting） -->
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-user</artifactId>
+        </dependency>
         <!-- MyBatis-Plus：导航域数据访问（PostgreSQL） -->
         <dependency>
             <groupId>com.baomidou</groupId>

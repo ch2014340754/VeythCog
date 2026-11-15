@@ -3,7 +3,8 @@ package com.vc.nav.service;
 import com.vc.nav.dto.BookmarkView;
 import com.vc.nav.dto.NavBootstrapView;
 import com.vc.nav.entity.NavCategory;
-import com.vc.nav.entity.NavSetting;
+import com.vc.user.setting.UserSettingService;
+import com.vc.user.setting.dto.UserSettingView;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,7 +31,7 @@ public class NavBootstrapService {
         return thread;
     });
 
-    private final NavSettingService settingService;
+    private final UserSettingService settingService;
     private final NavCategoryService categoryService;
     private final NavBookmarkService bookmarkService;
     private final NavWallpaperService wallpaperService;
@@ -41,7 +42,7 @@ public class NavBootstrapService {
      * @param categoryId 前端本地缓存的上次分类；为空或已失效时回落到用户配置 / 默认分类
      */
     public NavBootstrapView get(Long userId, Long categoryId) {
-        CompletableFuture<NavSetting> settingFuture =
+        CompletableFuture<UserSettingView> settingFuture =
                 CompletableFuture.supplyAsync(() -> settingService.get(userId), BOOTSTRAP_EXECUTOR);
         CompletableFuture<List<NavCategory>> categoriesFuture =
                 CompletableFuture.supplyAsync(() -> categoryService.list(userId), BOOTSTRAP_EXECUTOR);
@@ -50,7 +51,7 @@ public class NavBootstrapService {
                         // 壁纸是装饰数据：S3 抖动不能拖垮整个首页启动
                         .exceptionally(ex -> null);
 
-        NavSetting setting = settingFuture.join();
+        UserSettingView setting = settingFuture.join();
         List<NavCategory> categories = categoriesFuture.join();
         NavWallpaperService.WallpaperItem wallpaper = wallpaperFuture.join();
 

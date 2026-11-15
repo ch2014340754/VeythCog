@@ -3,11 +3,8 @@ package com.vc.app.web;
 import com.vc.common.BaseResponse;
 import com.vc.common.ResultUtils;
 import com.vc.nav.dto.NavBootstrapView;
-import com.vc.nav.dto.SettingUpdateRequest;
 import com.vc.nav.dto.WallpaperLockRequest;
-import com.vc.nav.entity.NavSetting;
 import com.vc.nav.service.NavBootstrapService;
-import com.vc.nav.service.NavSettingService;
 import com.vc.nav.service.NavWallpaperService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -29,14 +26,15 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * 导航首页配置 + 壁纸接口。
+ * 导航首页聚合 + 壁纸接口。
+ * <p>用户偏好（搜索引擎 / 上次分类 / 锁定壁纸）读写已收口到 {@code /user/setting}，
+ * 本 Controller 只保留首页聚合与壁纸资产接口。</p>
  */
 @RestController
 @RequestMapping("/nav")
 @RequiredArgsConstructor
 public class NavSettingController {
 
-    private final NavSettingService settingService;
     private final NavWallpaperService wallpaperService;
     private final NavBootstrapService bootstrapService;
 
@@ -50,20 +48,7 @@ public class NavSettingController {
         return ResultUtils.success(bootstrapService.get(currentUserId(), categoryId));
     }
 
-    /** 1. 读取当前用户首页配置 */
-    @GetMapping("/setting")
-    public BaseResponse<NavSetting> getSetting() {
-        return ResultUtils.success(settingService.get(currentUserId()));
-    }
-
-    /** 2. 更新用户配置（搜索引擎 / 上次选中分类） */
-    @PutMapping("/setting")
-    public BaseResponse<Void> updateSetting(@RequestBody SettingUpdateRequest req) {
-        settingService.update(currentUserId(), req);
-        return ResultUtils.success(null);
-    }
-
-    /** 3. 随机取一张壁纸（预签名 URL；桶空返回 null） */
+    /** 1. 随机取一张壁纸（预签名 URL；桶空返回 null） */
     @GetMapping("/wallpaper/random")
     public BaseResponse<NavWallpaperService.WallpaperItem> randomWallpaper() {
         return ResultUtils.success(wallpaperService.random());

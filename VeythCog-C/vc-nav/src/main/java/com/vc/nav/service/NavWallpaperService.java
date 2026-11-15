@@ -6,8 +6,7 @@ import com.vc.common.s3.S3Bucket;
 import com.vc.common.s3.S3ClientProvider;
 import com.vc.common.s3.S3PresignService;
 import com.vc.nav.dto.WallpaperLockRequest;
-import com.vc.nav.entity.NavSetting;
-import com.vc.nav.mapper.NavSettingMapper;
+import com.vc.user.setting.UserSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -61,7 +60,7 @@ public class NavWallpaperService {
 
     private final S3ClientProvider clientProvider;
     private final S3PresignService presignService;
-    private final NavSettingMapper settingMapper;
+    private final UserSettingService settingService;
 
     /** 静态图后缀白名单（只认这些才当壁纸下发） */
     private static final Set<String> IMAGE_EXTENSIONS =
@@ -335,8 +334,7 @@ public class NavWallpaperService {
      * 未设置或对象已从桶中删除时返回 null，前端回落纯色兜底。
      */
     public WallpaperItem current(Long userId) {
-        NavSetting setting = settingMapper.selectById(userId);
-        String key = setting == null ? null : setting.getCurrentWallpaperKey();
+        String key = settingService.currentWallpaperKey(userId);
         if (key == null || key.isBlank()) {
             return null;
         }
@@ -348,23 +346,11 @@ public class NavWallpaperService {
     }
 
     /**
-     * 锁定壁纸（写 nav_setting.current_wallpaper_key）。
+     * 锁定壁纸（写 user_setting.current_wallpaper_key）。
      * key 传 null 表示解锁随机。
      */
     public void lock(Long userId, WallpaperLockRequest req) {
-        NavSetting setting = settingMapper.selectById(userId);
-        boolean isNew = (setting == null);
-        if (isNew) {
-            setting = new NavSetting();
-            setting.setUserId(userId);
-            setting.setSearchEngine("baidu");
-        }
-        setting.setCurrentWallpaperKey(req.getKey());
-        if (isNew) {
-            settingMapper.insert(setting);
-        } else {
-            settingMapper.updateById(setting);
-        }
+        settingService.updateWallpaperKey(userId, req.getKey());
     }
 
     /**

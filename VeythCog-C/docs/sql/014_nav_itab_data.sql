@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS nav_setting (
     active_category_id   BIGINT       NULL,
     updated_at           TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+-- ⚠️ 本段仅兼容尚未升级的旧库。022_user_setting.sql 已把 nav_setting 迁入 user_setting 并 DROP，
+--    执行过 022 的库请不要再重跑本脚本（否则会重建一个空 nav_setting，需再跑一次 022 清理）。
 
 -- 0.2 旧库补列：等价于 013_nav_bookmark_icon.sql（P0 库缺这 5 列）
 ALTER TABLE nav_bookmark

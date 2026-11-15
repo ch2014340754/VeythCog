@@ -8,12 +8,12 @@ import {
   getCategories,
   getBookmarks,
   getNavBootstrap,
-  getNavSetting,
-  updateNavSetting,
   type NavBootstrap,
   type NavCategory,
   type NavBookmark,
 } from '@/api/nav';
+// 用户偏好统一走 /user/setting（后端 user_setting 表）
+import { getUserSetting, updateUserSetting } from '@/api/user';
 
 interface NavState {
   /** 分类列表 */
@@ -126,17 +126,17 @@ export const useNavStore = create<NavState>()(
         // 无感刷新：保留旧书签显示，只在细进度条上体现
         await get().loadBookmarks(id);
         // fire-and-forget 持久化 activeCategoryId
-        updateNavSetting({ activeCategoryId: id }).catch(() => {});
+        updateUserSetting({ activeCategoryId: id }).catch(() => {});
       },
 
       setSearchEngine: (engine) => {
         set({ searchEngine: engine });
-        updateNavSetting({ searchEngine: engine }).catch(() => {});
+        updateUserSetting({ searchEngine: engine }).catch(() => {});
       },
 
       loadSetting: async () => {
         try {
-          const s = await getNavSetting();
+          const s = await getUserSetting();
           if (s.searchEngine) set({ searchEngine: s.searchEngine });
           if (s.activeCategoryId != null) set({ activeCategoryId: s.activeCategoryId });
         } catch (e) {
