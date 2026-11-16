@@ -52,6 +52,15 @@ const ACTIONS: { key: QuickAiAction; label: string; hint: string }[] = [
 
 const MAX_SELECT_CHARS = 3000;
 
+/** 块编辑器（BlockNote / ProseMirror）根节点：这里选中文字已有自己的格式菜单，划词改由右键唤出 */
+const EDITOR_SELECTOR = '.bn-container, .bn-editor, .ProseMirror';
+
+function isEditorTarget(node: Node | null): boolean {
+  const el: HTMLElement | null =
+    node instanceof HTMLElement ? node : node?.parentElement ?? null;
+  return !!el?.closest?.(EDITOR_SELECTOR);
+}
+
 /** 选区是否落在不该触发划词的地方（自身 UI / 输入框 / 编辑器） */
 function isIgnoredTarget(node: Node | null): boolean {
   let el: HTMLElement | null = node instanceof HTMLElement ? node : node?.parentElement ?? null;
@@ -123,13 +132,14 @@ const SelectionAsk: React.FC = () => {
     return () => document.removeEventListener('mousedown', onDown);
   }, [bar, panel, closeAll]);
 
-  // 选中 → 悬浮条
+  // 选中 → 悬浮条（块编辑器内不接管，交给右键，见下面的 contextmenu）
   React.useEffect(() => {
     if (!active) return;
     const onMouseUp = (e: MouseEvent) => {
       window.setTimeout(() => {
         // 卡片/悬浮条内的点击不重新取词
         if (isIgnoredTarget(e.target as Node)) return;
+        if (isEditorTarget(e.target as Node)) return;
         const sel = window.getSelection();
         if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
           return;
@@ -158,6 +168,44 @@ const SelectionAsk: React.FC = () => {
     };
     document.addEventListener('mouseup', onMouseUp);
     return () => document.removeEventListener('mouseup', onMouseUp);
+  }, [active]);
+
+  // 块编辑器内：右键唤出划词条
+  // BlockNote 选中文字后自己会弹格式菜单（加粗/链接…），再叠一条悬浮条会互相抢位置，
+  // 所以编辑器里改成"先选中、再右键"——右键本身在纯阅读态也没有别的用途。
+  React.useEffect(() => {
+    if (!active) return;
+    const onContextMenu = (e: MouseEvent) => {
+      if (!isEditorTarget(e.target as Node)) return;
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const node = range.commonAncestorContainer;
+      const host: HTMLElement | null =
+        node instanceof HTMLElement ? node : node.parentElement;
+      // 选区必须真的落在同一个编辑器里，避免拖到卡片文字上时误接管
+      if (!host?.closest?.(EDITOR_SELECTOR)) return;
+      const raw = sel.toString().replace(/\s+/g, ' ').trim();
+      if (raw.length < 2) return;
+      const rect = range.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (raw.length > MAX_SELECT_CHARS) {
+        message.info('选中内容过长，只取前 3000 字');
+      }
+      setBar({
+        text: raw.slice(0, MAX_SELECT_CHARS),
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        width: rect.width,
+      });
+      setPanel(null);
+    };
+    document.addEventListener('contextmenu', onContextMenu);
+    return () => document.removeEventListener('contextmenu', onContextMenu);
   }, [active]);
 
   // 滚动时收起悬浮条（卡片跟着选区会被甩出可视区，收掉更干净）

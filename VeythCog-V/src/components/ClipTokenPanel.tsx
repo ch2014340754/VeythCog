@@ -5,7 +5,9 @@
  * 明文与书签脚本只在签发的那一次响应里出现 —— 想换设备就再签一枚，别复用同一枚。
  */
 import React from 'react';
-import { Button, Empty, Input, message, Popconfirm, Tag } from 'antd';
+import { Button, Empty, Input, message, Popconfirm, Tag, Tooltip } from 'antd';
+import { Icon } from '@iconify/react';
+import infoIcon from '@iconify-icons/lucide/info';
 import { createClipToken, listClipTokens, revokeClipToken, type ClipTokenCreateResult, type ClipTokenView } from '@/api/clip';
 import '@/styles/clipToken.css';
 
@@ -76,18 +78,26 @@ const ClipTokenPanel: React.FC = () => {
     <section className="vc-panel">
       <div className="vc-panel__head">
         <div>
-          <h2 className="vc-panel__title">网页剪藏令牌</h2>
-          <p className="vc-panel__desc">
-            在别人家的网页上一键收进收件箱：令牌只可写入、不可读取，随时可撤销。
-          </p>
+          <h2 className="vc-panel__title vc-token-title">
+            网页剪藏令牌
+            <Tooltip
+              placement="right"
+              title={
+                <ul className="vc-token-tip-list">
+                  <li>令牌只可写入、不可读取，随时可撤销。</li>
+                  <li>令牌是长期凭据（不像登录态会过期），建议每台设备一枚，丢了只撤那一枚。</li>
+                  <li>书签脚本会把当前页面的正文发到收件箱，正文只存在你自己的账号里。</li>
+                  <li>剪藏是「先收起来」，是否进知识库由你在收件箱里逐条确认。</li>
+                </ul>
+              }
+            >
+              <span className="vc-token-tip" aria-label="关于网页剪藏令牌">
+                <Icon icon={infoIcon} width={15} />
+              </span>
+            </Tooltip>
+          </h2>
         </div>
       </div>
-
-      <ul className="vc-token-tips">
-        <li>令牌是长期凭据（不像登录态会过期），建议每台设备一枚，丢失只撤那一枚。</li>
-        <li>书签脚本会把当前页面的正文发到你的收件箱，正文只存在你自己的账号里。</li>
-        <li>剪藏是"先收起来"，是否进知识库由你在收件箱里逐条确认。</li>
-      </ul>
 
       <div className="vc-token-create">
         <Input

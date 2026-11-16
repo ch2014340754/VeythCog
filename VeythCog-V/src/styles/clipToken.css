@@ -1,11 +1,34 @@
 /* 剪藏令牌面板（设置 → 账号） */
 
-.vc-token-tips {
-  margin: 0 0 14px;
-  padding-left: 18px;
+/* 标题旁的信息图标：说明收进 Tooltip，避免正文一坨文字 */
+.vc-token-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vc-token-tip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-tertiary);
+  cursor: help;
+  transition: color 0.15s ease;
+}
+
+.vc-token-tip:hover {
+  color: var(--color-primary);
+}
+
+.vc-token-tip-list {
+  margin: 0;
+  padding-left: 14px;
+  max-width: 300px;
   font-size: 12.5px;
   line-height: 1.7;
-  color: var(--color-text-secondary);
+}
+
+.vc-token-tip-list li + li {
+  margin-top: 4px;
 }
 
 .vc-token-create {

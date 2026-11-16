@@ -352,6 +352,75 @@ body.has-bg .vc-subnav__foot {
   margin: 0 auto;
 }
 
+/* ---------- 统一整页背景（设置页） ----------
+   问题：左侧导航透明（透出内容卡的玻璃底），右侧是一摞实色 .vc-panel 卡片，
+   中间还压了一条 border-right，看起来像"两块拼起来"。
+   做法：整页铺一层 surface 当"纸"，导航与内容共用；页内的 .vc-panel 退化成
+   无边框的章节（用发丝线分隔），卡片感只保留给真正的对象卡（.vc-provider 这类）。 */
+
+.vc-subnav-layout--unified {
+  background: var(--color-surface);
+}
+
+body.glass-on .vc-subnav-layout--unified {
+  background: var(--glass-bg);
+}
+
+/* 竖向分界线去掉：两栏同底，靠右栏左边缘一道极淡的内阴影做层次
+   （比 1px 实线柔和，滚动时也不会被"切断"） */
+.vc-subnav-layout--unified .vc-subnav {
+  border-right: 0;
+}
+
+.vc-subnav-layout--unified .vc-subnav-content {
+  background: linear-gradient(
+    to right,
+    rgba(20, 12, 46, 0.055) 0,
+    rgba(20, 12, 46, 0.02) 6px,
+    transparent 26px
+  );
+}
+
+body.dark .vc-subnav-layout--unified .vc-subnav-content,
+body.has-bg .vc-subnav-layout--unified .vc-subnav-content {
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.22) 0,
+    rgba(0, 0, 0, 0.08) 6px,
+    transparent 30px
+  );
+}
+
+/* 章节化：设置里的面板不再自带卡片框 */
+.vc-subnav-layout--unified .vc-panel:not(.vc-provider):not(.vc-table-card) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.vc-subnav-layout--unified .vc-panel:not(.vc-provider):not(.vc-table-card) + .vc-panel {
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--color-divider);
+}
+
+.vc-subnav-layout--unified .vc-stack {
+  gap: var(--space-xl);
+}
+
+/* 真正的对象卡（模型配置里的供应商卡）在"纸"上要还能看出来 */
+.vc-subnav-layout--unified .vc-provider {
+  background: color-mix(in srgb, var(--color-bg) 8%, var(--color-surface));
+}
+
+body.glass-on .vc-subnav-layout--unified .vc-provider {
+  background: var(--color-surface);
+}
+
+
 @media (min-width: 1900px) {
   .vc-subnav-content { padding: 40px 48px 64px; }
   .vc-subnav-content__inner { max-width: 1040px; }

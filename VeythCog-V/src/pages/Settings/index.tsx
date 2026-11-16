@@ -14,6 +14,7 @@ const MENU = [
 
 const SettingsPage: React.FC = () => (
   <SubPageLayout
+    unified
     eyebrow="Settings"
     title="设置"
     items={MENU}

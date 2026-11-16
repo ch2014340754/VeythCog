@@ -66,11 +66,13 @@ interface SubPageLayoutProps extends SectionNavProps {
   children?: React.ReactNode;
   /** 内容区最大宽度：设置类 960，管理表格类用 wide */
   wide?: boolean;
+  /** 整页作为一块「纸张」：左右共用同一底色、没有竖向分界线（设置页在用） */
+  unified?: boolean;
 }
 
 /** 二级页面骨架：左侧导航 + 右侧滚动内容（内容卡内单点滚动） */
-export const SubPageLayout: React.FC<SubPageLayoutProps> = ({ children, wide, ...nav }) => (
-  <div className="vc-subnav-layout">
+export const SubPageLayout: React.FC<SubPageLayoutProps> = ({ children, wide, unified, ...nav }) => (
+  <div className={`vc-subnav-layout${unified ? ' vc-subnav-layout--unified' : ''}`}>
     <SectionNav {...nav} />
     <main className="vc-subnav-content">
       <div className="vc-subnav-content__inner" style={wide ? { maxWidth: 1200 } : undefined}>

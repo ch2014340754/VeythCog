@@ -239,7 +239,7 @@ const AppearancePage: React.FC = () => {
               <div>
                 <h2 className="vc-panel__title">划词 AI</h2>
                 <p className="vc-panel__desc">
-                  选中任意文字后浮出「解释 / 翻译 / 润色 / 问 / 存入知识库」；只在有鼠标的设备生效
+                  选中任意文字后浮出「解释 / 翻译 / 润色 / 问 / 存入知识库」；文档编辑器内因自带格式菜单，改为选中后右键唤出；只在有鼠标的设备生效
                 </p>
               </div>
             </div>
