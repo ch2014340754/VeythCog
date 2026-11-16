@@ -333,7 +333,7 @@ const LoginPage: React.FC = () => {
         {/* 左侧：品牌叙事（窄屏隐藏） */}
         <aside className="vc-login__brand">
           <div className="vc-login__wordmark">
-            <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} size={38} />
+            <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} size={46} />
             <div>
               <div className="vc-login__word">渡思</div>
               <div className="vc-login__latin">VeythCog</div>
@@ -372,7 +372,7 @@ const LoginPage: React.FC = () => {
           <span className="vc-login__ring" aria-hidden />
 
           <div className="vc-login__badge">
-            <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} size={30} />
+            <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} size={59} />
           </div>
 
           <div className="vc-login__title">

@@ -424,15 +424,12 @@ body.dark .vc-login__card {
 .vc-login__badge {
   width: 60px;
   height: 60px;
-  margin: 0 auto 16px;
+  margin: 0 auto 1px;
   display: grid;
   place-items: center;
-  border-radius: 20px;
-  background: var(--lg-chip-bg);
-  border: 1px solid var(--lg-chip-border);
-  box-shadow:
-    0 12px 28px -16px var(--lg-primary-40),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .vc-login__title {
@@ -535,6 +532,7 @@ body.dark .vc-login__card {
   padding: 0;
   border: none;
   background: transparent;
+  background-color: transparent !important;
   box-shadow: none;
 }
 
@@ -563,6 +561,7 @@ body.dark .vc-login__card {
 .vc-login .ant-input-affix-wrapper .ant-input-prefix {
   margin-inline-end: 8px;
   color: var(--lg-text-3);
+  background: transparent;
 }
 
 .vc-login .ant-input-affix-wrapper-focused .ant-input-prefix {
@@ -571,6 +570,13 @@ body.dark .vc-login__card {
 
 .vc-login .ant-input-suffix {
   color: var(--lg-text-3);
+  background: transparent;
+}
+
+/* 密码可见性切换按钮：去掉独立底板，与输入框融为整体 */
+.vc-login .ant-input-password-icon {
+  background: transparent;
+  border: none;
 }
 
 /* 浏览器自动填充会强制浅蓝底 + 黑字，用 inset 阴影覆盖，保持主题一致 */
@@ -1026,7 +1032,7 @@ body.dark .vc-login__submit.ant-btn:not(:disabled):hover {
   .vc-login__badge {
     width: 52px;
     height: 52px;
-    margin-bottom: 12px;
+    margin-bottom: 5px;
     border-radius: 17px;
   }
 
