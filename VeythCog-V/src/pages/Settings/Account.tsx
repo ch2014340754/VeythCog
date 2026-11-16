@@ -1,5 +1,6 @@
 import { fetchMe, removeAvatar, uploadAvatar } from '@/api/auth';
 import PageHeader from '@/components/PageHeader';
+import ClipTokenPanel from '@/components/ClipTokenPanel';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
 import { Button, Form, Input, message } from 'antd';
@@ -221,6 +222,8 @@ const AccountPage: React.FC = () => {
             </Form>
           )}
         </section>
+
+        <ClipTokenPanel />
       </div>
     </div>
   );

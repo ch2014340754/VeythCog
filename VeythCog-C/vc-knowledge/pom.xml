@@ -39,5 +39,23 @@
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
         </dependency>
+        <!-- 网页剪藏：jsoup 解析 DOM（readability4j 的底层内核，显式声明版本以统一 API） -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+        <!-- 网页剪藏：readability4j 做正文提取（Readability 算法的 Java 移植） -->
+        <dependency>
+            <groupId>net.dankito.readability4j</groupId>
+            <artifactId>readability4j</artifactId>
+            <version>1.0.8</version>
+        </dependency>
+        <!-- 网页剪藏：HTML → Markdown（保留标题层级/列表/表格/代码块/链接） -->
+        <dependency>
+            <groupId>com.vladsch.flexmark</groupId>
+            <artifactId>flexmark-html2md-converter</artifactId>
+            <version>0.64.8</version>
+        </dependency>
     </dependencies>
 </project>

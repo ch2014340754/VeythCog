@@ -58,6 +58,19 @@ public class SecurityConfig {
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "Range"));
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+
+        // 剪藏上报：书签脚本执行在"别人的域名"上，来源无法枚举，只能对这一条端点放开任意 Origin。
+        // 风险面由三件事收窄：只能写入、必须持剪藏令牌（明文不入库、可撤销）、有令牌维度频控。
+        //
+        // 【必须先注册】UrlBasedCorsConfigurationSource 是"首个匹配即返回"，
+        // 若 "/**" 先注册，/clip/capture 会拿到默认配置、预检直接被 403 掉。
+        CorsConfiguration clipCors = new CorsConfiguration();
+        clipCors.setAllowedOriginPatterns(List.of("*"));
+        clipCors.setAllowedMethods(List.of("POST", "OPTIONS"));
+        clipCors.setAllowedHeaders(List.of("Content-Type"));
+        clipCors.setMaxAge(600L);
+        source.registerCorsConfiguration("/clip/capture", clipCors);
+
         source.registerCorsConfiguration("/**", config);
         return source;
     }
@@ -79,6 +92,9 @@ public class SecurityConfig {
                         // 音频播流由 <audio> 直连（同样带不上 Authorization），鉴权改由 query 短时签名承担
                         // （MusicStreamTokenService：5 分钟、绑定用户 + 曲目）。其余 /music 接口仍需 JWT。
                         .requestMatchers("/music/stream/**").permitAll()
+                        // 剪藏上报：书签脚本在第三方页面执行，带不上 Authorization，
+                        // 鉴权改由 query 里的剪藏令牌承担（ClipTokenService，只可写 + 可撤销 + 频控）
+                        .requestMatchers("/clip/capture").permitAll()
                         // 接口文档（knife4j / springdoc）
                         .requestMatchers("/doc.html", "/v3/api-docs/**", "/swagger-ui.html",
                                 "/swagger-ui/**", "/webjars/**", "/favicon.ico")

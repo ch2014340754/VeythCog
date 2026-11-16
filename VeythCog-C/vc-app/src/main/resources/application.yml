@@ -93,6 +93,22 @@ music:
   max-duration-ms: 600000      # 10 分钟
   page-size-max: 200
 
+# 网页剪藏 + 收件箱（P2）
+# 抓取侧的安全上限写死在配置里，不允许前端传参覆盖（否则等于开放 SSRF / 带宽口子）
+clip:
+  max-items: 1000              # 单账号收件箱条数上限
+  daily-limit: 200             # 单账号每日剪藏次数上限
+  token-rate-per-minute: 10    # 单令牌每分钟上报上限
+  max-raw-html-chars: 400000   # 原始 HTML 保留上限，超出不落库
+  # 生成书签脚本用的后端地址（本地开发可传 apiBase 覆盖）
+  public-api-base: ${CLIP_PUBLIC_API_BASE:https://www.veythcog.top/api}
+  fetch:
+    max-bytes: 2097152         # 响应体 2MB 上限，超出截断
+    connect-timeout-ms: 4000
+    timeout-ms: 8000
+    max-redirects: 3           # 每跳都重新做 SSRF 校验
+    min-article-chars: 200     # 正文提取低于该长度 → 回退整页文本（quality=fallback）
+
 # JWT 配置（本地默认值；生产由环境变量覆盖）
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789}

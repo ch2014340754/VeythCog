@@ -4,7 +4,7 @@
 > 需求名：全局划词 AI（Quick Actions）+ 网页剪藏与收件箱（Web Clip / Inbox）（P2）
 > 技术栈：React 18 + TS + Vite + AntD 5 + Zustand + Iconify / Spring Boot 3.5 + Java 21 + MyBatis-Plus + PostgreSQL 16
 > 模块：前端 `components/SelectionAsk` + `pages/Inbox` + `pages/Settings`；后端 `vc-knowledge`（新增 `clip` 子包）+ `vc-app/web`（新增 `QuickAiController`、`ClipController`）
-> 版本：v0.1-P2（待评审）
+> 版本：v0.2-P2（评审中；2026-11-16 按用户口径修订：§12 十条决策全部确认 + 划词结果 1 天缓存 + 收件箱交互细化）
 > 复杂度：中偏高（两个特性、一条跨域写入链路）
 > 依赖：`openspec/api-spec.md`、`vc-chat` 的 `ChatService.streamChatStateless`（AI 搜索 `SearchController` 已有先例）、`vc-llm` 的 `LlmModelService.getDefaultModel`、`vc-knowledge` 的 `DocService`（文档落库 + 向量化）、`vc-app/RagChatOrchestrator`、`SecurityConfig`
 
@@ -13,6 +13,8 @@
 | 版本 | 变更点 |
 |---|---|
 | v0.1 | 初版：划词 AI 三层能力（通用解释 / 可选 RAG / 沉淀入库）+ 三路剪藏入口（粘 URL / 书签脚本 / 预留扩展）+ 收件箱页 + 独立剪藏令牌 |
+| v0.2 | ✔️ §12 十条决策全部按建议定稿（侧栏平级入口、剪藏落 `vc-knowledge` 子包、RAG 默认关、划词不落对话历史、正文存 PG、抓取失败留痕、P2 不做扩展、移动端不启用）；🆕 **划词结果缓存 24 小时**（同选区同动作同模型直接命中，卡片标注"缓存"并给「重新生成」）；✏️ 收件箱交互细化（多选批量入库/丢弃、URL 去重、待处理角标、Markdown 可手改再入库、失败可重试、可选"自动入库") |
+| v0.3（实现对齐） | 按实现把 §6.2 接口表校正为真实契约：① 书签脚本**随 `POST /clip/tokens` 一起返回**（令牌明文只在签发时可得，事后无法再构造脚本，故原 `GET /clip/bookmarklet` 取消）；② 新增 `GET /clip/pending-count`（路径避开 `/clip/items/{id}`，否则 `pending-count` 会被当成 id 转换失败）；③ `to-knowledge` 返回体加 `alreadyImported`，用于收件箱提示"已入库"并直接跳文档；④ 列表/详情返回体统一 `PageResult<ClipItemView>` / `ClipItemDetail`（列表不含 `content_md`） |
 
 ## 1. 概述
 
@@ -44,7 +46,8 @@
 - 全局选区浮层（`SelectionAsk`），4 个动作：解释 / 翻译 / 润色 / 存入知识库
 - 流式结果卡（玻璃卡、可拖动、可关闭、可复制、可"追问转入对话"）
 - 划词卡内「结合我的知识库」开关（手动触发 RAG）
-- 收件箱页 `/inbox`：列表、预览、编辑标题/标签、入库、丢弃、删除
+- 划词结果 **24 小时缓存**（前端 localStorage + 后端 Caffeine 双层，命中即 0 请求）
+- 收件箱页 `/inbox`：列表、预览、多选批量、Markdown 手改后入库、丢弃/恢复/删除
 - 三路剪藏：收件箱粘 URL（服务端抓取）、书签脚本（页面 DOM 上报）、`POST /api/clip/capture` 开放给未来的扩展
 - 设置页「剪藏令牌」：生成 / 复制 / 重置 / 撤销
 - 入库联动：剪藏项 → `knowledge_doc` → 自动向量化
@@ -104,13 +107,68 @@
 
 ### 3.3 收件箱页（`/inbox`）
 
-- 顶部：标题「收件箱」、副标题说明、右侧【粘贴链接】【获取书签】【导出全部 md】
-- 粘贴链接：输入框 + 【抓取】按钮（抓取中按钮显示细进度条，列表保持不动）
-- 主区：**列表优先**（表格），列：标题 / 来源域名 / 字数 / 抓取时间 / 状态（待处理 / 已入库 / 已丢弃）/ 操作（预览 / 入库 / 丢弃 / 删除）
-- 预览：右侧抽屉（`vc-inbox__preview`），Markdown 渲染正文 + 原链接 + 原始 HTML 折叠区（只读）
-- 入库：可选目标目录（复用知识库目录树）+ 标签，确认后创建文档并触发向量化，状态转「已入库」并显示 `doc_id` 链接
+**定位**：收件箱是"**待处理队列**"，不是第二个知识库。剪藏只负责"把内容捞进来"，是否变成永久记忆由人在这里决定。
+
+- 顶部：标题「收件箱」、右侧操作【粘贴链接】【获取书签】【全部入库（P2 不做，多选后用批量按钮）】
+- 粘贴链接：输入框 + 【抓取】按钮；抓取中按钮内显示细进度条，**列表保持不动**
+- 筛选：`待处理` / `已入库` / `已丢弃` 分段控件 + 关键词（仅匹配标题/域名）
+- 主区：**列表优先**（表格），列：勾选框、标题、来源域名、字数、抓取时间、状态、操作（预览 / 入库 / 丢弃 / 删除）
+- 预览：右侧抽屉（`vc-inbox__preview`）：Markdown 渲染正文 + 原链接 + 「编辑正文」+ 原始 HTML 折叠区（只读）+ 失败原因（若有）
+- 入库：在弹出的轻量表单里选目标目录（复用知识库目录树）+ 标签，确认后建文档并默认触发向量化；行内状态原地转「已入库」，显示 `doc_id` 链接
 - 空态：一句说明 + 两个入口（粘贴链接 / 获取书签），不放大插画
-- 筛选：全部 / 待处理 / 已入库 / 已丢弃；关键词只看标题
+
+#### 3.3.1 状态机与生命周期
+
+```
+pending（待处理） ──入库──▶ archived（已入库，带 doc_id）
+       │
+       ├──丢弃──▶ dropped（已丢弃，保留 30 天可恢复）
+       └──删除──▶ deleted（软删，不可恢复）
+```
+
+| 规则 | 说明 |
+|---|---|
+| 待处理角标 | 侧栏「收件箱」入口右上角显示未处理数量（≤99，超出显 `99+`），轮询 60s 或页面聚焦时刷新 |
+| 重复剪藏 | 同 `owner_id + URL` 已存在且未删除 → 不新建，返回原条并置顶，提示"这条已在收件箱"（正文若更新则覆盖 `content_md`） |
+| 入库幂等 | 已 `archived` 的条目再次点入库 → 提示"已入库"并跳转到对应文档，不产生第二篇 |
+| 删除不连带 | 删除剪藏项**不影响**已经入库的知识文档 |
+| dropped 可恢复 | 丢弃 30 天内可"恢复为待处理"，超期由定时任务清 `raw_html`（P2 可不做定时，留字段） |
+| 正文可手改 | 抓取不理想时在预览里直接编辑 Markdown，保存后再入库（避免把噪声灌进 RAG） |
+| 自动入库开关 | 设置项 `clip.autoImport`（默认**关**）：开了以后书签脚本上报直接入库+向量化，适合"我信任来源"的场景 |
+
+#### 3.3.2 批量操作
+
+- 多选（表头全选 / 行勾选）后底部出现浮动操作条（玻璃底、居中、悬浮 16px）：
+  `已选 3 条` + 【批量入库（选同一目录）】【批量丢弃】【取消】
+- 批量入库走串行（每条一次 doc 创建 + 向量化），期间条内显示 `2/3` 进度，可中断；失败条目单独标红可重试
+
+#### 3.3.3 与其它页面的关系
+
+| 页面 | 关系 |
+|---|---|
+| 知识库 | 收件箱是它的**上游漏斗**；入库即成为一篇普通文档，之后在知识库里正常编辑/向量化 |
+| 划词 AI | 划词的「存入知识库」**直接建文档，不进收件箱**（那是"我已经确认有用"的动作，不需要二次筛选） |
+| 对话 | 收件箱正文可作为对话的 `docIds` 上下文（入库后即生效） |
+| 首页 | 不新增卡片；只有侧栏角标提示"有 N 条待处理" |
+
+### 3.4 划词结果缓存（v0.2）
+
+**目标**：同一段文字、同一动作、同一模型，24 小时内不重复花 token、不重复等首字。
+
+| 项 | 规则 |
+|---|---|
+| 缓存键 | `sha256(action + '\n' + text + '\n' + modelCode + '\n' + (withKnowledge ? 'k1' : 'k0'))` |
+| TTL | **24 小时**（`quickAi.cache-ttl-hours=24`），过期即失效，不主动刷新 |
+| 第一层（前端） | `localStorage`：`vc:qai:<key前缀16>` → `{ md, modelName, cachedAt }`；命中直接渲染，**不发请求** |
+| 第二层（后端） | Caffeine 内存缓存（同键，24h，最大 500 条）；换浏览器/换设备/清缓存后仍能命中 |
+| 命中提示 | 卡头显示 `缓存 · 3 小时前`（灰色小字）+ 一个【重新生成】文字按钮 |
+| 重新生成 | 带 `nocache=true` 重发，成功后**覆盖**缓存（同一键） |
+| 失效条件 | ① 换模型 ② 切换 `结合知识库` 开关 ③ 文本改动（哪怕加一个字就是新键） ④ 过期 ⑤ 用户点「重新生成」 |
+| 不缓存的内容 | `ask`（带自定义问题，组合空间大，收益低）；**`withKnowledge=true` 的答案同样不缓存**（检索上下文会随知识库变化，缓存会给出"看着有引用但实际已过期"的答案） |
+| 存储上限 | 前端最多存 200 条，超出按 `cachedAt` 淘汰最旧；单条正文 > 8KB 不缓存（避免把 localStorage 塞满） |
+| 隐私 | 缓存只存"选中文本的哈希 + 回答"，**不存原文**；清空入口：设置-外观里「清空划词缓存」 |
+
+> 为什么两层：前端命中是 0ms（连骨架都不出），后端命中解决"换浏览器/换设备/刷新后无感"。只做后端的话每次仍要往返，只做前端的话换端就没了。
 
 ## 4. 剪藏管线设计
 
@@ -213,7 +271,7 @@ CREATE INDEX idx_clip_item_url    ON clip_item(owner_id, md5(url));
 
 | # | 接口 | 说明 |
 |---|---|---|
-| 1 | `POST /api/ai/quick` | SSE 流式一次性问答。请求 `{ action: 'explain'\|'translate'\|'polish'\|'ask', text, pageTitle?, withKnowledge?, question? }`；事件顺序 `event: meta`（模型名/是否检索）→ `data: <token>` → `data: [DONE]`；失败 `event: error` |
+| 1 | `POST /api/ai/quick` | SSE 流式一次性问答。请求 `{ action: 'explain'\|'translate'\|'polish'\|'ask', text, pageTitle?, withKnowledge?, question?, nocache? }`；事件顺序 `event: meta`（模型名 / 是否检索 / **是否命中缓存 `cached`** / `cachedAt`）→ `data: <token>` → `data: [DONE]`；失败 `event: error`。**命中缓存时鉴权通过后一次性把整段回答按 token 帧下发（无首字延迟），不开流式等待** |
 | 2 | `GET /api/ai/quick/models` | 返回当前默认模型名（前端在卡头显示，无需额外配置） |
 
 实现要点（复用现有，不新建 LLM 通路）：
@@ -241,12 +299,12 @@ CREATE INDEX idx_clip_item_url    ON clip_item(owner_id, md5(url));
 | 3 | `GET /api/clip/items` | JWT | 分页列表；参数 `status` `keyword` `current` `pageSize` |
 | 4 | `GET /api/clip/items/{id}` | JWT | 详情（含 `content_md`、`raw_html`） |
 | 5 | `PUT /api/clip/items/{id}` | JWT | 改标题/标签/状态（`pending`/`dropped`） |
-| 6 | `POST /api/clip/items/{id}/to-knowledge` | JWT | `{ folderId?, tags?, vectorize? }` → 建 `knowledge_doc` 并（默认）触发向量化，回填 `doc_id` |
+| 6 | `POST /api/clip/items/{id}/to-knowledge` | JWT | `{ folderId?, tags?, vectorize? }` → 建 `knowledge_doc` 并（默认）触发向量化；返回 `{ clipId, docId, vectorized, chunkCount, error?, alreadyImported }`（已入库过则 `alreadyImported=true` 并直接回原 `docId`，不建第二篇） |
 | 7 | `DELETE /api/clip/items/{id}` | JWT | 软删除（同时清 `raw_html`） |
-| 8 | `POST /api/clip/tokens` | JWT | 生成令牌（返回明文一次） |
-| 9 | `GET /api/clip/tokens` | JWT | 列出令牌（只回 `label` / `lastUsedAt` / `revoked`） |
+| 8 | `POST /api/clip/tokens` | JWT | `{ label?, apiBase? }` → 生成令牌，返回 `{ id, label, token, bookmarklet, createdAt }`（**明文 + 书签脚本只在这一次响应里**） |
+| 9 | `GET /api/clip/tokens` | JWT | 列出令牌（只回 `label` / `createdAt` / `lastUsedAt` / `revoked`） |
 | 10 | `DELETE /api/clip/tokens/{id}` | JWT | 撤销令牌 |
-| 11 | `GET /api/clip/bookmarklet?token=` | JWT | 返回书签脚本片段（前端直接渲染成可拖拽链接） |
+| 11 | `GET /api/clip/pending-count` | JWT | 待处理条数（侧栏角标用，单独拉一次比翻列表便宜） |
 
 ### 6.3 跨域与鉴权（关键技术点）
 
@@ -292,7 +350,9 @@ CREATE INDEX idx_clip_item_url    ON clip_item(owner_id, md5(url));
 | 文件 | 变更 |
 |---|---|
 | `src/api/quickAi.ts` | 新增：`quickAskStream`。SSE 解析**复用 `api/chat.ts#streamChatMessage` 的事件解析逻辑**（`event: references` / `event: token` / `data: [DONE]`），把它抽成共享函数（新建 `src/api/sseParse.ts`），**不改动现有 `api/sse.ts`**（那是 OpenAI 兼容直连的另一条通路） |
-| `src/api/clip.ts` | 新增：`clipByUrl` / `listClips` / `getClip` / `updateClip` / `toKnowledge` / `removeClip` / `clipTokens` / `createClipToken` / `revokeClipToken` / `bookmarkletSnippet` |
+| `src/api/clip.ts` | 新增：`clipByUrl` / `listClipItems` / `getClipItem` / `updateClipItem` / `clipToKnowledge` / `deleteClipItem` / `getClipPendingCount` / `listClipTokens` / `createClipToken`（返回体自带 `bookmarklet`，不需要单独的片段接口）/ `revokeClipToken` |
+| `src/utils/quickAiCache.ts` | 新增：localStorage 24h 缓存（键为"动作+选中文字哈希"，只存结果不存原文；`ask` 不进缓存） |
+| `src/stores/clipStore.ts` | 新增：`pendingCount`（角标统一来源，MainLayout / HomeSidebar 共用） |
 | `src/components/SelectionAsk.tsx` | 新增：选区工具条 + 结果卡（受控于 `selectionAskStore`） |
 | `src/stores/selectionAskStore.ts` | 新增：`enabled`（持久化）、`open/close`、`lastSelection` |
 | `src/pages/Inbox/index.tsx` + `inbox.css` | 新增：收件箱页 |
@@ -342,6 +402,7 @@ CREATE INDEX idx_clip_item_url    ON clip_item(owner_id, md5(url));
 | readability 对某些站点失效 | 回退整页文本（`quality=fallback`），列表标注，允许手工编辑 Markdown |
 | 剪藏正文乱码 | 响应按 `Content-Type` charset 解码，缺省 UTF-8；失败提示改用书签脚本 |
 | 划词与页面其他选区交互冲突 | 输入控件内不触发；卡片打开时禁止再次触发（点击卡外才复位） |
+| 缓存给出过时答案 | 只缓存纯模型动作；`withKnowledge` 不缓存；卡头明确标注"缓存 · N 小时前"并提供「重新生成」；设置页可一键清空 |
 | 模型未绑定 | 卡内直接显示"先去设置绑定模型"的跳转，不发请求 |
 | 结果卡遮挡内容 | 支持拖动（复用播放器的 `offsetY` 拖动惯性），并且点击卡外即关 |
 
@@ -353,6 +414,9 @@ CREATE INDEX idx_clip_item_url    ON clip_item(owner_id, md5(url));
 3. 选中 4000 字 → 发送前截断到 3000 并提示
 4. 打开「结合知识库」→ 命中引用 → 底部出现引用条目，点击可跳文档
 5. 按 Esc / 点空白 → 卡片消失；再次选中同一段可重新触发
+5b. **缓存命中**：同一段文字再选一次「解释」→ 0 请求直达、卡头显示「缓存 · N 小时前」、不发新的 token；点「重新生成」→ 重新请求并覆盖缓存
+5c. 缓存过期（改系统时间 / TTL 设 1 分钟验证）→ 再次触发走真实请求，卡头不再显示缓存标记
+5d. 切换模型 或 打开「结合知识库」→ 视为不同缓存键，不会命中旧答案
 6. 「存入知识库」→ 落成一篇文档且可向量化（与手动新建结果一致）
 7. 未登录 → 浮层不出现；未绑定模型 → 卡内提示去设置
 
@@ -377,24 +441,27 @@ CREATE INDEX idx_clip_item_url    ON clip_item(owner_id, md5(url));
 2. **模块归属**：剪藏放在 **`vc-knowledge` 内的 `com.vc.knowledge.clip` 子包**（直接复用 `DocService` 建文档，避免"跨模块调用还要过 HTTP"）。**不新增 `vc-clip` 模块** —— 如果将来长出 RSS/稍后读/全文检索再拆；届时必须同步改 `Dockerfile`（COPY + 逐模块 install 顺序），这条已在 `PROJECT_MEMORY.md` 记过
 3. **SQL**：`docs/sql/024_clip.sql`（在 023 之后编号；纯语句 + 幂等，适配"按 `;` 逐句执行"的跑法）
 4. **安全配置**：`SecurityConfig` 增加 `/api/clip/capture` 的独立 CORS 与 `permitAll`；`ApiAccessLogFilter` 对 `token` 参数做掩码
-5. **配置项**（`application.yml`）：`clip.fetch.max-bytes=2MB`、`clip.fetch.timeout-ms=8000`、`clip.daily-limit=200`、`clip.token-rate-limit=10/分钟`；`quickAi.max-tokens-*`（按动作）
+5. **配置项**（`application.yml`）：`clip.fetch.max-bytes=2MB`、`clip.fetch.timeout-ms=8000`、`clip.daily-limit=200`、`clip.token-rate-limit=10/分钟`、`quickAi.cache-ttl-hours=24`、`quickAi.cache-max=500`、`quickAi.max-tokens-*`（按动作）
 6. **前端依赖**：无新增（`react-markdown@^9.1.0` 已在 `package.json` 内，对话页已用于渲染；划词结果卡与剪藏预览直接复用同一套渲染配置，含代码块高亮）
 7. **mvn 构建**：本地验证用 `JDK21 + D:\maven\...\mvn.cmd`，注意 PATH 先补 `C:\Windows\System32`（否则 `'cmd' is not recognized`）
 
-## 12. 待确认决策（请评审时逐条确认）
+## 12. 决策记录（v0.2，2026-11-16 已确认）
 
-| # | 决策点 | 建议 | 备选 |
-|---|---|---|---|
-| 1 | 划词动作清单 | **解释 / 翻译 / 润色 / 存入知识库** 四个 + 更多菜单（复制、追问） | 只留解释+翻译，最轻 |
-| 2 | 「结合知识库」默认状态 | **默认关**（快），手动开（准） | 默认开（更"AI"但慢） |
-| 3 | 划词是否落库对话历史 | **不落库**（`streamChatStateless`） | 落成"划词记录"供以后回溯 |
-| 4 | 剪藏代码位置 | **`vc-knowledge` 子包** | 新建 `vc-clip` 模块（更重，需改 Dockerfile） |
-| 5 | 收件箱入口 | `NAV_ITEMS` 追加「收件箱」，侧栏平级 | 放进 `/tools` 或 Settings |
-| 6 | 剪藏正文存哪 | **PG `text`** | S3 私有桶 `clip`（为将来大文件预留） |
-| 7 | 令牌形态 | **独立长期令牌（写口）** | 复用 JWT（书签脚本实际上拿不到，不可行） |
-| 8 | 抓取失败是否落库 | **落库（带 error）**，可重试 | 直接报错不留痕 |
-| 9 | P2 是否做扩展 | **不做**，只留 `capture` 接口 | 同步做 unpacked 扩展（+2~3 天） |
-| 10 | 划词移动端 | **不启用**（避免长按菜单冲突） | 启用但用长按触发 |
+> 以下 10 条 + 新增的第 11 条均按建议定稿，不再作为待确认项；后续若要改动需先改本文档再同步 spec。
+
+| # | 决策点 | 结论 |
+|---|---|---|
+| 1 | 划词动作清单 | **解释 / 翻译 / 润色 / 存入知识库** + 更多菜单（复制、追问） |
+| 2 | 「结合知识库」默认状态 | **默认关**，卡片内手动开（快 vs 准由用户选） |
+| 3 | 划词是否落库对话历史 | **不落库**（`streamChatStateless`），避免污染 `chat_message` |
+| 4 | 剪藏代码位置 | **`vc-knowledge` 的 `com.vc.knowledge.clip` 子包**，不新建模块 |
+| 5 | 收件箱入口 | `NAV_ITEMS` **追加平级「收件箱」**，两套侧栏自动同步 + 待处理角标 |
+| 6 | 剪藏正文存哪 | **PG `text`**（≤2MB），不进 S3 |
+| 7 | 令牌形态 | **独立长期剪藏令牌**，只可写、可撤销、带频控 |
+| 8 | 抓取失败是否落库 | **落库并带 `error` 字段**，列表可重试 |
+| 9 | P2 是否做浏览器扩展 | **不做**，只留 `POST /clip/capture` 接口与令牌，扩展留 P3 |
+| 10 | 划词移动端 | **不启用**（`pointer: fine` 才挂载），避免与长按菜单冲突 |
+| 11 | 划词结果缓存 | **24 小时**，前端 localStorage + 后端 Caffeine 双层；只缓存 `explain`/`translate`/`polish`（`ask` 与 `withKnowledge` 答案不缓存）；可「重新生成」覆盖；缓存只存哈希不存原文（§3.4） |
 
 ## 13. 面试亮点说明（可直接放进 README）
 

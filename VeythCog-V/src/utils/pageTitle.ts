@@ -6,6 +6,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/home': '导航首页',
   '/chat': '对话',
   '/knowledge': '知识库',
+  '/inbox': '收件箱',
   '/music': '音乐库',
   '/tools': '工具集',
   '/settings': '设置',

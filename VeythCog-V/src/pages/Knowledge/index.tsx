@@ -190,6 +190,19 @@ const KnowledgePage: React.FC = () => {
     }
   };
 
+  // 外部深链：/knowledge?docId=12（收件箱入库后直接跳过来看文档）
+  // 只在首帧读一次，之后清掉 query，避免刷新/返回时反复触发
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('docId');
+    if (!raw || !/^\d+$/.test(raw)) return;
+    void selectDoc(Number(raw), { silent: true });
+    params.delete('docId');
+    const rest = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /**
    * 保存文档（标题 / 摘要 / 标签 / 正文）。
    * @param override 元数据弹窗提交时的草稿值，避免 setState 异步导致取到旧值

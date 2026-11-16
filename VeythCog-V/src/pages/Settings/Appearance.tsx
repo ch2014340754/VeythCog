@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Segmented, Slider, Switch } from 'antd';
+import { Button, message, Segmented, Slider, Switch } from 'antd';
 import { Icon } from '@iconify/react';
 import sunIcon from '@iconify-icons/lucide/sun';
 import moonIcon from '@iconify-icons/lucide/moon';
@@ -10,6 +10,10 @@ import checkIcon from '@iconify-icons/lucide/check';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
+import { useSelectionAskStore } from '@/stores/selectionAskStore';
+import { clearQuickAiCache as clearQuickAiRemoteCache } from '@/api/quickAi';
+import { clearQuickAiLocalCache, countQuickAiLocalCache } from '@/utils/quickAiCache';
+import textSelectIcon from '@iconify-icons/lucide/text-select';
 import WallpaperManagerModal from '@/components/WallpaperManagerModal';
 import WallpaperMedia from '@/components/WallpaperMedia';
 import { getPreset, presetNames } from '@/styles/presets';
@@ -27,6 +31,25 @@ const AppearancePage: React.FC = () => {
   const setBackground = useSettingsStore((s) => s.setBackground);
   const overlayOpacity = useSettingsStore((s) => s.overlayOpacity);
   const setOverlayOpacity = useSettingsStore((s) => s.setOverlayOpacity);
+
+  // 划词 AI：开关 + 缓存治理（本地 24h + 后端 TTL，两边一起清）
+  const selectionAskEnabled = useSelectionAskStore((s) => s.enabled);
+  const setSelectionAskEnabled = useSelectionAskStore((s) => s.setEnabled);
+  const [cacheCount, setCacheCount] = useState(() => countQuickAiLocalCache());
+  const [clearingCache, setClearingCache] = useState(false);
+
+  const clearSelectionAskCache = async () => {
+    setClearingCache(true);
+    clearQuickAiLocalCache();
+    try {
+      await clearQuickAiRemoteCache();
+    } catch {
+      // 后端不可用时本地已清，够用；不打断用户
+    }
+    setCacheCount(0);
+    setClearingCache(false);
+    message.success('划词缓存已清空（本地 + 服务端）');
+  };
 
   // 全站唯一壁纸（S3，与账号绑定）
   const activeWallpaper = useWallpaperStore((s) => s.active);
@@ -204,6 +227,40 @@ const AppearancePage: React.FC = () => {
             <Slider min={0} max={90} value={glassOpacity} onChange={setGlassOpacity} />
             <div className="vc-hint">
               往左拖背景图越清晰，往右拖毛玻璃感越明显，背景始终隐约透出。
+            </div>
+          </div>
+        </section>
+
+        {/* 划词 AI */}
+        <section className="vc-panel">
+          <div className="vc-panel__head">
+            <div className="vc-setting-row__title">
+              <Icon icon={textSelectIcon} width={18} />
+              <div>
+                <h2 className="vc-panel__title">划词 AI</h2>
+                <p className="vc-panel__desc">
+                  选中任意文字后浮出「解释 / 翻译 / 润色 / 问 / 存入知识库」；只在有鼠标的设备生效
+                </p>
+              </div>
+            </div>
+            <Switch checked={selectionAskEnabled} onChange={setSelectionAskEnabled} />
+          </div>
+          <div className="vc-setting-row">
+            <div className="vc-setting-row__label">
+              <span>结果缓存</span>
+              <span className="vc-meta vc-num">本地 {cacheCount} 条</span>
+            </div>
+            <div className="vc-hint">
+              解释/翻译/润色的结果缓存 24 小时，同一段文字再选一次直接出结果，不重复花 token。
+              「问」和开启知识库检索的答案不缓存。
+            </div>
+            <div className="vc-toolbar" style={{ marginTop: 8 }}>
+              <Button size="small" loading={clearingCache} onClick={() => void clearSelectionAskCache()}>
+                清空缓存
+              </Button>
+              <Button size="small" type="text" onClick={() => setCacheCount(countQuickAiLocalCache())}>
+                刷新计数
+              </Button>
             </div>
           </div>
         </section>

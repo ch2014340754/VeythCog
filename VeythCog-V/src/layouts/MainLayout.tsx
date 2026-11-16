@@ -4,6 +4,7 @@ import PageLoadingBar from '@/components/PageLoadingBar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useAuthStore } from '@/stores/authStore';
+import { useClipStore } from '@/stores/clipStore';
 import { resolvePageTitle } from '@/utils/pageTitle';
 import { NAV_ITEMS } from '@/config/navItems';
 import searchIcon from '@iconify-icons/lucide/search';
@@ -23,6 +24,15 @@ const MainLayout: React.FC = () => {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+
+  // 收件箱角标：进站拉一次 + 60s 轮询（入库/删除后 Inbox 页会主动 refresh，角标立即跟上）
+  const clipPending = useClipStore((s) => s.pendingCount);
+  const refreshPending = useClipStore((s) => s.refreshPending);
+  React.useEffect(() => {
+    void refreshPending();
+    const timer = window.setInterval(() => void refreshPending(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [refreshPending]);
 
   // /tools/:id 的标题由 ToolsLayout 用工具名设置，这里让位避免父级覆盖
   const isToolDetail = location.pathname.startsWith('/tools/');
@@ -73,6 +83,11 @@ const MainLayout: React.FC = () => {
             >
               <Icon icon={item.icon} width={22} />
               {active && <span className="vc-rail__indicator" aria-hidden />}
+              {item.badge === 'clipPending' && clipPending > 0 && (
+                <span className="vc-rail__badge" aria-label={`${clipPending} 条待处理`}>
+                  {clipPending > 99 ? '99+' : clipPending}
+                </span>
+              )}
             </button>
           );
         })}

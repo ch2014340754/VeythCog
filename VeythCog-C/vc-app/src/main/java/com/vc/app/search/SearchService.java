@@ -65,6 +65,11 @@ public class SearchService {
         return vectorizeService.hasVectorizedDocs(userId);
     }
 
+    /** 当前账号可见的模型列表（划词卡片用来展示"由谁回答"） */
+    public List<LlmModelItem> listModels(Long userId) {
+        return llmModelService.getModels(userId);
+    }
+
     /**
      * 构造搜索 AI 的一次性提示词。
      *

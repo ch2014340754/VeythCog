@@ -1,0 +1,102 @@
+/* 剪藏令牌面板（设置 → 账号） */
+
+.vc-token-tips {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+}
+
+.vc-token-create {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.vc-token-fresh {
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.vc-token-fresh__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 10px;
+}
+
+.vc-token-fresh__row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.vc-token-fresh__drag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* 可拖拽的书签：做成"按钮"的样子，用户才敢拖 */
+.vc-token-drag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff !important;
+  font-size: 13px;
+  cursor: grab;
+  user-select: none;
+  text-decoration: none !important;
+  box-shadow: 0 4px 12px -6px var(--color-primary);
+}
+
+.vc-token-drag:active {
+  cursor: grabbing;
+}
+
+.vc-token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.vc-token-table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.vc-token-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.vc-token-table tr.is-revoked {
+  opacity: 0.5;
+}
+
+.vc-token-table__ops {
+  text-align: right;
+}
+
+.vc-token-empty {
+  padding: 16px 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}

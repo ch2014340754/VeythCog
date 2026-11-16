@@ -443,6 +443,12 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 8. **P0 用户自持 Key 已落地（2026-11-13）**：AES-256-GCM 加密入库、供应商多选模型、配置兜底。**2026-11-13 收口三项**：① Key 连通校验 `is_valid` 门控（对话下拉过滤 + 后端 40000 拦截 + 换 AK 自动失效）；② `chat_session` 会话元数据（模型 / `ragDocIds` / 标题 / 压缩开关，软删除）；③ 上下文动态压缩（阈值 4000 token、保留 3 轮、摘要 system 消息、失败降级丢弃）。`openspec/llm-binding-prd.md` 仍剩：访客演示模型、SSE 协议 `delta/done` + 幂等 + 同会话并发锁、绑定表单 temperature/topP/备注、token 估算统一 `cl100k_base`（当前为 CJK 启发式）。
 9. **模型目录管理已落地（2026-11-13）**：`/admin/llm-models` 增删改查 + 上下架 + 从供应商同步。实测百炼 `/api/v1/models` 返回 373 个模型、其中 108 个具备 TG（文本生成）能力；DeepSeek 的 `/models` 需要该供应商 AK，而当前配置 `deepseek.api-key` 为空，同步会返回 40000 提示先配 AK。同步为「只增不删、新增默认不上架」，避免误删用户绑定。
 10. **百炼地域 / 业务空间已落地（2026-11-13）**：`019` 迁移 + `DashScopeEndpoint` / `LlmEndpointService`；workspace/region 按「用户 + 供应商」保存，系统配置兜底；校验（含多模态）和实际对话均按生效地址调用，复合指纹换 Key/换空间即失效。实测华北2 `llm-j09pwqdqv4no16ww`：`qwen3-vl-plus` 多模态校验与 `qwen-max` 真实对话均通过；标准域名同样可用（业务空间不是硬性前提）。已同步改造管理端「从供应商同步」走生效地址。**已知限制**：`vision` 模型虽在对话下拉中，但 Spring AI DashScope 文本生成路径对 `qwen3-vl-plus` 返回 `url error`（标准域名同样），纯文本模型正常；视觉模型对话入口需后续接多模态生成路径。
+11. **P2 划词 AI + 网页剪藏已落地（2026-11-16）**：口径见 `openspec/quick-ai-clip-prd.md`（v0.3，实现对齐版）。
+    - 后端：`vc-knowledge/clip`（entity/mapper/dto/config/service：`ClipFetchService` 抓取清洗 + SSRF 三重校验、`ClipTokenService` 令牌与频控、`ClipService` 收件箱状态机与入库向量化）+ `vc-app/web/ClipController`、`QuickAiController`（`/ai/quick` SSE）+ `com.vc.app.quickai`（prompt 拼装 + 24h TTL 缓存）。
+    - 数据：`docs/sql/024_clip.sql`（`clip_item` / `clip_token`），本地 `vector_test` 已执行；**生产库未执行**。
+    - 前端：`SelectionAsk`（划词悬浮条 + 结果卡，`pointer: fine` 才挂载）、`pages/Inbox`（收件箱）、`ClipTokenPanel`（设置→账号的令牌与书签脚本）、`utils/quickAiCache`（localStorage 24h）、`api/sseParse`（SSE 解析抽公共）、`stores/clipStore`（导航角标）。
+    - 契约要点：`POST /clip/capture` 是唯一 permitAll 写入口（query 令牌 + `text/plain` 简单请求，CORS 只对这条放开 `*`）；`POST /clip/tokens` 响应内直接带可拖拽的 `bookmarklet`（明文只出现一次）；`GET /clip/pending-count` 供角标；`to-knowledge` 返回 `alreadyImported`。
+    - 排序陷阱（已踩过）：`UrlBasedCorsConfigurationSource` 是「首个匹配即返回」，`/clip/capture` 的 CORS 配置必须注册在 `/**` **之前**，否则预检被 403。
 
 ---
 

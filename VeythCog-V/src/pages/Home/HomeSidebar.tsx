@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
+import { useClipStore } from '@/stores/clipStore';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import UserMenu from '@/components/UserMenu';
 import { NAV_ITEMS } from '@/config/navItems';
@@ -20,6 +21,15 @@ const HomeSidebar: React.FC = () => {
   const { colors } = useTheme();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
+
+  // 收件箱角标：与 MainLayout 同一份 store，首页/内页角标不会各拉各的
+  const clipPending = useClipStore((s) => s.pendingCount);
+  const refreshPending = useClipStore((s) => s.refreshPending);
+  React.useEffect(() => {
+    void refreshPending();
+    const timer = window.setInterval(() => void refreshPending(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [refreshPending]);
 
   const [visible, setVisible] = React.useState(false);
   const hideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,6 +88,11 @@ const HomeSidebar: React.FC = () => {
             >
               <Icon icon={item.icon} width={22} />
               {active && <span className="vc-rail__indicator" aria-hidden />}
+              {item.badge === 'clipPending' && clipPending > 0 && (
+                <span className="vc-rail__badge" aria-label={`${clipPending} 条待处理`}>
+                  {clipPending > 99 ? '99+' : clipPending}
+                </span>
+              )}
             </button>
           );
         })}
