@@ -12,6 +12,6 @@
 | `015_*` / `017` / `018` / `019` / `020` | 头像 / 会话校验 / 模型类型 / 业务空间 / 模态 | 幂等增量 |
 | `016_observability.sql` | 监控四表 | 幂等 |
 | `021_knowledge_folder.sql` | 知识库目录树 | 幂等 |
-| `022_user_setting.sql` | **用户偏好统一表** + 迁移 `nav_setting` + `DROP nav_setting` | 幂等；`DROP` 不可逆，执行前先备份 `nav_setting` |
+| `022_user_setting.sql` | **用户偏好统一表** + 迁移 `nav_setting` + `DROP nav_setting` | 幂等；全部为纯语句（无 `DO $$` 块），整文件执行 / 逐句执行（按 `;` 切分，如 JDK `ApplySql.java`、DBeaver 脚本）结果一致；`DROP` 不可逆，执行前先备份 `nav_setting` |
 
 新增「用户偏好」时：在 `user_setting` 上 `ALTER TABLE ADD COLUMN`，并新建 `023_xxx.sql` 这类增量脚本，**不要修改已执行过的脚本**。

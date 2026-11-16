@@ -1,4 +1,5 @@
 {
   "java.autobuild.enabled": true,
-  "java.debug.settings.onBuildFailureProceed": false
+"java.debug.settings.onBuildFailureProceed": false,
+"java.compile.nullAnalysis.mode": "automatic"
 }

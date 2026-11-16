@@ -379,7 +379,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 业务空间脚本：`019_llm_workspace_region.sql`（`user_llm_binding.workspace_id/region` + `(user_id,vendor_code,workspace_id)` 索引，幂等）。开发库已执行（`OK executed=5`）。旧校验记录为 key-only 指纹，升级后需重新校验。
 - 多模态脚本：`020_llm_model_modalities.sql`（`llm_model.modalities` + 按 `model_type` 回填，幂等）。开发库已执行（`OK executed=3`，373 行全部有值）。
 - 知识库目录脚本：`021_knowledge_folder.sql`（`knowledge_folder` 建表 + `knowledge_doc.folder_id` + 3 个索引/部分唯一索引，全部幂等）。开发库已执行（`OK executed=10`）；复跑安全。
-- 用户偏好统一表脚本：`022_user_setting.sql`（建 `user_setting` + 部分索引 + `DO` 块迁移 `nav_setting` 并 `DROP`，幂等）。开发库已执行（2026-11-15，admin 行三列一致：baidu / v-27.mp4 / 13）；**022 之后不要再重跑 `012`/`014` 的 `nav_setting` 段**（会重建空表，再跑一次 022 即可清理）。
+- 用户偏好统一表脚本：`022_user_setting.sql`（建 `user_setting` + 部分索引 + 迁移 `nav_setting` 并 `DROP`，幂等）。**2026-11-16 修订**：原第 2 段 `DO $$ … $$` 被「按 `;` 切分逐句执行」的跑法（JDK `ApplySql.java`、部分 GUI 客户端）截断，报 `unterminated dollar-quoted string at or near "$$"`，库会停在「`user_setting` 建好但为空、`nav_setting` 还在」的半截状态（前面的建表/注释/索引是自动提交的，表在数据不在）；已改为纯语句（守卫建壳 → INSERT → `DROP IF EXISTS`），整文件/逐句执行都成立。开发库 `vector_test` 已重跑完成（admin 行 = baidu / 96.mp4 / 6，旧表备份在 `nav_setting_bak_20261116`）；**022 之后不要再重跑 `012`/`014` 的 `nav_setting` 段**（会重建空表，再跑一次 022 即可清理）。
 
 ---
 
