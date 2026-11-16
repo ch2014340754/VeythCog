@@ -62,12 +62,12 @@ VeythCog/                      # 仓库根（本项目记忆文档所在）
 
 ```
 vc-common(公共基础) ← vc-llm(LLM 网关) ← vc-chat(对话域) / vc-knowledge(知识库域) → vc-app(唯一可运行)
-vc-common ← vc-user(用户域：用户偏好统一存储) ← vc-nav(导航域) → vc-app
+vc-common ← vc-user(用户域：用户偏好统一存储) ← (vc-nav(导航域), vc-music(音乐库域)) → vc-app
 vc-admin(系统管理域：模型目录/监控/会话) → vc-llm / vc-common；禁止反依赖 vc-app
 vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 ```
 
-- **依赖方向单向**：`common ← llm ← (chat, knowledge) ← app`；`common/llm ← admin ← app`；`common ← user ← (nav, 未来其它域) ← app`；chat、knowledge、admin、nav 互相不依赖。
+- **依赖方向单向**：`common ← llm ← (chat, knowledge) ← app`；`common/llm ← admin ← app`；`common ← user ← (nav, music, 未来其它域) ← app`；chat、knowledge、admin、nav、music 互相不依赖。
 - **仅 `vc-app` 可运行**（端口 8123，`/api`）；其余为纯库（无 boot 插件、无 main）。
 - `vc-admin` 是 2026-11-13 新增的系统管理域（用户建议集中系统管理功能）。受依赖方向限制，`User` / `Role` 实体与用户、角色管理仍在 `vc-app`；模型目录管理、监控采集/查询、登录会话在 `vc-admin`（未来抽 `vc-user` 再迁）。
 - RAG 组合动作规划落在 vc-app 的 `orchestration` 包（当前为空占位）。
@@ -138,9 +138,17 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - `scripts/import_itab_backup.py`（在 `VeythCog-C/scripts`）：iTab `navConfig` 容错解析 → 按 URL 归一化去重 → SVG/ICO 用 Chrome 渲染 256px PNG（2 倍窗口截图 + alpha 包围盒裁剪，避免高 DPI 半图）→ `POST /nav/icons/upload` → `POST /nav/bookmarks` / `PUT /nav/bookmarks/{id}`；`state.json` 断点续跑，失败降级文字图标；支持 `--token` / `--chrome` / `--work-dir` / `--dry-run`，线上同步说明见 `scripts/README-nav-import.md`。2026-11-12 导入 249 条、更新 8 条已有图标、245 个唯一 S3 对象被引用。
 - `NavWallpaperService`：壁纸列表/随机/锁定 + 私有桶缩略图代理（锁定值写 `user_setting.current_wallpaper_key`，读写经 `UserSettingService`）。
 
+**vc-music**（`com.vc.music`）—— 音乐库域（无 Controller，2026-11-16 P0 `music-minimal-library`）：
+- `entity/MusicTrack`（`music_track`，`autoResultMap=true`）：`owner_id` 账号隔离；`tags` 用模块自带的 `StringArrayTypeHandler`（text[]）、`cover_color` 用 `JsonbTypeHandler`（jsonb）；`object_key` 只存 S3 key（不存 URL）；`@TableLogic deleted` 软删。
+- `mapper/MusicTrackMapper` + `resources/mapper/MusicTrackMapper.xml`：列表检索（`title/artist ILIKE` + `to_tsvector('simple')`、`source`、`ambient_enabled`、`#{tag} = ANY(tags)`、白名单排序、MP 分页）。
+- `service/MusicTrackService`：上传校验（后缀 mp3/m4a → MIME → **文件头魔数**（ID3/0xFFEx/ftyp）→ 时长 ≤600s → 许可枚举）/ 元信息更新 / 背景音池（上限 8，`ambient_order` 10 递增）/ 软删 + 删 S3 对象（失败只记日志）。许可 `CC-BY-NC` 直接 40000；`CC-BY` 必填署名；`aiDisclosure=true` 必填 `aiModel`。封面缺失时按标题 hash 从调色板兜底。
+- `service/MusicStreamTokenService`：`<audio>` 带不上 Authorization，播流走 query 短时签名 —— HMAC-SHA256，payload `userId:trackId:exp`，默认 5 分钟，绑定用户 + 曲目，`SecurityConfig` 放行 `/music/stream/**`、鉴权由签名承担。
+- `service/MusicStreamService`：S3 HEAD 取长度 → Range 解析（`bytes=start-end` / `start-` / `-suffix`）→ 206 + `Content-Range` / `Accept-Ranges`；非法或越界 Range 回退整段（不返回 416）。与 `NavWallpaperService` 动态壁纸同一套代理模式（预签名 + Range 会重置连接）。
+- `config/MusicProperties`：`music.*`（`stream-secret`（环境变量 `MUSIC_STREAM_SECRET`）/ `stream-token-minutes=5` / `ambient-max=8` / `max-file-bytes=20MB` / `max-duration-ms=600000` / `page-size-max=200`）。
+
 **vc-app**（`com.vc.app`）—— 唯一可运行，装配全部：
 - `auth/*`：JWT 鉴权（`JwtUtil` / `JwtAuthFilter` / `AuthServiceImpl` / `PasswordUtil` / `User`）。JWT 自 2026-11-13 带 `sid`，`JwtAuthFilter` 每次请求校验会话（kicked/expired 即 401）；`AuthServiceImpl.login(request, ip, ua)` 建 `sys_user_session`，`POST /auth/logout` 置 logout。**旧 token 无 sid 会失效，需重新登录**。
-- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE + `/chat/conversations` 三件套 + `/chat/sessions` 会话配置五件套）、`LlmModelController`（含 `POST /llm/models/{vendor}/{modelCode}/verify` 单模型校验）、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`NavBookmarkController` / `NavCategoryController` / `NavWallpaperController` / `NavSettingController`（导航聚合 `GET /nav/bootstrap` + 壁纸四接口）、`UserSettingController`（`GET/PUT /user/setting`，用户偏好唯一读写入口）、`NavIconController`（`POST /nav/icons/fetch|upload|sync`）、`GlobalExceptionHandler`、`ApiAccessLogFilter`（采集型访问日志：rid/user/ip/方法/**归一化路由**/业务码/HTTP 状态/耗时/流式标记/错误信息，敏感字段不落库，`/api/admin/monitor` 自身不打点）、`BizCodeAdvice`（`ResponseBodyAdvice`：把 `BaseResponse.code` 写进请求属性，供过滤器记录——后端业务错误也是 HTTP 200，只看 status 错误率恒为 0）。
+- `web/*`（Controller）：`ChatController`（`/chat/message` 同步 + `/chat/stream` SSE + `/chat/conversations` 三件套 + `/chat/sessions` 会话配置五件套）、`LlmModelController`（含 `POST /llm/models/{vendor}/{modelCode}/verify` 单模型校验）、`AuthController`、`HealthController`、`KnowledgeController`（P0 已实现 10 个接口）、`NavBookmarkController` / `NavCategoryController` / `NavWallpaperController` / `NavSettingController`（导航聚合 `GET /nav/bootstrap` + 壁纸四接口）、`UserSettingController`（`GET/PUT /user/setting`，用户偏好唯一读写入口）、`NavIconController`（`POST /nav/icons/fetch|upload|sync`）、`MusicController`（`/music` 曲库 CRUD + 背景音池 + Range 播流，P0 八个接口）、`GlobalExceptionHandler`、`ApiAccessLogFilter`（采集型访问日志：rid/user/ip/方法/**归一化路由**/业务码/HTTP 状态/耗时/流式标记/错误信息，敏感字段不落库，`/api/admin/monitor` 自身不打点）、`BizCodeAdvice`（`ResponseBodyAdvice`：把 `BaseResponse.code` 写进请求属性，供过滤器记录——后端业务错误也是 HTTP 200，只看 status 错误率恒为 0）。
 - `config/*`：`SecurityConfig`（无状态，放行 `/auth/**`、`/health/**`、接口文档、ASYNC 分发）、`CorsConfig`、`DataInitializer`（幂等种子：模型目录 + admin 用户 + 默认绑定 qwen-plus）。
 - `admin/*`：系统管理后端**已实现**（`AdminController` / `RoleController` / `AdminUserServiceImpl`，用户-角色多对多，`/admin/**` 需 `ADMIN` 角色）。
 - `orchestration/*`：`RagChatOrchestrator`（检索 → 拼带编号引用的上下文 → 交 vc-chat 作答；同步/流式共用，召回落空或失败降级为普通对话）。
@@ -193,6 +201,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | `nav_category` | 导航分类（iTab 右侧竖栏） | 按 user_id 隔离；sort_order 排序 |
 | `nav_bookmark` | 导航书签 | `icon_type`（auto/upload/text，CHECK 约束）、`icon_key`（`public-icons` 对象 key）、`icon_text`、`icon_color`、`icon_synced_at`；`013_nav_bookmark_icon.sql` 幂等增量 |
 | `user_setting` | 用户偏好统一表（一人一行，PK `user_id`，2026-11-15 起取代 `nav_setting`） | `search_engine`（baidu/google/bing，服务层白名单）/ `current_wallpaper_key`（NULL=随机）/ `active_category_id`（上次选中分类）/ `created_at` / `updated_at`；新增偏好**只加列不加表**（动作见 §3.2 vc-user）；**只放偏好，不放业务数据** |
+| `music_track` | 音乐曲库（2026-11-16，`023_music.sql`） | `owner_id` 账号隔离（列表/详情/删除强制带 owner，跨账号 40400）；`object_key` 存 S3 `music` 私有桶 key；`cover_color` jsonb 双色渐变；`source`（UPLOAD/AI_GEN/JAMENDO/AIGEI_CC/AI_OTHER）、`license`（CC0/CC-BY/OWNED/AI_GEN/LICENSED，**CC-BY-NC 不入库**）、`attribution`、`ai_disclosure` + `ai_model`、`tags` text[]、`ambient_enabled` + `ambient_order`（池上限 8）、`status`（published/hidden）、`deleted` 软删；索引 `(owner_id, deleted)`、部分索引 `(owner_id, ambient_enabled, ambient_order) WHERE deleted=false`、`title||artist` GIN |
 | `sys_api_sample` | 接口调用单请求明细（2026-11-13，`016_observability.sql`） | rid / user_id / ip / method / route（归一化 pattern）/ handler / status / biz_code / cost_ms / stream / error_msg；按时间 + 路由检索 |
 | `sys_api_metric_minute` | 接口分钟桶聚合 | unique(bucket, method, route)；calls / errors / 6 档耗时直方图（p95 由直方图估算），采集时 `ON CONFLICT` 累加 |
 | `llm_call_log` | LLM 调用用量 | vendor / model_code / user_id / prompt_tokens / completion_tokens / total_tokens / latency_ms / status / error_msg / usage_source（provider \| estimate） |
@@ -266,6 +275,14 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | GET | `/nav/wallpaper/random`、`/list`、`/current`，`PUT /nav/wallpaper/lock` | - | 是（缩略图 `/nav/wallpaper/thumb` permitAll） |
 | GET | `/user/setting` | - | 是（当前用户偏好，行不存在返回默认视图不落库；`NavBootstrap` 里 `setting` 同源） |
 | PUT | `/user/setting` | {searchEngine?, activeCategoryId?, clear?:[]} | 是（唯一写入口；null/省略=不改，`clear` 显式置 NULL，未知字段/非法引擎 40000） |
+| GET | `/music/tracks` | query: keyword?, source?, ambientOnly?, tag?, current=1, pageSize=20, sortField?, sortOrder? | 是（当前用户曲库分页；`file` 与 `meta` 一次上传落库；`streamUrl` 为带签名的接口相对路径，前端补基址后交给 `<audio>`） |
+| GET | `/music/tracks/{id}` | - | 是（含署名 / AI 标识 / 播流签名） |
+| POST | `/music/upload` | multipart: `file`(≤20MB, mp3/m4a) + `meta`(**JSON 字符串表单字段**，不要发 application/json 的 part，否则读不到) | 是（校验魔数/时长/许可；CC-BY 必填署名；AI 生成必填模型；CC-BY-NC 40000） |
+| PUT | `/music/tracks/{id}` | {title?, artist?, tags?, source?, license?, attribution?, licenseUrl?, aiDisclosure?, aiModel?, status?} | 是（只改元信息，不动对象；null=不改） |
+| PUT | `/music/tracks/{id}/ambient` | {enabled, order?} | 是（池上限 8；下架曲目不能入池） |
+| DELETE | `/music/tracks/{id}` | - | 是（软删 + 删 S3 对象，幂等） |
+| GET | `/music/ambient` | - | 是（背景音池，`ambient_order` 升序，仅 published） |
+| GET | `/music/stream/{id}?token=` | Range header | **否**（query 短时签名，5 分钟、绑定 user+track；206 + Content-Range；签名无效/过期 40100） |
 | POST | `/auth/logout` | - | 是（当前 sid 置 logout，token 立即失效） |
 | GET | `/admin/monitor/overview` | query: hours=24 | 仅 admin（调用量/错误率/P95/Token/会话/LLM 汇总） |
 | GET | `/admin/monitor/timeseries` | query: hours | 仅 admin（≤24h 按小时、>24h 按天） |
@@ -333,7 +350,14 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - **系统管理 · 模型目录页（2026-11-13 接真）**：`Admin/Models.tsx` 原为前端 mock，现接 `/admin/llm-models`；表格按供应商分组展示、支持全部/已上架/未上架筛选 + 关键字搜索（模型名/编码/供应商）、上架开关、编辑（已绑定模型锁定供应商与编码）、删除（有绑定则禁用并提示）、新增、从供应商同步（弹窗选供应商 + 是否直接上架，结果弹窗列出新增编码）。列表撑满父容器剩余高度、**取消分页改为表头固定 + 表体内部滚动**（数据全在前端，109 行级别无需请求分页），变更后静默刷新 + 顶部细进度条。二次改造：新增**类型列**（图标 + 类型标签）；新增/编辑表单可选模型类型；同步不再过滤非文本模型，并按供应商 capabilities 保存类型。
 - 导航首页（`/home`，对标 iTab）：分类竖栏 + 书签网格 + 壁纸；`BookmarkModal` 按 iTab「自定义图标」重做，支持「获取图标 / 上传图片 / 文字图标 + 12 色板 / 保存并继续」；`BookmarkIcon` 先查 localStorage 图标缓存，未命中再 `GET /nav/bookmarks/{id}/icon`，不再实时拼对方站点 favicon；进入首页延后 1.5s 触发一次 `POST /nav/icons/sync`（后端幂等 + 失败冷却）。
 - 主题系统：6 预设 × 亮暗 + **全局毛玻璃开关**（CSS 变量 + inline style 双轨）。
-- 浮动音乐播放器（`FloatingMusicPlayer`，真 `<audio>`，mock 歌单）。
+- 浮动音乐播放器（`FloatingMusicPlayer`，真 `<audio>`，**曲库接 `/music/tracks` 真实数据**）：
+  - 播流走 `/music/stream/{id}?token=`（后端 S3 Range 代理），前端只负责把签名相对路径补成绝对地址；列表每 3 分钟静默换新签名，audio `error`（签名过期）时静默换新地址并从断点续播一次。
+  - 背景音模式：`/music/ambient` 池内随机起播、音量固定 0.25、3s 渐入 / 1.5s 渐出、`visibilitychange` 隐藏即暂停、手动选曲自动退出；开关与音量持久化在 `musicStore`（`veythcog:music`），其余状态不持久化。
+- 前台播放默认音量 **20%**（`FloatingMusicPlayer.DEFAULT_VOLUME = 0.2`，state 初值与 `new Audio()` 初始化两处共用同一常量）；音量不持久化，每次会话从 20% 起，用户拖过之后本次会话记住。
+  - 自动播放被浏览器拦截时不弹提示，等首次 `pointerdown/keydown` 静默重试；`bypassMode` 下才用 mock 曲库兜底。
+- 音乐库页（`/music`，`pages/Music`）：分页列表（搜索/来源/只看背景音/排序）、上传弹窗（选文件后浏览器读时长、前端先拦格式/体积/时长）、编辑弹窗、背景音开关与「背景音 5/8」计数、删除二次确认；增删改后派发 `veythcog:music-changed`，播放器即时静默同步；刷新是「保留旧内容的细进度条」，不闪骨架。
+- **侧栏入口清单唯一权威 `src/config/navItems.ts`**：`/home` 是**独立布局**（`Home/index.tsx` + `HomeSidebar` 滑入式 rail），不经过 `MainLayout`（固定 rail），两者是两套组件；入口清单共用 `navItems.ts`，新增页面只改这一处。
+- **底部 Dock「歌单」= 歌单弹窗（2026-11-16）**：`HomeDock` 的 `listMusic` 按钮不再打开悬浮播放器，改为 `setPickerOpen(true)` 弹 `components/MusicPickerModal`（列表 = `musicStore.tracks`，带本地搜索、AI/背景音/正在播放角标，底部可跳 `/music`）。点某行 → `requestPlay(id)` → 全局播放器 `FloatingMusicPlayer` 监听 `playRequest.at` 换源起播（同曲连点可重播、播放器重挂载不重播、背景音模式下先退出背景音），同时展开播放器；播放器把当前曲目 `id` 回写 `musicStore.currentId` 供弹窗高亮。
 - 可折叠侧栏（`CollapsibleSidebar`，物理裁剪把手，persist）。
 - 工具集：24+ 工具（`registry.tsx` 注册表，React.lazy 独立分包，多标签保留状态）。
 - **系统管理 · 系统监控页（2026-11-13 接真）**：`Admin/Monitoring.tsx` 由三块 mock 改为真实数据面板——概览卡（调用量 / 失败率 / P95 / Token / 在线会话 / LLM 调用）、调用趋势（24h 按小时、7d 按天，柱高=调用量、柱顶红字=错误数）、服务资源（系统/进程 CPU、物理内存、JVM 堆、磁盘、Swap、线程/运行时长）、接口排行（可按调用量/错误数/P95 切换）、LLM 用量（按供应商+模型）、在线会话（强制下线，Popconfirm）、最近错误（业务码/HTTP 状态/message/rid）。60s 自动静默刷新 + 手动刷新，首次加载才整块 Spin；`admin.ts` 对应函数在 bypass 模式仍返回本地假数据，其余走 `/admin/monitor/*`。
@@ -364,6 +388,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
   仓库根 `.vscode/settings.json` 已开 `java.autobuild.enabled`、关 `java.debug.settings.onBuildFailureProceed`（`.vscode/settings.json` 与 `tasks.json` 已从 .gitignore 放行，随仓库生效）。
 - 种子账号：`admin / admin123`，默认绑定 `dashscope/qwen-plus`。
 - **监控配置（2026-11-13）**：`monitor.*` 在 `application.yml`（保留天数、采集队列容量、会话空闲阈值、资源采样开关）；`VcAppApplication` 已加 `@EnableScheduling` 供 `MonitorRetentionJob` 每日 03:30 清理。监控表脚本 `docs/sql/016_observability.sql`（开发库已执行，输出 `OK executed=19`）。
+- **音乐库配置（2026-11-16）**：`music.*` 在 `application.yml` —— `stream-secret`（环境变量 **`MUSIC_STREAM_SECRET`**，未配时用本地开发默认值）、`stream-token-minutes=5`、`ambient-max=8`、`max-file-bytes=20MB`、`max-duration-ms=600000`、`page-size-max=200`；`spring.servlet.multipart` 同步放到 `max-file-size=25MB / max-request-size=30MB`（业务层再按 20MB 精确校验）。RustFS 需建**私有桶 `music`**。**生产必须覆盖 `MUSIC_STREAM_SECRET`**，否则任何人都能伪造播流签名。
+- **新增后端模块必须同步改 `VeythCog-C/Dockerfile`（踩过一次）**：生产镜像**按模块逐个 COPY**（`COPY vc-xxx/pom.xml` + `COPY vc-xxx vc-xxx`），并按依赖拓扑**逐个 `mvn -f <模块>/pom.xml install`**（刻意不走聚合 reactor，为了绕开 vc-learn）。新增模块漏了 COPY 或漏了 install 步骤，镜像构建必失败（报 `Could not find artifact com.vc:<模块>`）。2026-11-16 已补 `vc-music`，并顺带修好历史遗留的 `vc-user`（源码未 COPY、构建顺序排在依赖它的 vc-nav 之后）。当前顺序：common → llm → user → knowledge → chat → nav → music → admin → app。
 
 ### 8.2 前端
 - `.env.development`（已提交）：`VITE_API_BASE=http://localhost:8123/api`（与后端 8123 对齐，2026-11-09 修正原 8080 错配）；`.env.production` 指向 `https://api.veythcog.top/api`；`src/config/index.ts` 兜底默认 8123。
@@ -380,6 +406,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 多模态脚本：`020_llm_model_modalities.sql`（`llm_model.modalities` + 按 `model_type` 回填，幂等）。开发库已执行（`OK executed=3`，373 行全部有值）。
 - 知识库目录脚本：`021_knowledge_folder.sql`（`knowledge_folder` 建表 + `knowledge_doc.folder_id` + 3 个索引/部分唯一索引，全部幂等）。开发库已执行（`OK executed=10`）；复跑安全。
 - 用户偏好统一表脚本：`022_user_setting.sql`（建 `user_setting` + 部分索引 + 迁移 `nav_setting` 并 `DROP`，幂等）。**2026-11-16 修订**：原第 2 段 `DO $$ … $$` 被「按 `;` 切分逐句执行」的跑法（JDK `ApplySql.java`、部分 GUI 客户端）截断，报 `unterminated dollar-quoted string at or near "$$"`，库会停在「`user_setting` 建好但为空、`nav_setting` 还在」的半截状态（前面的建表/注释/索引是自动提交的，表在数据不在）；已改为纯语句（守卫建壳 → INSERT → `DROP IF EXISTS`），整文件/逐句执行都成立。开发库 `vector_test` 已重跑完成（admin 行 = baidu / 96.mp4 / 6，旧表备份在 `nav_setting_bak_20261116`）；**022 之后不要再重跑 `012`/`014` 的 `nav_setting` 段**（会重建空表，再跑一次 022 即可清理）。
+- 音乐库脚本：`023_music.sql`（`music_track` 建表 + 3 个索引，幂等、纯语句）。**执行前**先在 RustFS 建私有桶 `music`（`S3Bucket.MUSIC`），否则上传/播流报对象存储错误。
 
 ---
 

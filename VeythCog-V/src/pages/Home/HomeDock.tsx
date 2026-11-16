@@ -23,7 +23,7 @@ interface DockAction {
 /**
  * 首页底部工具条：毛玻璃居中长条。
  * - 第一个：切换书签图标版块的显示 / 隐藏（动画在 Home 容器上）
- * - 其余：音乐、邮箱（占位）、工具集、知识库、对话、设置等常用入口
+ * - 其余：歌单、邮箱（占位）、工具集、知识库、对话、设置等常用入口
  * 视觉全部由 .vc-dock / .vc-dock__item 提供（含 body.has-bg 壁纸白玻璃变体）。
  *
  * 交互沿用 macOS Dock：指针横向移动时，图标按"离指针的距离"放大（高斯衰减），
@@ -36,7 +36,7 @@ const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = (
   onToggleGrid,
 }) => {
   const navigate = useNavigate();
-  const openMusic = useMusicStore((s) => s.open);
+  const openPicker = useMusicStore((s) => s.setPickerOpen);
 
   /** 空闲渐隐：与首页搜索框一致，鼠标未悬停 3 分钟后淡化为淡轮廓，进入即恢复 */
   const FADE_TIMEOUT_MS = 3 * 60 * 1000;
@@ -184,7 +184,7 @@ const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = (
       onClick: onToggleGrid,
       active: gridVisible,
     },
-    { key: 'music', label: '音乐管理', icon: listMusicIcon, onClick: openMusic },
+    { key: 'music', label: '歌单', icon: listMusicIcon, onClick: () => openPicker(true) },
     {
       key: 'mail',
       label: '邮箱管理',

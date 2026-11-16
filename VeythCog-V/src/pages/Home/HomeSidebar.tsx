@@ -4,17 +4,9 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuthStore } from '@/stores/authStore';
 import VeythCogLogo from '@/components/VeythCogLogo';
 import UserMenu from '@/components/UserMenu';
-import bookOpenIcon from '@iconify-icons/lucide/book-open';
-import messageSquareIcon from '@iconify-icons/lucide/message-square';
+import { NAV_ITEMS } from '@/config/navItems';
 import shieldIcon from '@iconify-icons/lucide/shield-check';
-import wrenchIcon from '@iconify-icons/lucide/wrench';
 import { Icon } from '@iconify/react';
-
-const NAV_ITEMS = [
-  { path: '/chat', icon: messageSquareIcon, label: '对话' },
-  { path: '/knowledge', icon: bookOpenIcon, label: '知识库' },
-  { path: '/tools', icon: wrenchIcon, label: '工具集' },
-] as const;
 
 const HIDE_DELAY = 1500;
 

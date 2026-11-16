@@ -15,6 +15,8 @@ export interface MockTrack {
   cover: [string, string];
   /** 音频地址 */
   url: string;
+  /** 真接口返回的播流地址（联调模式与后端数据同构时使用；mock 数据为 undefined） */
+  streamUrl?: string;
 }
 
 export const mockTracks: MockTrack[] = [
@@ -65,4 +67,20 @@ export function formatTime(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * mock 曲目 → 播放器统一结构（仅联调 / 后端不可用兜底时使用）。
+ * 放在 mock 文件里，避免播放器再直接依赖 MockTrack 的字段命名。
+ */
+export function mockAsPlayerTracks() {
+  return mockTracks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    artist: t.artist,
+    cover: t.cover,
+    url: t.streamUrl || t.url,
+    durationSec: t.duration,
+    ai: false,
+  }));
 }

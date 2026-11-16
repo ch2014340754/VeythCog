@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.vc</groupId>
+        <artifactId>veythcog-c</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vc-music</artifactId>
+    <name>vc-music</name>
+    <description>音乐库域：曲库元信息（music_track）/ S3 音频对象 / Range 播流代理 / 背景音池（Controller 在 vc-app）</description>
+
+    <dependencies>
+        <!-- 公共基础（BaseResponse / 异常体系 / S3 封装） -->
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-common</artifactId>
+        </dependency>
+        <!-- MyBatis-Plus：music_track 读写 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+        <!-- PostgreSQL 驱动（text[] / jsonb 类型处理器依赖 PGobject） -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <!-- 参数校验：@NotBlank / @NotNull -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- Web：MultipartFile / StreamingResponseBody 等（域模块内只用到类型，运行期由 vc-app 提供） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+    </dependencies>
+</project>

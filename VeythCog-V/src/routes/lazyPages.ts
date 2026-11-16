@@ -12,6 +12,7 @@
 export const PAGE_MODULES = {
   chat: () => import('@/pages/Chat'),
   knowledge: () => import('@/pages/Knowledge'),
+  music: () => import('@/pages/Music'),
   tools: () => import('@/pages/tools/ToolsLayout'),
   login: () => import('@/pages/Login'),
   settings: () => import('@/pages/Settings'),

@@ -177,6 +177,35 @@ export async function uploadFile<T = unknown>(
   }
 }
 
+/**
+ * 通用 multipart 提交（表单字段 + 文件混合，如音频上传）。
+ * 调用方自己构造 FormData；同样不手写 Content-Type，交给浏览器带 boundary。
+ */
+export async function uploadForm<T = unknown>(
+  path: string,
+  form: FormData,
+  timeout = 60000,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    try {
+      const token = getToken();
+      const resp = await fetch(buildUrl(path), {
+        method: 'POST',
+        signal: controller.signal,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      return await parseResponse<T>(resp);
+    } catch (err) {
+      toRequestError(err);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const http = {
   get: <T>(path: string, query?: RequestOptions['query']) => request<T>(path, { method: 'GET', query }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),

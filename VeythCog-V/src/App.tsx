@@ -10,6 +10,7 @@ import CommandPalette from '@/components/CommandPalette';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import WallpaperBackdrop from '@/components/WallpaperBackdrop';
 import FloatingMusicPlayer from '@/components/FloatingMusicPlayer';
+import MusicPickerModal from '@/components/MusicPickerModal';
 import PageLoadingBar from '@/components/PageLoadingBar';
 import { PAGE_MODULES, schedulePreloadPages } from '@/routes/lazyPages';
 import { useAuthStore } from '@/stores/authStore';
@@ -21,6 +22,7 @@ import { useWallpaperStore } from '@/stores/wallpaperStore';
 // 懒加载清单集中在 routes/lazyPages，首屏稳定后会被预取一遍，切页不再等 chunk。
 const ChatPage = React.lazy(PAGE_MODULES.chat);
 const KnowledgePage = React.lazy(PAGE_MODULES.knowledge);
+const MusicPage = React.lazy(PAGE_MODULES.music);
 const ToolsLayout = React.lazy(PAGE_MODULES.tools);
 const LoginPage = React.lazy(PAGE_MODULES.login);
 const SettingsPage = React.lazy(PAGE_MODULES.settings);
@@ -80,7 +82,12 @@ const WallpaperRouteSync: React.FC = () => {
 const GlobalMusic: React.FC = () => {
   const { pathname } = useLocation();
   if (pathname === '/login') return null;
-  return <FloatingMusicPlayer />;
+  return (
+    <>
+      <FloatingMusicPlayer />
+      <MusicPickerModal />
+    </>
+  );
 };
 
 const AppContent: React.FC = () => {
@@ -128,6 +135,7 @@ const AppContent: React.FC = () => {
             >
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/knowledge" element={<KnowledgePage />} />
+              <Route path="/music" element={<MusicPage />} />
               <Route path="/tools/*" element={<ToolsLayout />} />
 
               <Route path="/settings" element={<SettingsPage />}>

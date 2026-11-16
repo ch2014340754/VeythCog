@@ -67,6 +67,8 @@ services:
       DEEPSEEK_API_KEY: ""                # 可留空，绑定 DeepSeek 模型时才会用到
       # JWT 密钥（生产务必换成长随机串，勿用默认值）
       JWT_SECRET: "change-me-to-a-long-random-string-0123456789abcdef"
+      # 音乐播流 token 的 HMAC 密钥（必填；不配会回落开发默认值，播流签名可被伪造）
+      MUSIC_STREAM_SECRET: "${MUSIC_STREAM_SECRET:-change-me-music-stream-secret-0123456789}"
       # JVM 内存限制（轻量服务器建议）
       JAVA_OPTS: "-Xms256m -Xmx512m"
       # 外置配置目录（数据卷挂载到宿主机 ./backend-config，改配置免重建镜像，见第六章）

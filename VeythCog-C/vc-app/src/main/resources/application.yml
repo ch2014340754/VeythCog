@@ -5,9 +5,10 @@ spring:
     active: local
   servlet:
     multipart:
-      # 头像上限 2MB；留出 multipart 开销，避免被 Spring 默认 1MB 提前拦截
-      max-file-size: 5MB
-      max-request-size: 10MB
+      # 上传上限：头像 2MB 时代留的 5MB 已不够用，音乐音频单文件上限 20MB，
+      # 这里按 PRD 放到 25MB / 请求体 30MB；业务层再做一次 20MB 精确校验。
+      max-file-size: 25MB
+      max-request-size: 30MB
   jpa:
     hibernate:
       ddl-auto: none      # 表结构由 docs/sql/*.sql 脚本管理，不用 Hibernate 自动建
@@ -81,6 +82,16 @@ storage:
 nav:
   icon:
     sync-on-startup: true
+
+# 音乐库（P0）：曲库上限 / 背景音池 / 播流签名
+# 播流 token 的 HMAC 密钥只走环境变量（MUSIC_STREAM_SECRET），默认值仅本地开发可用。
+music:
+  stream-secret: ${MUSIC_STREAM_SECRET:dev-only-music-stream-secret-change-me}
+  stream-token-minutes: 5
+  ambient-max: 8
+  max-file-bytes: 20971520     # 20MB
+  max-duration-ms: 600000      # 10 分钟
+  page-size-max: 200
 
 # JWT 配置（本地默认值；生产由环境变量覆盖）
 jwt:

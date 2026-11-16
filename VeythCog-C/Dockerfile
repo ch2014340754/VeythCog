@@ -1,13 +1,15 @@
 # =============================================================================
 # 后端镜像 · 多阶段构建
 # -----------------------------------------------------------------------------
-# 后端唯一可运行应用为 vc-app，依赖 vc-common / vc-llm / vc-chat / vc-knowledge。
+# 后端唯一可运行应用为 vc-app，依赖 vc-common / vc-llm / vc-chat / vc-knowledge /
+# vc-user / vc-nav / vc-music / vc-admin。
 # 技术栈：Java 21 + Spring Boot 3.5 + Maven 多模块（聚合根 pom）。
 #
 # 构建上下文须为「项目根目录」（fly.toml 与本文件同目录，从根目录部署），
-# 至少包含：pom.xml + vc-common / vc-llm / vc-chat / vc-knowledge / vc-nav / vc-app。
+# 至少包含：pom.xml + vc-common / vc-llm / vc-chat / vc-knowledge / vc-user /
+# vc-nav / vc-music / vc-admin / vc-app。
 #   vc-learn（学习沙箱）无需进入生产构建上下文，本 Dockerfile 不引用它。
-#   注意：vc-nav 是 vc-app 的编译依赖，pom 与源码都必须进上下文，漏一个即构建失败。
+#   注意：vc-app 的每一个编译依赖（含 vc-nav、vc-music）pom 与源码都必须进上下文，漏一个即构建失败。
 #
 # 构建要点：
 #   根 pom.xml 的 <modules> 引用了 vc-learn；若用聚合 reactor（-pl vc-app -am），
@@ -29,7 +31,10 @@ COPY vc-common/pom.xml      vc-common/
 COPY vc-llm/pom.xml         vc-llm/
 COPY vc-chat/pom.xml        vc-chat/
 COPY vc-knowledge/pom.xml   vc-knowledge/
+COPY vc-user/pom.xml        vc-user/
 COPY vc-nav/pom.xml         vc-nav/
+COPY vc-music/pom.xml       vc-music/
+COPY vc-admin/pom.xml       vc-admin/
 COPY vc-app/pom.xml         vc-app/
 
 # 2) 复制生产模块源码（vc-learn 不需要）
@@ -37,13 +42,15 @@ COPY vc-common      vc-common
 COPY vc-llm         vc-llm
 COPY vc-chat        vc-chat
 COPY vc-knowledge   vc-knowledge
+COPY vc-user        vc-user
 COPY vc-nav         vc-nav
+COPY vc-music       vc-music
 COPY vc-admin       vc-admin
 COPY vc-app         vc-app
 
 # 3) 按依赖拓扑逐个构建并安装到本地仓库，最后打包 vc-app：
-#    vc-common → vc-llm → vc-knowledge → vc-chat → vc-nav → vc-app
-#    （逐个 -f 构建，避免聚合 reactor 对 vc-learn 的依赖）
+#    vc-common → vc-llm → vc-user → vc-knowledge → vc-chat → vc-nav → vc-music → vc-admin → vc-app
+#    （vc-nav / vc-music 都依赖 vc-user，vc-admin 依赖 vc-llm，顺序不能乱）
 #    先 install -N 根聚合 pom：子模块 pom 的 parent 是根 pom，解析依赖时
 #    必须在本地仓库找到它，否则报 "Could not find artifact com.vc:veythcog-c:pom"
 #    --mount=type=cache,target=/root/.m2：把 Maven 依赖仓库做成宿主级持久缓存，
@@ -57,9 +64,11 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -ntp -U -f pom.xml install -N -DskipTests \
  && mvn -B -ntp -U -f vc-common/pom.xml    install -DskipTests \
  && mvn -B -ntp -U -f vc-llm/pom.xml       install -DskipTests \
+ && mvn -B -ntp -U -f vc-user/pom.xml      install -DskipTests \
  && mvn -B -ntp -U -f vc-knowledge/pom.xml install -DskipTests \
  && mvn -B -ntp -U -f vc-chat/pom.xml      install -DskipTests \
  && mvn -B -ntp -U -f vc-nav/pom.xml       install -DskipTests \
+ && mvn -B -ntp -U -f vc-music/pom.xml     install -DskipTests \
  && mvn -B -ntp -U -f vc-admin/pom.xml     install -DskipTests \
  && mvn -B -ntp -U -f vc-app/pom.xml       package -DskipTests
 
@@ -84,6 +93,8 @@ ENV JAVA_OPTS=""
 #   · 数据源默认值指向「本机 PostgreSQL」（与腾讯轻量服务器部署一致：veyth_cog / postgres / 123456）；
 #     compose 里用 SPRING_DATASOURCE_URL 覆盖为 pg-vector:5432（同网络下走容器名，见 DEPLOY.md）
 #   · API Key：DASHSCOPE_API_KEY / DEEPSEEK_API_KEY 须在运行时提供（参考 .env.example）
+#   · MUSIC_STREAM_SECRET：音乐播流 token 的 HMAC 密钥，生产必须注入；未注入会回落到
+#     application.yml 里的开发默认值，任何人都能伪造播流签名（见 .env.example）
 #   · 注意：切勿在镜像内写死云数据库凭据（历史坑：曾内置 Supabase 明文账号密码），一律运行时注入
 ENV SPRING_PROFILES_ACTIVE=prod \
     SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/veyth_cog \

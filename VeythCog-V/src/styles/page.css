@@ -3576,9 +3576,48 @@ body.dark .vc-panel.vc-table-card {
 }
 
 .vc-player__range {
-  width: 70px;
+  /* 340px 卡片内要同时容纳 上一首/播放/下一首/背景音/音量/列表，音量条收到 56px 留出呼吸 */
+  width: 56px;
   accent-color: var(--color-primary);
   cursor: pointer;
+}
+
+/* 背景音开关：比普通图标钮窄一点，正好卡在音量左侧 */
+.vc-player__ambient {
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-secondary);
+}
+
+.vc-player__ambient.is-on {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+/* 标题后的小标签：背景音 / AI 生成（两者语义不同，配色区分） */
+.vc-player__badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full, 999px);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  vertical-align: 1px;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.vc-player__badge--ai {
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+.vc-player__list-empty {
+  padding: 16px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-tertiary);
+  text-align: center;
 }
 
 .vc-player__progress-row {
@@ -5973,4 +6012,201 @@ body.dark .vc-panel.vc-table-card::after {
   .ant-modal .ant-modal-content::before {
     transition: none !important;
   }
+}
+/* ===== 歌单弹窗（首页底部 Dock「歌单」入口） ===== */
+.vc-picker-modal .ant-modal-content {
+  background: var(--color-surface-elevated);
+}
+
+.vc-picker {
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text);
+}
+
+.vc-picker__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.vc-picker__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.vc-picker__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.vc-picker__sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.vc-picker__search {
+  flex: 0 0 190px;
+  width: 190px;
+}
+
+.vc-picker__list {
+  max-height: 52vh;
+  min-height: 180px;
+  overflow-y: auto;
+  padding: 6px 8px;
+}
+
+.vc-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.vc-picker__item:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.vc-picker__item.is-current {
+  background: color-mix(in srgb, var(--color-primary) 13%, transparent);
+}
+
+.vc-picker__cover {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.vc-picker__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.vc-picker__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.vc-picker__name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-picker__badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  color: var(--color-primary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.vc-picker__badge--ambient {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  color: var(--color-accent);
+}
+
+.vc-picker__badge--now {
+  border-color: color-mix(in srgb, var(--color-text-secondary) 40%, transparent);
+  color: var(--color-text-secondary);
+}
+
+.vc-picker__artist {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-picker__dur {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.vc-picker__play {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--color-primary);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.vc-picker__item:hover .vc-picker__play,
+.vc-picker__item.is-current .vc-picker__play {
+  opacity: 1;
+}
+
+.vc-picker__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-top: 1px solid var(--glass-border);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.vc-picker__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 42px 0;
+  text-align: center;
+}
+
+.vc-picker__empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.vc-picker__empty-sub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.vc-picker__tip {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }

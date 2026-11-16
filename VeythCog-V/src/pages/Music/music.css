@@ -1,0 +1,185 @@
+/**
+ * 音乐库页面样式（/music）。
+ * 只补页面专属类：通用容器（.vc-page / .vc-panel / .vc-toolbar）全部复用 page.css。
+ */
+/* 静默刷新细进度条：只有一条 1px 走的线，不遮挡列表、不闪骨架 */
+.vc-music__slim {
+  position: relative;
+  height: 2px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: transparent;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+.vc-music__slim.is-on {
+  opacity: 1;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.vc-music__slim span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30%;
+  height: 100%;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  animation: vc-music-flow 1.1s linear infinite;
+}
+
+@keyframes vc-music-flow {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(400%); }
+}
+
+/* 头部统计：背景音 5/8 */
+.vc-music__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vc-music__stat--full {
+  color: var(--color-warning, #d97706);
+}
+
+/* 曲目单元格：渐变封面 + 标题 + 标签 */
+.vc-music__track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vc-music__cover {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.vc-music__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.vc-music__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vc-music__badge {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.vc-music__badge--ai {
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+
+.vc-music__sub {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 上传 / 编辑弹窗 */
+.vc-music__drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 22px;
+  border: 1px dashed var(--color-border, rgba(127, 127, 127, 0.35));
+  border-radius: var(--radius-md, 10px);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s var(--ease-out), background 0.2s var(--ease-out);
+}
+
+.vc-music__drop:hover {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.vc-music__drop--filled {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  color: var(--color-text);
+}
+
+.vc-music__file-name {
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vc-music__hint {
+  margin: -4px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-text-tertiary);
+}
+
+.vc-music__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.vc-music__form--single {
+  grid-template-columns: 1fr;
+}
+
+.vc-music__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.vc-music__label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.vc-music__field--full {
+  grid-column: 1 / -1;
+}

@@ -133,6 +133,12 @@
                 <artifactId>vc-nav</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- 音乐库域：曲库元信息 + S3 音频 + Range 播流代理 -->
+            <dependency>
+                <groupId>com.vc</groupId>
+                <artifactId>vc-music</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.vc</groupId>
                 <artifactId>vc-admin</artifactId>
@@ -148,6 +154,7 @@
         <module>vc-knowledge</module>
         <module>vc-user</module>
         <module>vc-nav</module>
+        <module>vc-music</module>
         <module>vc-admin</module>
         <module>vc-app</module>
         <module>vc-learn</module>

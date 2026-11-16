@@ -55,7 +55,7 @@ public class SecurityConfig {
                 "https://www.veythcog.top",
                 "http://localhost:*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "Range"));
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
@@ -76,6 +76,9 @@ public class SecurityConfig {
                         // 壁纸缩略图 / 动态壁纸视频由 <img>、<video> 直连（无法携带 Authorization），
                         // 且 key 必须命中桶内对象才返回，这里放行以便浏览器请求；其余 /nav 接口仍需 JWT。
                         .requestMatchers("/nav/wallpaper/thumb", "/nav/wallpaper/video").permitAll()
+                        // 音频播流由 <audio> 直连（同样带不上 Authorization），鉴权改由 query 短时签名承担
+                        // （MusicStreamTokenService：5 分钟、绑定用户 + 曲目）。其余 /music 接口仍需 JWT。
+                        .requestMatchers("/music/stream/**").permitAll()
                         // 接口文档（knife4j / springdoc）
                         .requestMatchers("/doc.html", "/v3/api-docs/**", "/swagger-ui.html",
                                 "/swagger-ui/**", "/webjars/**", "/favicon.ico")

@@ -16,7 +16,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication(scanBasePackages = "com.vc")
 @EnableJpaRepositories(basePackages = "com.vc")
 @EntityScan(basePackages = "com.vc")
-@MapperScan({"com.vc.knowledge.mapper", "com.vc.chat.mapper", "com.vc.nav.mapper", "com.vc.user.setting"})
+@MapperScan({"com.vc.knowledge.mapper", "com.vc.chat.mapper", "com.vc.nav.mapper", "com.vc.user.setting",
+        "com.vc.music.mapper"})
 @EnableScheduling
 public class VcAppApplication {
 

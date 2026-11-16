@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vc.music.mapper.MusicTrackMapper">
+
+    <resultMap id="MusicTrackMap" type="com.vc.music.entity.MusicTrack">
+        <id property="id" column="id"/>
+        <result property="ownerId" column="owner_id"/>
+        <result property="title" column="title"/>
+        <result property="artist" column="artist"/>
+        <result property="durationMs" column="duration_ms"/>
+        <result property="objectKey" column="object_key"/>
+        <result property="coverKey" column="cover_key"/>
+        <result property="coverColor" column="cover_color" typeHandler="com.vc.music.handler.JsonbTypeHandler"/>
+        <result property="source" column="source"/>
+        <result property="license" column="license"/>
+        <result property="attribution" column="attribution"/>
+        <result property="licenseUrl" column="license_url"/>
+        <result property="aiDisclosure" column="ai_disclosure"/>
+        <result property="aiModel" column="ai_model"/>
+        <result property="tags" column="tags" typeHandler="com.vc.music.handler.StringArrayTypeHandler"/>
+        <result property="ambientEnabled" column="ambient_enabled"/>
+        <result property="ambientOrder" column="ambient_order"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deleted" column="deleted"/>
+    </resultMap>
+
+    <select id="selectTrackPage" resultMap="MusicTrackMap">
+        SELECT id, owner_id, title, artist, duration_ms, object_key, cover_key, cover_color,
+               source, license, attribution, license_url, ai_disclosure, ai_model, tags,
+               ambient_enabled, ambient_order, status, created_at, updated_at, deleted
+        FROM music_track
+        WHERE deleted = false
+          AND owner_id = #{ownerId}
+        <if test="keyword != null and keyword != ''">
+            <!-- PG 'simple' 分词不切中文（整串当一个词），中文标题会搜不出来，
+                 因此标题/艺人走 ILIKE 子串匹配，再用 tsvector 兜住英文长词 -->
+            AND (
+                title ILIKE '%' || #{keyword} || '%'
+                OR artist ILIKE '%' || #{keyword} || '%'
+                OR to_tsvector('simple', title || ' ' || artist)
+                   @@ plainto_tsquery('simple', #{keyword})
+            )
+        </if>
+        <if test="source != null and source != ''">
+            AND source = #{source}
+        </if>
+        <if test="ambientOnly">
+            AND ambient_enabled = true
+            AND status = 'published'
+        </if>
+        <if test="tag != null and tag != ''">
+            AND #{tag} = ANY(tags)
+        </if>
+        ORDER BY
+        <choose>
+            <when test="sortField == 'title'">title</when>
+            <when test="sortField == 'durationMs'">duration_ms</when>
+            <when test="sortField == 'createdAt'">created_at</when>
+            <otherwise>updated_at</otherwise>
+        </choose>
+        <choose>
+            <when test="sortOrder == 'ascend'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+        , id DESC
+    </select>
+
+</mapper>

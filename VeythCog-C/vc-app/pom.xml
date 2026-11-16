@@ -35,6 +35,11 @@
             <groupId>com.vc</groupId>
             <artifactId>vc-nav</artifactId>
         </dependency>
+        <!-- 音乐库域：曲库 CRUD + 音频 Range 代理 -->
+        <dependency>
+            <groupId>com.vc</groupId>
+            <artifactId>vc-music</artifactId>
+        </dependency>
         <!-- 用户域：用户偏好统一接口 -->
         <dependency>
             <groupId>com.vc</groupId>

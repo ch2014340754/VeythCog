@@ -336,6 +336,24 @@ body.dark .ant-modal-content {
   background: var(--color-surface);
 }
 
+/*
+  Modal.confirm 是静态方法，渲染在 ConfigProvider 之外，拿不到暗色主题 token：
+  背景被上面的 `body.dark .ant-modal-content` 改成了深色，正文却仍是 antd 默认的近黑字，
+  于是深色主题下「删除曲目」这类确认弹窗的文字几乎看不清。
+  这里按主题变量补齐字号颜色（选择器带两段类名，压过 antd CSS-in-JS 的单类规则）。
+*/
+.ant-modal-confirm .ant-modal-content {
+  color: var(--color-text);
+}
+
+.ant-modal-confirm .ant-modal-confirm-title {
+  color: var(--color-text);
+}
+
+.ant-modal-confirm .ant-modal-confirm-content {
+  color: var(--color-text-secondary);
+}
+
 body.dark .ant-dropdown {
   background: var(--color-surface);
 }

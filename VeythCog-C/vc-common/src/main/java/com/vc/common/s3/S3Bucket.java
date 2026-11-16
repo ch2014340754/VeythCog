@@ -16,7 +16,13 @@ public enum S3Bucket {
     PUBLIC_ICONS("public-icons", true, "网页图标，公开只读"),
 
     /** 壁纸资源：私有桶，不允许匿名访问，只能通过后端预签名 URL 读写 */
-    WALLPAPERS("wallpapers", false, "壁纸资源，私有读写");
+    WALLPAPERS("wallpapers", false, "壁纸资源，私有读写"),
+
+    /**
+     * 音乐音频：私有桶，音频对象只经后端 Range 代理下发（206），
+     * 不暴露任何预签名/公开直链，避免带宽被直连打满与版权外泄。
+     */
+    MUSIC("music", false, "音乐音频，私有读写");
 
     /** 实际桶名 */
     private final String bucketName;

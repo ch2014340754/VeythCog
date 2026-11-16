@@ -5,20 +5,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useAuthStore } from '@/stores/authStore';
 import { resolvePageTitle } from '@/utils/pageTitle';
-import bookOpenIcon from '@iconify-icons/lucide/book-open';
-import messageSquareIcon from '@iconify-icons/lucide/message-square';
+import { NAV_ITEMS } from '@/config/navItems';
 import searchIcon from '@iconify-icons/lucide/search';
 import shieldIcon from '@iconify-icons/lucide/shield-check';
-import wrenchIcon from '@iconify-icons/lucide/wrench';
 import { Icon } from '@iconify/react';
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-
-const NAV_ITEMS = [
-  { path: '/chat', icon: messageSquareIcon, label: '对话' },
-  { path: '/knowledge', icon: bookOpenIcon, label: '知识库' },
-  { path: '/tools', icon: wrenchIcon, label: '工具集' },
-] as const;
 
 /**
  * 全站主框架：左侧 72px 浮动导航 rail + 右侧玻璃内容卡。
