@@ -662,6 +662,40 @@ body.dark .composer-model-select.ant-select-focused .ant-select-selector {
   box-shadow: none !important;
 }
 
+/* ========================================
+   全局文本输入框：无边框、底色与所在区块一致（透明透出），
+   聚焦 / 悬停都不换底色、不加描边和光圈，只保留光标闪烁。
+   覆盖上面的内高光、聚焦光圈，以及暗色 elevated 底。
+   （Select / Picker 是选择控件，不在此列。）
+   ======================================== */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+textarea.ant-input,
+.ant-input:hover,
+.ant-input-affix-wrapper:hover,
+.ant-input-number:hover,
+textarea.ant-input:hover,
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused,
+.ant-input-affix-wrapper:focus-within,
+.ant-input-number-focused,
+textarea.ant-input:focus,
+body.dark .ant-input,
+body.dark .ant-input-affix-wrapper,
+body.dark .ant-input-number,
+body.dark textarea.ant-input {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.ant-input-affix-wrapper .ant-input,
+body.dark .ant-input-affix-wrapper .ant-input {
+  background-color: transparent !important;
+}
+
 /* 登录页 登录/注册 内切 tab 面板切换动画：淡入 + 上移 */
 @keyframes vc-fade-up {
   from {

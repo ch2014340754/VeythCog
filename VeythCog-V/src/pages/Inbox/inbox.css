@@ -285,6 +285,34 @@
   word-break: break-word;
 }
 
+.vc-inbox__md-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.vc-inbox__md-editor {
+  flex: 1;
+  width: 100%;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  min-height: calc(100vh - 280px);
+  resize: none;
+}
+
+/* 编辑态：正文输入框撑满抽屉剩余可视高度 */
+.vc-inbox__preview.is-editing {
+  height: 100%;
+}
+
+.vc-inbox__preview.is-editing .vc-inbox__md {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .vc-inbox__md img {
   max-width: 100%;
   border-radius: var(--radius-md);

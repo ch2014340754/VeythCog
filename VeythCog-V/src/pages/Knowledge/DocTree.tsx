@@ -11,12 +11,14 @@ import {
 import type { KnowledgeDocNode, KnowledgeTree } from '@/types';
 import { formatRelativeTime } from '@/utils/formatTime';
 import fileTextIcon from '@iconify-icons/lucide/file-text';
+import foldVerticalIcon from '@iconify-icons/lucide/fold-vertical';
 import folderIcon from '@iconify-icons/lucide/folder';
 import folderOpenIcon from '@iconify-icons/lucide/folder-open';
 import folderPlusIcon from '@iconify-icons/lucide/folder-plus';
 import pencilIcon from '@iconify-icons/lucide/pencil';
 import plusIcon from '@iconify-icons/lucide/plus';
 import trashIcon from '@iconify-icons/lucide/trash-2';
+import unfoldVerticalIcon from '@iconify-icons/lucide/unfold-vertical';
 import zapIcon from '@iconify-icons/lucide/zap';
 import { Icon } from '@iconify/react';
 import { Input, message, Modal, Select, Spin, Tree } from 'antd';
@@ -345,6 +347,22 @@ const DocTree = forwardRef<DocTreeHandle, DocTreeProps>(function DocTree(props, 
   }, [root]);
 
   const expandedSet = useMemo(() => new Set(expandedKeys.map(String)), [expandedKeys]);
+
+  /** 所有文件夹 key（不含虚拟根「全部文档」），供「展开/收起全部」用 */
+  const folderKeys = useMemo(
+    () => (root ? collectFolderKeys(root).filter((k) => k !== ROOT_KEY) : []),
+    [root]
+  );
+
+  /** 是否已经全部展开（搜索态由树强制全展开，按钮只读） */
+  const allExpanded =
+    folderKeys.length > 0 && folderKeys.every((k) => expandedSet.has(k));
+
+  const toggleAllFolders = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (keyword.trim() || folderKeys.length === 0) return;
+    setExpandedKeys(allExpanded ? [ROOT_KEY] : [ROOT_KEY, ...folderKeys]);
+  };
 
   /** 移动到… 的下拉选项：带完整路径，便于区分同名目录 */
   const folderOptions = useMemo(() => {
@@ -702,6 +720,17 @@ const DocTree = forwardRef<DocTreeHandle, DocTreeProps>(function DocTree(props, 
         <span className="vc-tree-row">
           <Icon icon={folderIcon} width={14} className="vc-tree-row__folder vc-tree-row__folder--root" />
           <span className="vc-tree-row__title">{highlighted}</span>
+          {folderKeys.length > 0 && (
+            <button
+              type="button"
+              className="vc-tree-row__toggle"
+              title={allExpanded ? '收起全部' : '展开全部'}
+              disabled={keyword.trim() ? true : false}
+              onClick={toggleAllFolders}
+            >
+              <Icon icon={allExpanded ? foldVerticalIcon : unfoldVerticalIcon} width={13} />
+            </button>
+          )}
           <span className="vc-tree-row__badge">{node.docCount}</span>
         </span>
       );

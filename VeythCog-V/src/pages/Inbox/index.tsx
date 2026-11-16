@@ -65,6 +65,8 @@ const InboxPage: React.FC = () => {
   const [previewLoading, setPreviewLoading] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
   const [tagDraft, setTagDraft] = React.useState('');
+  const [contentDraft, setContentDraft] = React.useState('');
+  const [contentMode, setContentMode] = React.useState<'preview' | 'edit'>('preview');
 
   const load = React.useCallback(
     async (opts?: { current?: number }) => {
@@ -133,6 +135,8 @@ const InboxPage: React.FC = () => {
       setPreview(detail);
       setTitleDraft(detail.title);
       setTagDraft((detail.tags ?? []).join(', '));
+      setContentDraft(detail.contentMd ?? '');
+      setContentMode('preview');
     } catch (e) {
       message.error((e as Error).message || '打开失败');
       setPreviewOpen(false);
@@ -144,15 +148,18 @@ const InboxPage: React.FC = () => {
   const savePreviewEdit = async () => {
     if (!preview) return;
     try {
-      await updateClipItem(preview.id, {
+      const view = await updateClipItem(preview.id, {
         title: titleDraft.trim(),
         tags: tagDraft
           .split(/[,，\s]+/)
           .map((t) => t.trim())
           .filter(Boolean),
+        contentMd: contentDraft,
       });
       message.success('已保存');
-      setPreview((prev) => (prev ? { ...prev, title: titleDraft.trim() } : prev));
+      setPreview((prev) =>
+        prev ? { ...prev, ...view, contentMd: contentDraft, rawHtml: prev.rawHtml ?? null } : prev,
+      );
       void load({ current: page });
     } catch (e) {
       message.error((e as Error).message || '保存失败');
@@ -371,7 +378,7 @@ const InboxPage: React.FC = () => {
         title="剪藏预览"
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        width={Math.min(760, window.innerWidth - 40)}
+        width={Math.min(1140, window.innerWidth - 40)}
         className="vc-inbox__drawer"
         extra={
           preview ? (
@@ -394,7 +401,7 @@ const InboxPage: React.FC = () => {
         {previewLoading ? (
           <div className="vc-inbox__drawer-loading">正在读取…</div>
         ) : preview ? (
-          <div className="vc-inbox__preview">
+          <div className={'vc-inbox__preview' + (contentMode === 'edit' ? ' is-editing' : '')}>
             <div className="vc-inbox__preview-fields">
               <label>
                 <span>标题</span>
@@ -417,7 +424,30 @@ const InboxPage: React.FC = () => {
             </div>
             {preview.error ? <div className="vc-inbox__preview-error">抓取失败：{preview.error}</div> : null}
             <div className="vc-inbox__md">
-              <ReactMarkdown>{preview.contentMd || '（无正文）'}</ReactMarkdown>
+              {!preview.error && (
+                <div className="vc-inbox__md-toolbar">
+                  <Segmented
+                    size="small"
+                    value={contentMode}
+                    options={[
+                      { label: '预览', value: 'preview' },
+                      { label: '编辑正文', value: 'edit' },
+                    ]}
+                    onChange={(value) => setContentMode(value as 'preview' | 'edit')}
+                  />
+                </div>
+              )}
+              {contentMode === 'edit' && !preview.error ? (
+                <Input.TextArea
+                  className="vc-inbox__md-editor"
+                  value={contentDraft}
+                  onChange={(e) => setContentDraft(e.target.value)}
+                  spellCheck={false}
+                  placeholder="正文为 Markdown，可直接修改、删减抓取到的内容，保存后会重算字数与摘要"
+                />
+              ) : (
+                <ReactMarkdown>{contentDraft || '（无正文）'}</ReactMarkdown>
+              )}
             </div>
           </div>
         ) : null}

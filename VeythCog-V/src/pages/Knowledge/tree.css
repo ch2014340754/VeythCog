@@ -34,7 +34,17 @@
   justify-content: center;
   width: 18px;
   min-width: 18px;
+  height: 18px;
+  align-self: center;
   color: var(--color-text-tertiary);
+}
+
+/* antd 的 hover 底是 switcher::before，宽度沿用原始 titleHeight(30px) 且 left:0，
+   本体被压成 18px 后阴影会向右多出一截、三角不在块中心；这里让底铺满本体 */
+.vc-knowledge-tree .ant-tree .ant-tree-switcher::before {
+  inset: 0;
+  width: 18px;
+  height: 18px;
 }
 
 .vc-knowledge-tree .ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
@@ -129,6 +139,35 @@
   line-height: 15px;
   color: var(--color-text-tertiary);
   text-align: center;
+}
+
+/* 「全部文档」行的展开 / 收起全部小按钮 */
+.vc-tree-row__toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.vc-tree-row__toggle:hover:not(:disabled) {
+  background: var(--color-primary-10);
+  color: var(--color-primary);
+}
+
+.vc-tree-row__toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .vc-tree-row__zap {
