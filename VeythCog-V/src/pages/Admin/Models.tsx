@@ -430,6 +430,7 @@ const ModelsPage: React.FC = () => {
                 columns={columns}
                 dataSource={visible}
                 pagination={false}
+                scroll={{ y: 'calc(100vh - 300px)' }}
                 onChange={(_, filters) => {
                   const nextTypeFilters = Array.isArray(filters.modalities)
                     ? filters.modalities.map(String)

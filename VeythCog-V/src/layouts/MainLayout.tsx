@@ -98,7 +98,7 @@ const MainLayout: React.FC = () => {
         {isAdmin && (
           <button
             type="button"
-            className={`vc-rail__btn${isActive('/admin') ? ' is-active' : ''}`}
+            className={`vc-rail__btn vc-rail__admin${isActive('/admin') ? ' is-active' : ''}`}
             onClick={() => navigate('/admin')}
             title="系统管理"
             aria-current={isActive('/admin') ? 'page' : undefined}

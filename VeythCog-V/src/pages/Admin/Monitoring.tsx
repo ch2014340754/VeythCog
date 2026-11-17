@@ -523,6 +523,7 @@ const MonitoringPage: React.FC = () => {
               columns={endpointCols}
               dataSource={epRows.visible}
               pagination={false}
+              scroll={{ y: 260 }}
               locale={{ emptyText: '暂无接口调用' }}
             />
             <ListSentinel
@@ -551,6 +552,7 @@ const MonitoringPage: React.FC = () => {
               columns={llmCols}
               dataSource={llm?.rows ?? []}
               pagination={false}
+              scroll={{ y: 260 }}
               locale={{ emptyText: '暂无 LLM 调用记录（发一次对话就会出现在这里）' }}
             />
           </section>
@@ -569,6 +571,7 @@ const MonitoringPage: React.FC = () => {
               columns={sessionCols}
               dataSource={sessRows.visible}
               pagination={false}
+              scroll={{ y: 260 }}
               locale={{ emptyText: '暂无会话' }}
             />
             <ListSentinel
@@ -593,6 +596,7 @@ const MonitoringPage: React.FC = () => {
               columns={errorCols}
               dataSource={errRows.visible}
               pagination={false}
+              scroll={{ y: 260 }}
               locale={{ emptyText: '没有错误，保持住' }}
             />
             <ListSentinel

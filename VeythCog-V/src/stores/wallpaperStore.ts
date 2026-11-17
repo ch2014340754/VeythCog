@@ -91,14 +91,21 @@ export const useWallpaperStore = create<WallpaperState>((set, get) => ({
   loadActive: async () => {
     try {
       const item = await getCurrentWallpaper();
-      set({ active: item ? { ...item, kind: resolveWallpaperKind(item) } : null });
+      const next = item ? { ...item, kind: resolveWallpaperKind(item) } : null;
+      const prev = get().active;
+      // 同一张壁纸短路：保留旧对象/旧 URL，避免每次路由变化重解码、重挂图片视频层造成闪烁
+      if (next && prev && prev.key === next.key) return;
+      set({ active: next });
     } catch (e) {
       console.error('[wallpaperStore] loadActive failed', e);
     }
   },
 
   applyActive: (item) => {
-    set({ active: item ? { ...item, kind: resolveWallpaperKind(item) } : null });
+    const next = item ? { ...item, kind: resolveWallpaperKind(item) } : null;
+    const prev = get().active;
+    if (next && prev && prev.key === next.key) return;
+    set({ active: next });
   },
 
   loadList: async (force = false) => {

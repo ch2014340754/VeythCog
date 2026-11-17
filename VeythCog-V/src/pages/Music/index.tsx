@@ -515,13 +515,14 @@ const MusicPage: React.FC = () => {
           <span />
         </div>
 
-        <div className="vc-panel vc-panel--flush">
+        <div className="vc-panel vc-panel--flush vc-music__table">
           <Table<MusicTrack>
             rowKey="id"
             size="middle"
             loading={loading}
             columns={columns}
             dataSource={rows}
+            scroll={{ y: 'calc(100vh - 320px)' }}
             locale={{
               emptyText: (
                 <EmptyState

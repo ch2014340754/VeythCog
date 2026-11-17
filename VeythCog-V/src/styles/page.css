@@ -2848,8 +2848,16 @@ body.dark .vc-panel.vc-table-card {
   padding: 4px 6px 2px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-elevated);
+  background: color-mix(in srgb, var(--color-surface-elevated) 55%, transparent);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
   transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+body.dark .vc-composer {
+  background: color-mix(in srgb, var(--color-surface-elevated) 55%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
 }
 
 .vc-composer:focus-within {
@@ -2883,6 +2891,18 @@ body.dark .vc-panel.vc-table-card {
   min-width: 34px !important;
   height: 34px !important;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none;
+}
+
+.vc-composer__send .iconify {
+  transform: scale(1.2);
+  color: var(--color-primary);
 }
 
 .vc-composer__tools {
@@ -3449,15 +3469,16 @@ body.dark .vc-panel.vc-table-card {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 /* 弹窗内复用设置页：收敛页面级大标题，保留说明文字 */
 .vc-modal-page {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 100%;
 }
 
 .vc-modal-page .vc-page__body {
@@ -4126,6 +4147,7 @@ body.dark .vc-panel.vc-table-card {
 }
 .vc-shell__canvas {
   position: relative;
+  isolation: isolate;
   width: 100%;
   height: 100%;
   border-radius: var(--radius-xl);
@@ -4175,6 +4197,7 @@ body.has-bg .vc-shell__canvas::before {
 
 .vc-rail {
   position: fixed;
+  isolation: isolate;
   top: 10px;
   left: 10px;
   bottom: 10px;
@@ -4292,6 +4315,26 @@ body.has-bg .vc-rail__btn:hover,
 body.has-bg .vc-rail__btn.is-active {
   color: #fff;
   background: rgba(255, 255, 255, 0.16);
+}
+
+/* 系统管理入口：按钮本体无底框/底色，hover 只让内部图标上浮放大变色，激活态保留左侧指示条 */
+.vc-rail__admin,
+.vc-rail__admin:hover,
+.vc-rail__admin.is-active,
+body.has-bg .vc-rail__admin,
+body.has-bg .vc-rail__admin:hover,
+body.has-bg .vc-rail__admin.is-active {
+  background: transparent;
+}
+.vc-rail__admin .iconify {
+  transition: transform var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+.vc-rail__admin:hover .iconify {
+  transform: translateY(-2px) scale(1.12);
+  color: var(--color-primary);
+}
+.vc-rail__admin.is-active .iconify {
+  color: var(--color-primary);
 }
 
 /* ---------- 首页（Home） ---------- */
@@ -5683,6 +5726,7 @@ body.has-bg .vc-dock__item:hover::after {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  padding:0 var(--space-smx);
 }
 
 /* 容器内滚动时表头吸顶；玻璃模式下 surface 是半透明色，
@@ -5696,6 +5740,24 @@ body.has-bg .vc-dock__item:hover::after {
 }
 
 body.dark .vc-table-fill .admin-table .ant-table-thead > tr > th {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg)) !important;
+}
+
+/* antd scroll.y 拆分固定表头：表头独立悬浮在表体之上，必须给不透明底色，
+   否则滚动经过的行会从表头透出（半透明底色只适用于未拆分的整表玻璃） */
+.admin-table .ant-table-header .ant-table-thead > tr > th {
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-bg)) !important;
+}
+
+body.dark .admin-table .ant-table-header .ant-table-thead > tr > th {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg)) !important;
+}
+
+.vc-music__table .ant-table-header .ant-table-thead > tr > th {
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-bg)) !important;
+}
+
+body.dark .vc-music__table .ant-table-header .ant-table-thead > tr > th {
   background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg)) !important;
 }
 

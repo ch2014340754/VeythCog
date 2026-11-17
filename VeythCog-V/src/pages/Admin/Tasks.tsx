@@ -118,6 +118,7 @@ const TasksPage: React.FC = () => {
               loading={loading}
               pagination={false}
               size="middle"
+              scroll={{ y: 'calc(100vh - 300px)' }}
             />
             <ListSentinel total={total} shown={visible.length} hasMore={hasMore} sentinelRef={sentinelRef} />
           </div>

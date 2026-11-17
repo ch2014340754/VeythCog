@@ -52,6 +52,7 @@
   /* 间距 */
   --space-xs: 4px;
   --space-sm: 8px;
+  --space-smx: 12px;
   --space-md: 16px;
   --space-lg: 24px;
   --space-xl: 32px;
@@ -132,6 +133,14 @@ body.dark {
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+
+/* 输入控件聚焦不保留浏览器默认矩形 outline（聚焦光圈由 antd box-shadow 提供） */
+input, textarea, select {
+  outline: none;
+}
+::-moz-focus-inner {
+  border: 0;
+}
 
 body {
   font-family: var(--font-body);
@@ -414,7 +423,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 .chat-panel-fade-in {
-  animation: chatPanelFadeIn 2s var(--ease-out);
+  animation: chatPanelFadeIn 220ms var(--ease-out);
 }
 
 /* ========================================
@@ -589,7 +598,7 @@ body.dark textarea.ant-input {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 
-/* 聚焦：3px 主色 14% 光圈（明暗一致，暗色只把内高光压低） */
+/* 聚焦：不外加主色 3px 矩形光圈，仅保留顶部一条内高光 */
 .ant-input:focus,
 .ant-input-focused,
 .ant-input-affix-wrapper-focused,
@@ -598,7 +607,6 @@ body.dark textarea.ant-input {
 .ant-picker-focused,
 .ant-select-focused .ant-select-selector {
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
 }
 
@@ -610,7 +618,6 @@ body.dark .ant-input-number-focused,
 body.dark .ant-picker-focused,
 body.dark .ant-select-focused .ant-select-selector {
   box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 
@@ -685,7 +692,13 @@ textarea.ant-input:focus,
 body.dark .ant-input,
 body.dark .ant-input-affix-wrapper,
 body.dark .ant-input-number,
-body.dark textarea.ant-input {
+body.dark textarea.ant-input,
+body.dark .ant-input:focus,
+body.dark .ant-input-focused,
+body.dark .ant-input-affix-wrapper-focused,
+body.dark .ant-input-affix-wrapper:focus-within,
+body.dark .ant-input-number-focused,
+body.dark textarea.ant-input:focus {
   background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;

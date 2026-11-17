@@ -64,6 +64,7 @@ const RolesPage: React.FC = () => {
               dataSource={visible}
               loading={loading}
               pagination={false}
+              scroll={{ y: 'calc(100vh - 300px)' }}
             />
             <ListSentinel total={total} shown={visible.length} hasMore={hasMore} sentinelRef={sentinelRef} />
           </div>
