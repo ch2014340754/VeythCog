@@ -199,6 +199,8 @@ const KnowledgePage: React.FC = () => {
       const action = await new Promise<'save' | 'discard' | 'cancel'>((resolve) => {
         leaveResolveRef.current = resolve;
         Modal.confirm({
+          className: 'vc-leave-modal',
+          centered: true,
           title: '有未保存的改动',
           content: '当前文档的修改还没有保存，离开后将丢失。',
           okText: '保存并离开',

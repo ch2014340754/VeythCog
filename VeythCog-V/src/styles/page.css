@@ -6428,37 +6428,51 @@ body.dark .vc-panel.vc-table-card::after {
   color: var(--color-text-secondary);
 }
 
-/* ---------- 离开确认弹窗：主次按钮跟随主题、拉开色阶 ---------- */
-.vc-leave-modal .ant-modal-footer {
+/* ---------- 离开确认弹窗：主次按钮跟随主题、拉开色阶 ----------
+   受控 Modal 按钮在 .ant-modal-footer；静态 Modal.confirm 按钮在 .ant-modal-confirm-btns */
+.vc-leave-modal .ant-modal-footer,
+.vc-leave-modal .ant-modal-confirm-btns {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
 
 /* 主按钮「保存并离开」：主题主色实心 */
-.vc-leave-modal .ant-modal-footer .ant-btn-primary {
+.vc-leave-modal .ant-modal-footer .ant-btn-primary,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-primary {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: var(--color-text-inverse, #fff);
+  box-shadow: none;
+}
+.vc-leave-modal .ant-modal-footer .ant-btn-primary:focus-visible,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-primary:focus-visible {
+  outline: none;
 }
 .vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):hover,
-.vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):focus-visible {
+.vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):focus-visible,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-primary:not(:disabled):hover,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-primary:not(:disabled):focus-visible {
   background: color-mix(in srgb, var(--color-primary) 88%, #000);
   border-color: color-mix(in srgb, var(--color-primary) 88%, #000);
 }
-.vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):active {
+.vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):active,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-primary:not(:disabled):active {
   background: color-mix(in srgb, var(--color-primary) 80%, #000);
   border-color: color-mix(in srgb, var(--color-primary) 80%, #000);
 }
 
 /* 次按钮「不保存离开」：危险弱化描边，与主按钮近似同主题但色相/明度区分 */
-.vc-leave-modal .ant-modal-footer .ant-btn-default {
+.vc-leave-modal .ant-modal-footer .ant-btn-default,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-default {
   background: color-mix(in srgb, var(--color-error) 8%, transparent);
   border-color: color-mix(in srgb, var(--color-error) 32%, transparent);
   color: var(--color-error);
 }
 .vc-leave-modal .ant-modal-footer .ant-btn-default:not(:disabled):hover,
-.vc-leave-modal .ant-modal-footer .ant-btn-default:not(:disabled):focus-visible {
+.vc-leave-modal .ant-modal-footer .ant-btn-default:not(:disabled):focus-visible,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-default:not(:disabled):hover,
+.vc-leave-modal .ant-modal-confirm-btns .ant-btn-default:not(:disabled):focus-visible {
   background: color-mix(in srgb, var(--color-error) 14%, transparent);
   border-color: color-mix(in srgb, var(--color-error) 48%, transparent);
   color: var(--color-error);
