@@ -1857,6 +1857,19 @@ body.dark .vc-dialog-scrim {
 
 .vc-doc-head__title:hover { color: var(--color-primary); }
 
+.vc-doc-head__autosaving {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary, var(--color-text));
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.vc-doc-head__autosaving.is-dirty {
+  color: var(--color-warning, #d48806);
+  opacity: 1;
+}
+
 .vc-doc-head__actions {
   display: flex;
   align-items: center;
@@ -3477,8 +3490,8 @@ body.dark .vc-composer {
 
 /* 弹窗内复用设置页：收敛页面级大标题，保留说明文字 */
 .vc-modal-page {
-  flex: 0 0 auto;
-  min-height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .vc-modal-page .vc-page__body {
@@ -6413,4 +6426,40 @@ body.dark .vc-panel.vc-table-card::after {
   text-align: center;
   font-size: 13px;
   color: var(--color-text-secondary);
+}
+
+/* ---------- 离开确认弹窗：主次按钮跟随主题、拉开色阶 ---------- */
+.vc-leave-modal .ant-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* 主按钮「保存并离开」：主题主色实心 */
+.vc-leave-modal .ant-modal-footer .ant-btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse, #fff);
+}
+.vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):hover,
+.vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 88%, #000);
+  border-color: color-mix(in srgb, var(--color-primary) 88%, #000);
+}
+.vc-leave-modal .ant-modal-footer .ant-btn-primary:not(:disabled):active {
+  background: color-mix(in srgb, var(--color-primary) 80%, #000);
+  border-color: color-mix(in srgb, var(--color-primary) 80%, #000);
+}
+
+/* 次按钮「不保存离开」：危险弱化描边，与主按钮近似同主题但色相/明度区分 */
+.vc-leave-modal .ant-modal-footer .ant-btn-default {
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 32%, transparent);
+  color: var(--color-error);
+}
+.vc-leave-modal .ant-modal-footer .ant-btn-default:not(:disabled):hover,
+.vc-leave-modal .ant-modal-footer .ant-btn-default:not(:disabled):focus-visible {
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 48%, transparent);
+  color: var(--color-error);
 }

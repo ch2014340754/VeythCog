@@ -9,9 +9,33 @@ import React, {
 import type { PartialBlock } from '@blocknote/core';
 import { zh } from '@blocknote/core/locales';
 import { useCreateBlockNote } from '@blocknote/react';
+import {
+  BlockColorsItem,
+  DragHandleMenu,
+  RemoveBlockItem,
+  SideMenu,
+  SideMenuController,
+  TableRowHeaderItem,
+  TableColumnHeaderItem,
+  useBlockNoteEditor,
+  useComponentsContext,
+  useDictionary,
+} from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/mantine';
 import { Icon } from '@iconify/react';
 import listTreeIcon from '@iconify-icons/lucide/list-tree';
+import pilcrowIcon from '@iconify-icons/lucide/pilcrow';
+import heading1Icon from '@iconify-icons/lucide/heading-1';
+import heading2Icon from '@iconify-icons/lucide/heading-2';
+import heading3Icon from '@iconify-icons/lucide/heading-3';
+import codeIcon from '@iconify-icons/lucide/code';
+import quoteIcon from '@iconify-icons/lucide/quote';
+import bulletListIcon from '@iconify-icons/lucide/list';
+import orderedListIcon from '@iconify-icons/lucide/list-ordered';
+import checkListIcon from '@iconify-icons/lucide/list-checks';
+import moveUpIcon from '@iconify-icons/lucide/move-up';
+import moveDownIcon from '@iconify-icons/lucide/move-down';
+import copyIcon from '@iconify-icons/lucide/copy';
 import { Tooltip } from 'antd';
 import { useTheme } from '@/contexts/ThemeContext';
 import { CODE_BLOCK_LANGUAGES } from './codeBlockLanguages';
@@ -27,6 +51,221 @@ export interface DocEditorHandle {
   focusTitle: () => void;
 }
 
+// ---- 自定义拖拽手柄菜单：第一项「转换为」直接把当前块切成指定类型 ----
+// 对照 Notion / BlockNote 官方侧边菜单，除类型切换外保留颜色、删除等原有操作，
+// 并补上移 / 下移 / 复制，避免用户只能靠斜杠命令改类型。
+
+/** 可在手柄菜单里直接切换的块类型（语言/复选状态等原有 props 由 updateBlock 保留） */
+type ConvertSpec = {
+  key: string;
+  label: string;
+  icon: { body: string; width?: number; height?: number };
+  type: string;
+  props?: Record<string, unknown>;
+  /** 判断当前块是否已是该类型（标题需额外比 level） */
+  isCurrent: (block: any) => boolean;
+};
+
+const CONVERT_SPECS: ConvertSpec[] = [
+  {
+    key: 'paragraph',
+    label: '段落',
+    icon: pilcrowIcon,
+    type: 'paragraph',
+    isCurrent: (b) => b.type === 'paragraph',
+  },
+  {
+    key: 'heading-1',
+    label: '一级标题',
+    icon: heading1Icon,
+    type: 'heading',
+    props: { level: 1 },
+    isCurrent: (b) => b.type === 'heading' && b.props.level === 1,
+  },
+  {
+    key: 'heading-2',
+    label: '二级标题',
+    icon: heading2Icon,
+    type: 'heading',
+    props: { level: 2 },
+    isCurrent: (b) => b.type === 'heading' && b.props.level === 2,
+  },
+  {
+    key: 'heading-3',
+    label: '三级标题',
+    icon: heading3Icon,
+    type: 'heading',
+    props: { level: 3 },
+    isCurrent: (b) => b.type === 'heading' && b.props.level === 3,
+  },
+  {
+    key: 'quote',
+    label: '引用',
+    icon: quoteIcon,
+    type: 'quote',
+    isCurrent: (b) => b.type === 'quote',
+  },
+  {
+    key: 'codeBlock',
+    label: '代码块',
+    icon: codeIcon,
+    type: 'codeBlock',
+    isCurrent: (b) => b.type === 'codeBlock',
+  },
+  {
+    key: 'bulletListItem',
+    label: '无序列表',
+    icon: bulletListIcon,
+    type: 'bulletListItem',
+    isCurrent: (b) => b.type === 'bulletListItem',
+  },
+  {
+    key: 'numberedListItem',
+    label: '有序列表',
+    icon: orderedListIcon,
+    type: 'numberedListItem',
+    isCurrent: (b) => b.type === 'numberedListItem',
+  },
+  {
+    key: 'checkListItem',
+    label: '检查清单',
+    icon: checkListIcon,
+    type: 'checkListItem',
+    isCurrent: (b) => b.type === 'checkListItem',
+  },
+];
+
+/** 深拷贝块（去掉 id，复制时由编辑器生成新 id；children 一并展开） */
+function cloneBlockWithoutId(block: any): PartialBlock {
+  const { id: _id, children, ...rest } = block;
+  void _id;
+  const next = { ...rest } as PartialBlock;
+  if (children && children.length > 0) {
+    next.children = children.map(cloneBlockWithoutId);
+  }
+  return next;
+}
+
+/**
+ * 自定义手柄下拉菜单：替换 BlockNote 默认的「删除 / 颜色」。
+ * 第一项「转换为」直接把当前块切成段落 / 标题 / 引用 / 代码 / 列表 / 检查清单等类型，
+ * 其余保留上移 / 下移 / 复制、颜色、表格表头与删除。
+ */
+function CustomDragHandleMenu(props: any) {
+  const { block } = props;
+  const editor = useBlockNoteEditor();
+  const components = useComponentsContext();
+  const dict = useDictionary();
+
+  const convert = (spec: ConvertSpec) => {
+    editor.focus();
+    editor.updateBlock(block, {
+      type: spec.type,
+      props: spec.props,
+    } as PartialBlock);
+  };
+
+  const duplicate = () => {
+    editor.focus();
+    editor.insertBlocks([cloneBlockWithoutId(block)], block, 'after');
+  };
+
+  const moveUp = () => {
+    editor.focus();
+    editor.setSelection(block, block);
+    editor.moveBlocksUp();
+  };
+
+  const moveDown = () => {
+    editor.focus();
+    editor.setSelection(block, block);
+    editor.moveBlocksDown();
+  };
+
+  if (!components) return null;
+
+  return (
+    <DragHandleMenu block={block as any}>
+      {/* 转换为：块类型切换子菜单 */}
+      <components.Generic.Menu.Root position="right" sub>
+        <components.Generic.Menu.Trigger sub>
+          <components.Generic.Menu.Item subTrigger className="bn-menu-item">
+            转换为
+          </components.Generic.Menu.Item>
+        </components.Generic.Menu.Trigger>
+        <components.Generic.Menu.Dropdown sub className="bn-menu-dropdown">
+          {CONVERT_SPECS.filter(
+            (spec) => spec.type in editor.schema.blockSchema,
+          ).map((spec) => (
+            <components.Generic.Menu.Item
+              key={spec.key}
+              className="bn-menu-item"
+              checked={spec.isCurrent(block)}
+              icon={<Icon icon={spec.icon} width={16} />}
+              onClick={() => convert(spec)}
+            >
+              {spec.label}
+            </components.Generic.Menu.Item>
+          ))}
+        </components.Generic.Menu.Dropdown>
+      </components.Generic.Menu.Root>
+
+      <components.Generic.Menu.Divider />
+
+      <components.Generic.Menu.Item
+        className="bn-menu-item"
+        icon={<Icon icon={moveUpIcon} width={16} />}
+        onClick={moveUp}
+      >
+        上移
+      </components.Generic.Menu.Item>
+      <components.Generic.Menu.Item
+        className="bn-menu-item"
+        icon={<Icon icon={moveDownIcon} width={16} />}
+        onClick={moveDown}
+      >
+        下移
+      </components.Generic.Menu.Item>
+      <components.Generic.Menu.Item
+        className="bn-menu-item"
+        icon={<Icon icon={copyIcon} width={16} />}
+        onClick={duplicate}
+      >
+        复制
+      </components.Generic.Menu.Item>
+
+      <components.Generic.Menu.Divider />
+
+      <BlockColorsItem block={block as any}>
+        {dict.drag_handle.colors_menuitem}
+      </BlockColorsItem>
+
+      {block.type === 'table' && (
+        <>
+          <TableRowHeaderItem block={block as any}>
+            {dict.drag_handle.header_row_menuitem}
+          </TableRowHeaderItem>
+          <TableColumnHeaderItem block={block as any}>
+            {dict.drag_handle.header_column_menuitem}
+          </TableColumnHeaderItem>
+        </>
+      )}
+
+      <RemoveBlockItem block={block as any}>
+        {dict.drag_handle.delete_menuitem}
+      </RemoveBlockItem>
+    </DragHandleMenu>
+  );
+}
+
+/**
+ * 自定义侧边菜单：保留默认的「添加块」加号与拖拽手柄，
+ * 手柄下拉通过 dragHandleMenu 替换为 {@link CustomDragHandleMenu}。
+ */
+function CustomSideMenu(props: any) {
+  return <SideMenu {...props} dragHandleMenu={CustomDragHandleMenu as any} />;
+}
+
 interface DocEditorProps {
   docId: number;
   /** 权威源：BlockNote 块数组 JSON 字符串 */
@@ -35,6 +274,8 @@ interface DocEditorProps {
   markdownText: string;
   /** 文档标题（首个 H1，缺省回退首个任意标题）变化时回调，用于顶部标题同步 */
   onTitleChange?: (title: string) => void;
+  /** 正文内容发生编辑时回调（用于父级防抖自动保存） */
+  onContentChange?: () => void;
 }
 
 interface OutlineItem {
@@ -210,7 +451,7 @@ function applyTitlesToBlocks(blocks: unknown, titles: Map<string, string>): void
 }
 
 const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor(
-  { docId, blockData, markdownText, onTitleChange },
+  { docId, blockData, markdownText, onTitleChange, onContentChange },
   ref,
 ) {
   const { isDark } = useTheme();
@@ -243,6 +484,8 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   const unlockTimerRef = useRef<number | null>(null);
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
+  const onContentChangeRef = useRef(onContentChange);
+  onContentChangeRef.current = onContentChange;
 
   const syncTitle = useCallback(() => {
     onTitleChangeRef.current?.(extractTitle(editor.document));
@@ -285,6 +528,7 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
     const unsub = editor.onChange(() => {
       setOutline(extractOutline(editor.document));
       syncTitle();
+      onContentChangeRef.current?.();
     });
     return () => {
       unsub?.();
@@ -450,7 +694,10 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
           <BlockNoteView
             editor={editor}
             theme={isDark ? 'dark' : 'light'}
-          />
+            sideMenu={false}
+          >
+            <SideMenuController sideMenu={CustomSideMenu as any} />
+          </BlockNoteView>
         </div>
       </div>
     </div>

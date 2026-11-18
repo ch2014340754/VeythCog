@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 import { generateAntDTheme } from '@/styles/theme';
@@ -99,6 +99,83 @@ const GlobalSelectionAsk: React.FC = () => {
   return <SelectionAsk />;
 };
 
+/**
+ * 根布局：全局组件需要在 Router 上下文内才能用 useLocation / useNavigate，
+ * 因此放进最外层路由的 layout 里，而不是 RouterProvider 之外。
+ */
+const RootLayout: React.FC = () => (
+  <>
+    <WallpaperRouteSync />
+    <GlobalMusic />
+    <GlobalSelectionAsk />
+    <CommandPalette />
+    <Outlet />
+  </>
+);
+
+/** 路由表：data router（createBrowserRouter），useBlocker 拦截离开提醒依赖此形态 */
+const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
+      { path: '/login', element: <LoginPage /> },
+  {
+    element: (
+      <RequireAuth>
+        <MainLayout />
+      </RequireAuth>
+    ),
+    children: [
+      { path: '/chat', element: <ChatPage /> },
+      { path: '/knowledge', element: <KnowledgePage /> },
+      { path: '/inbox', element: <InboxPage /> },
+      { path: '/music', element: <MusicPage /> },
+      { path: '/tools/*', element: <ToolsLayout /> },
+      {
+        path: '/settings',
+        element: <SettingsPage />,
+        children: [
+          { index: true, element: <Navigate to="/settings/account" replace /> },
+          { path: 'account', element: <AccountSettings /> },
+          { path: 'providers', element: <ProvidersSettings /> },
+          { path: 'lark', element: <LarkBindSettings /> },
+          { path: 'appearance', element: <AppearanceSettings /> },
+        ],
+      },
+      {
+        path: '/admin',
+        element: (
+          <RequireAdmin>
+            <AdminPage />
+          </RequireAdmin>
+        ),
+        children: [
+          { index: true, element: <Navigate to="/admin/users" replace /> },
+          { path: 'users', element: <AdminUsers /> },
+          { path: 'roles', element: <AdminRoles /> },
+          { path: 'models', element: <AdminModels /> },
+          { path: 'monitor', element: <AdminMonitor /> },
+          { path: 'audit', element: <AdminAudit /> },
+          { path: 'tasks', element: <AdminTasks /> },
+          { path: 'config', element: <AdminConfig /> },
+        ],
+      },
+    ],
+  },
+  {
+    path: '/home',
+    element: (
+      <RequireAuth>
+        <HomePage />
+      </RequireAuth>
+    ),
+  },
+  { path: '/', element: <Navigate to="/home" replace /> },
+  { path: '*', element: <Navigate to="/home" replace /> },
+    ],
+  },
+]);
+
 const AppContent: React.FC = () => {
   const { presetName, isDark } = useTheme();
   const token = useAuthStore((s) => s.token);
@@ -124,78 +201,11 @@ const AppContent: React.FC = () => {
   return (
     <ConfigProvider theme={antdTheme}>
       <WallpaperBackdrop />
-      <BrowserRouter>
-        <WallpaperRouteSync />
-        <GlobalMusic />
-        <GlobalSelectionAsk />
-        <CommandPalette />
-        <ErrorBoundary>
-          <React.Suspense fallback={<PageLoadingBar />}>
-            <Routes>
-            {/* 登录页（独立布局） */}
-            <Route path="/login" element={<LoginPage />} />
-
-            {/* 受保护路由（主布局） */}
-            <Route
-              element={
-                <RequireAuth>
-                  <MainLayout />
-                </RequireAuth>
-              }
-            >
-              <Route path="/chat" element={<ChatPage />} />
-              <Route path="/knowledge" element={<KnowledgePage />} />
-              <Route path="/inbox" element={<InboxPage />} />
-              <Route path="/music" element={<MusicPage />} />
-              <Route path="/tools/*" element={<ToolsLayout />} />
-
-              <Route path="/settings" element={<SettingsPage />}>
-                <Route index element={<Navigate to="/settings/account" replace />} />
-                <Route path="account" element={<AccountSettings />} />
-                <Route path="providers" element={<ProvidersSettings />} />
-                <Route path="lark" element={<LarkBindSettings />} />
-                <Route path="appearance" element={<AppearanceSettings />} />
-              </Route>
-
-              {/* 系统管理（仅管理员） */}
-              <Route
-                path="/admin"
-                element={
-                  <RequireAdmin>
-                    <AdminPage />
-                  </RequireAdmin>
-                }
-              >
-                <Route index element={<Navigate to="/admin/users" replace />} />
-                <Route path="users" element={<AdminUsers />} />
-                <Route path="roles" element={<AdminRoles />} />
-                <Route path="models" element={<AdminModels />} />
-                <Route path="monitor" element={<AdminMonitor />} />
-                <Route path="audit" element={<AdminAudit />} />
-                <Route path="tasks" element={<AdminTasks />} />
-                <Route path="config" element={<AdminConfig />} />
-              </Route>
-            </Route>
-
-            {/* 兜底 */}
-            <Route path="*" element={<Navigate to="/home" replace />} />
-
-            {/* 导航首页（独立布局，不经过 MainLayout） */}
-            <Route
-              path="/home"
-              element={
-                <RequireAuth>
-                  <HomePage />
-                </RequireAuth>
-              }
-            />
-
-            {/* 根路径默认跳首页 */}
-            <Route path="/" element={<Navigate to="/home" replace />} />
-            </Routes>
-          </React.Suspense>
-        </ErrorBoundary>
-      </BrowserRouter>
+      <ErrorBoundary>
+        <React.Suspense fallback={<PageLoadingBar />}>
+          <RouterProvider router={router} />
+        </React.Suspense>
+      </ErrorBoundary>
     </ConfigProvider>
   );
 };

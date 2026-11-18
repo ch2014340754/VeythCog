@@ -31,6 +31,7 @@ import zapOffIcon from '@iconify-icons/lucide/zap-off';
 import { Icon } from '@iconify/react';
 import { Button, Input, message, Modal, Popconfirm, Tag, Tooltip, Upload } from 'antd';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useBlocker } from 'react-router-dom';
 import DocEditor, { type DocEditorHandle } from './DocEditor';
 import DocTree, { type DocTreeHandle } from './DocTree';
 
@@ -62,11 +63,32 @@ const KnowledgePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [vectorizing, setVectorizing] = useState(false);
   const [metaGenerating, setMetaGenerating] = useState(false);
+  /** 自动保存：正在后台静默保存中（与手动保存共用 saving 态，避免并发写同一文档） */
+  const [autoSaving, setAutoSaving] = useState(false);
   /** 元数据弹窗：摘要 + 标签统一编辑 */
   const [metaOpen, setMetaOpen] = useState(false);
   const [metaSummary, setMetaSummary] = useState('');
   const [metaTags, setMetaTags] = useState('');
+  /** 等待切文档决策的 Promise resolve（供弹窗按钮 / 关闭回调统一触发） */
+  const leaveResolveRef = useRef<((a: 'save' | 'discard' | 'cancel') => void) | null>(null);
+  /** 离开确认弹窗：拦截站内跳转 */
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  /** blocker 最新实例，供决策回调读取 */
+  const blockerRef = useRef<ReturnType<typeof useBlocker> | null>(null);
   const editorRef = useRef<DocEditorHandle>(null);
+  /** 自动保存防抖定时器 */
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 最近一次成功保存的内容指纹（标题 + 块 JSON），无变化则不重复落库 */
+  const lastSavedFingerprintRef = useRef<string>('');
+  /** 进行中的保存请求，切文档 / 卸载时可兜底 flush */
+  const saveInFlightRef = useRef<Promise<unknown> | null>(null);
+  /** 有未保存的正文改动（已向量化文档不自动保存，离开前需提醒） */
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const setDirtyState = useCallback((v: boolean) => {
+    dirtyRef.current = v;
+    setDirty(v);
+  }, []);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -172,6 +194,27 @@ const KnowledgePage: React.FC = () => {
     const silent = opts?.silent ?? false;
     // 重复点击当前已打开的文档时直接返回，避免无意义的重新拉取与 loading 闪烁
     if (!silent && id === activeDocId && detail?.id === id) return;
+    // 切走前：有未保存改动先确认，避免内容丢失（已向量化文档不会自动保存，尤其需要提醒）
+    if (!silent && dirtyRef.current && detail && id !== detail.id) {
+      const action = await new Promise<'save' | 'discard' | 'cancel'>((resolve) => {
+        leaveResolveRef.current = resolve;
+        Modal.confirm({
+          title: '有未保存的改动',
+          content: '当前文档的修改还没有保存，离开后将丢失。',
+          okText: '保存并离开',
+          cancelText: '不保存离开',
+          closable: true,
+          onCancel: () => resolve('discard'),
+          onOk: async () => {
+            const saved = await handleSaveRef.current?.();
+            resolve(saved ? 'save' : 'cancel');
+          },
+        });
+      });
+      leaveResolveRef.current = null;
+      if (action === 'cancel') return;
+      if (action === 'discard') setDirtyState(false);
+    }
     if (!silent) {
       setActiveDocId(id);
       setDetailLoading(true);
@@ -182,6 +225,9 @@ const KnowledgePage: React.FC = () => {
       setTitle(d.title ?? '');
       setSummary(d.summary ?? '');
       setTagsText((d.tags ?? []).join(', '));
+      // 以服务端内容作为指纹基线：文档刚打开、尚未编辑时自动保存不重复写库
+      lastSavedFingerprintRef.current = `${d.title ?? ''}\u0001${d.blockData ?? '[]'}`;
+      setDirtyState(false);
       if (silent) setActiveDocId(id);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '加载文档详情失败');
@@ -206,10 +252,15 @@ const KnowledgePage: React.FC = () => {
   /**
    * 保存文档（标题 / 摘要 / 标签 / 正文）。
    * @param override 元数据弹窗提交时的草稿值，避免 setState 异步导致取到旧值
+   * @param opts.silent 自动保存：不弹成功提示、不切手动保存按钮 loading，后台静默落库
    * @returns 是否保存成功（供元数据弹窗决定是否关闭）
    */
-  const handleSave = async (override?: { summary?: string; tagsText?: string }): Promise<boolean> => {
+  const handleSave = async (
+    override?: { summary?: string; tagsText?: string },
+    opts?: { silent?: boolean },
+  ): Promise<boolean> => {
     if (!detail) return false;
+    const silent = opts?.silent ?? false;
     const summaryValue = (override?.summary ?? summary).trim();
     const rawTags = override?.tagsText ?? tagsText;
     const tags = rawTags
@@ -225,9 +276,24 @@ const KnowledgePage: React.FC = () => {
       blockData: snap?.blockData ?? '[]',
       markdownText: snap?.markdownText ?? '',
     };
-    setSaving(true);
+    // 指纹：标题 + 块结构。与上次成功保存一致则跳过，避免防抖窗口内重复写库
+    const fingerprint = `${payload.title}\u0001${payload.blockData}`;
+    if (silent && fingerprint === lastSavedFingerprintRef.current) return true;
+
+    // 上一轮保存尚未落库时先等它结束，避免两个写请求互相覆盖正文
+    if (saveInFlightRef.current) {
+      await saveInFlightRef.current.catch(() => null);
+      if (fingerprint === lastSavedFingerprintRef.current) return true;
+    }
+
+    if (silent) setAutoSaving(true);
+    else setSaving(true);
+    const inFlight = updateDoc(detail.id, payload);
+    saveInFlightRef.current = inFlight.catch(() => null);
     try {
-      await updateDoc(detail.id, payload);
+      await inFlight;
+      lastSavedFingerprintRef.current = fingerprint;
+      setDirtyState(false);
       // 本地乐观更新：只改元信息，不重新拉详情（重拉会让 DocEditor 重解析 blockData 造成闪动）
       setDetail((prev) =>
         prev ? { ...prev, title: payload.title, summary: payload.summary, tags, isVectorized: false } : prev
@@ -235,16 +301,93 @@ const KnowledgePage: React.FC = () => {
       setTitle(payload.title);
       setSummary(summaryValue);
       setTagsText(tags.join(', '));
-      message.success('已保存（内容变更后需重新向量化）');
+      if (!silent) message.success('已保存（内容变更后需重新向量化）');
       void refreshTreeSilently();
       return true;
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败');
+      if (!silent) message.error(e instanceof Error ? e.message : '保存失败');
       return false;
     } finally {
-      setSaving(false);
+      if (silent) setAutoSaving(false);
+      else setSaving(false);
+      saveInFlightRef.current = null;
     }
   };
+
+  /** 始终指向最新的 handleSave，避免防抖定时器闭包读到旧的 detail / title 状态 */
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+  /** 最新详情，供防抖回调读取 isVectorized */
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
+
+  /**
+   * 内容变更回调：
+   * - 未向量化文档：3 秒无新编辑后静默自动保存；
+   * - 已向量化文档：不自动落库（保存会让向量索引失效），只标记有未保存改动，离开时提醒手动保存。
+   */
+  const scheduleAutoSave = useCallback(() => {
+    setDirtyState(true);
+    if (detailRef.current?.isVectorized) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void handleSaveRef.current?.(undefined, { silent: true });
+    }, 3000);
+  }, [setDirtyState]);
+
+  // 切换文档 / 卸载时：清掉未触发的防抖定时器；若有进行中的保存则等待其落库，避免丢改动
+  useEffect(() => {
+    const timer = autoSaveTimerRef.current;
+    return () => {
+      if (timer) clearTimeout(timer);
+      autoSaveTimerRef.current = null;
+    };
+  }, [detail?.id]);
+
+  useEffect(() => {
+    const pending = saveInFlightRef.current;
+    return () => {
+      if (pending) void pending;
+    };
+  }, []);
+
+  // 站内路由跳转拦截：有未保存改动时弹确认，避免点侧栏菜单直接离开丢内容
+  const blocker = useBlocker(() => dirtyRef.current && !!detail);
+  blockerRef.current = blocker;
+  useEffect(() => {
+    if (blocker.state === 'blocked') setLeaveOpen(true);
+  }, [blocker.state]);
+
+  /** 站内跳转被拦截后的决策：保存并继续 / 放弃并继续 / 取消停留 */
+  const resolveBlocker = async (action: 'save' | 'discard' | 'cancel') => {
+    setLeaveOpen(false);
+    const current = blockerRef.current;
+    if (action === 'cancel') {
+      current?.reset?.();
+      return;
+    }
+    if (action === 'save') {
+      const saved = await handleSaveRef.current?.();
+      if (!saved) {
+        current?.reset?.();
+        return;
+      }
+    }
+    if (action === 'discard') setDirtyState(false);
+    current?.proceed?.();
+  };
+
+  // 关闭 / 刷新浏览器页面前的原生提醒
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current || !detail) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [detail]);
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
@@ -604,6 +747,12 @@ const KnowledgePage: React.FC = () => {
               >
                 {title || '未命名文档'}
               </button>
+              {autoSaving && <span className="vc-doc-head__autosaving">自动保存中…</span>}
+              {dirty && (
+                <span className={'vc-doc-head__autosaving' + (detail.isVectorized ? ' is-dirty' : '')}>
+                  {detail.isVectorized ? '有未保存改动' : '未保存'}
+                </span>
+              )}
               {detail.isVectorized ? (
                 <Tag color="success" icon={<Icon icon={zapIcon} width={12} />} style={{ margin: 0 }}>
                   已向量化
@@ -702,6 +851,7 @@ const KnowledgePage: React.FC = () => {
                 blockData={detail.blockData ?? '[]'}
                 markdownText={detail.markdownText ?? ''}
                 onTitleChange={setTitle}
+                onContentChange={scheduleAutoSave}
               />
             </div>
           </>
@@ -744,6 +894,21 @@ const KnowledgePage: React.FC = () => {
             <div className="vc-hint">多个标签用中英文逗号分隔，保存后立即生效。</div>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        className="vc-leave-modal"
+        title="有未保存的改动"
+        open={leaveOpen}
+        onOk={() => void resolveBlocker('save')}
+        onCancel={() => void resolveBlocker('discard')}
+        okText="保存并离开"
+        cancelText="不保存离开"
+        confirmLoading={saving}
+        width={420}
+        centered
+      >
+        <div className="vc-hint">当前文档的修改还没有保存，离开后将丢失。已向量化文档不会自动保存，请先手动保存或确认放弃。</div>
       </Modal>
 
       <Modal
