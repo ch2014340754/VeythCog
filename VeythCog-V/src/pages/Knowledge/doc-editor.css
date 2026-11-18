@@ -133,6 +133,8 @@
   background-color: rgba(18, 16, 32, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
+  /* 头部要贴住上边框和左右边，留白交给 select 行与 pre */
+  padding: 0;
 }
 
 /* 暗色下才是"全黑"最刺眼的地方：底色改成主色 + 透明黑混出的深色玻璃，
@@ -167,3 +169,255 @@ body.has-bg .doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] 
   .doc-outline { display: none; }
   .doc-editor-scroll .bn-editor { padding: 16px 20px 96px; }
 }
+
+/* 代码块头部（左「收起」、中间「名称」、右「语言 chip」）做在编辑器外层的浮层里。
+   为什么不在节点视图里塞控件：那部分 DOM 归 ProseMirror 管，外部插入会被它的
+   DOM 观察器判定成异常改动，随后整棵节点视图重建，控件被清掉（实测插入即消失）。 */
+.doc-editor-main {
+  position: relative;
+}
+
+.vc-code-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* 每行头部按代码块的屏幕位置用 transform 贴上去，宽高由脚本算 */
+.vc-code-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  pointer-events: auto;
+  will-change: transform;
+}
+
+/* 收起 / 展开：图标按钮，放在最左 */
+.vc-code-collapse {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.vc-code-collapse:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vc-code-collapse:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 1px;
+}
+
+.vc-code-collapse svg {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.vc-code-collapse[aria-expanded='false'] svg {
+  transform: rotate(-90deg);
+}
+
+/* 代码块名称：紧跟收起按钮，占满中间；未选中/未悬停时无边框，靠 hover/focus 才亮出来 */
+.vc-code-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 22px;
+  transition: background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.vc-code-title::placeholder {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.vc-code-title:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.vc-code-title:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* 语言 chip：常驻可见，放在最右；未选中/未悬停时无边框，只留下拉箭头 */
+.vc-code-lang {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 160px;
+  margin: 0;
+  padding: 3px 24px 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  color: rgba(255, 255, 255, 0.75);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  appearance: none;
+  transition: color var(--duration-fast) var(--ease-out),
+              background-color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.vc-code-lang:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.vc-code-lang:focus-visible {
+  outline: none;
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* 下拉列表跟随主题：用主题 token，深色下别弹出一块白底 */
+.vc-code-lang > option {
+  color: var(--color-text);
+  background: var(--color-surface-elevated);
+}
+
+/* 让浏览器原生下拉面板也用对应主题的明暗（深色主题下不再白底黑字） */
+body.dark .vc-code-lang {
+  color-scheme: dark;
+}
+
+/* 不换行时 pre 会横向滚动，滚动条也换成暗色，别露出系统白条 */
+.doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] > pre {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] > pre::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+  background: transparent;
+}
+
+.doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] > pre::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] > pre::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+/* 复制 / 换行：夹在名称框和语言 chip 中间 */
+.vc-code-copy {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+.vc-code-copy:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vc-code-copy:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 1px;
+}
+
+.vc-code-copy.is-copied {
+  color: #5ee6a8;
+}
+
+/* 「换行」开关：默认关（不换行），开启后高亮 */
+.vc-code-wrap {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11.5px;
+  line-height: 20px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+}
+
+.vc-code-wrap:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.vc-code-wrap:focus-visible {
+  outline: none;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vc-code-wrap[aria-pressed='true'] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* BlockNote 自带的 select 只留作数据通道，视觉上彻底藏掉 */
+.doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] > div > select {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 代码正文：顶部留出头部一行的高度 */
+.doc-editor-scroll .bn-block-content[data-content-type='codeBlock'] > pre {
+  padding: 40px 18px 16px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
