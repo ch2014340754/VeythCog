@@ -4,6 +4,8 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 /**
  * 辅助小模型配置（llm.aux-model.*）。
  *
@@ -18,8 +20,15 @@ public class AuxModelProps {
     /** 厂商标识，如 dashscope */
     private String vendor = "dashscope";
 
-    /** 模型编码，如 qwen-turbo */
+    /** 模型编码，如 qwen-flash */
     private String modelCode = "qwen-turbo";
+
+    /**
+     * 兜底模型编码（按顺序尝试）。
+     * <p>百炼部分模型的免费额度是按模型独立计算的，主模型配额耗尽时换一个可用模型即可继续；
+     * 列表为空则只调用 {@link #modelCode}。</p>
+     */
+    private List<String> fallbackModelCodes = List.of();
 
     /** 采样温度：元数据抽取 / rerank 需要稳定结果，默认接近 0 */
     private double temperature = 0.1;

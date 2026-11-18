@@ -1,29 +1,30 @@
 import React, { useMemo, useState } from 'react';
 import { Input } from 'antd';
-import cronParser from 'cron-parser';
+import { CronExpressionParser } from 'cron-parser';
 import ToolShell from '../ToolShell';
 
 const CronExplainer: React.FC = () => {
   const [expr, setExpr] = useState('*/5 * * * *');
-  const [error, setError] = useState('');
 
-  const info = useMemo(() => {
-    setError('');
+  const result = useMemo(() => {
     try {
-      // cron-parser 类型定义在不同版本下不一致，这里用 any 兼容
-      const interval = (cronParser as any).parseExpression(expr, { currentDate: new Date() });
+      // cron-parser 5.x 用 CronExpressionParser.parse 取代了 4.x 的 parseExpression
+      const interval = CronExpressionParser.parse(expr, { currentDate: new Date() });
       const next5 = Array.from({ length: 5 }, () => interval.next().toDate());
-      return { next5 };
+      return { next5, error: '' };
     } catch (e: any) {
-      setError(e.message);
-      return null;
+      return { next5: null, error: e?.message || '表达式解析失败' };
     }
   }, [expr]);
 
   const explain = (e: string): string => {
     const parts = e.trim().split(/\s+/);
-    if (parts.length !== 5) return '标准 cron 是 5 段：分 时 日 月 周';
-    const [m, h, dom, mon, dow] = parts;
+    if (parts.length !== 5 && parts.length !== 6) {
+      return '标准 cron 是 5 段（分 时 日 月 周），cron-parser 5.x 也支持 6 段（秒 分 时 日 月 周）';
+    }
+    const units = parts.length === 6
+      ? ['秒', '分钟', '小时', '日', '月', '周几']
+      : ['分钟', '小时', '日', '月', '周几'];
     const map = (v: string, unit: string) => {
       if (v === '*') return `每${unit}`;
       if (v.startsWith('*/')) return `每 ${v.slice(2)} ${unit}`;
@@ -31,7 +32,7 @@ const CronExplainer: React.FC = () => {
       if (v.includes('-')) return `${unit} ${v}（范围）`;
       return `${unit} ${v}`;
     };
-    return [map(m, '分钟'), map(h, '小时'), map(dom, '日'), map(mon, '月'), map(dow, '周几')].join('，');
+    return parts.map((v, i) => map(v, units[i])).join('，');
   };
 
   return (
@@ -46,15 +47,15 @@ const CronExplainer: React.FC = () => {
         />
       </div>
 
-      {error && <div className="vc-tool-error" style={{ marginBottom: 'var(--space-md)' }}>{error}</div>}
+      {result.error && <div className="vc-tool-error" style={{ marginBottom: 'var(--space-md)' }}>{result.error}</div>}
 
-      {info && (
+      {result.next5 && (
         <>
           <div className="vc-panel" style={{ marginBottom: 'var(--space-md)' }}>
             <div className="vc-panel__head">
               <div>
                 <h2 className="vc-panel__title">含义</h2>
-                <p className="vc-panel__desc">按「分 时 日 月 周」逐段解释。</p>
+                <p className="vc-panel__desc">按「分 时 日 月 周」（6 段时含秒）逐段解释。</p>
               </div>
             </div>
             <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: 'var(--color-text)' }}>{explain(expr)}</p>
@@ -67,7 +68,7 @@ const CronExplainer: React.FC = () => {
               </div>
             </div>
             <div className="vc-stack vc-stack--tight">
-              {info.next5.map((d, i) => (
+              {result.next5.map((d, i) => (
                 <div key={i} className="vc-hash-row" style={{ gridTemplateColumns: '48px minmax(0, 1fr)' }}>
                   <span className="vc-hash-row__algo">#{i + 1}</span>
                   <span className="vc-hash-row__value">{d.toLocaleString('zh-CN')}</span>

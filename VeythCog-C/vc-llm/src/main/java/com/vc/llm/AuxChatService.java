@@ -11,8 +11,11 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Service
 public class AuxChatService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuxChatService.class);
 
     /** 模型缓存：vendor:model → ChatClient（不含记忆顾问） */
     private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
@@ -43,23 +48,64 @@ public class AuxChatService {
 
     /**
      * 一次性补全：给定系统提示与用户内容，返回模型纯文本输出。
-     * <p>失败时抛出 {@link BusinessException}，调用方按"增强能力失败不阻断主流程"处理。</p>
+     * <p>先调 {@code model-code}，失败再按 {@code fallback-model-codes} 顺序兜底：
+     * 百炼的免费额度按模型独立计算，主模型配额耗尽时换个可用模型即可继续，
+     * 不至于让首行翻译 / 摘要 / rerank 整体瘫痪。</p>
+     * <p>全部失败时抛出 {@link BusinessException}，调用方按"增强能力失败不阻断主流程"处理。</p>
      */
     public String complete(String systemPrompt, String userPrompt) {
         String vendor = auxProps.getVendor();
-        String modelCode = auxProps.getModelCode();
-        try {
-            ChatClient client = resolveClient(vendor, modelCode);
-            return client.prompt()
-                    .system(systemPrompt)
-                    .user(userPrompt)
-                    .options(optionsOf(vendor, modelCode))
-                    .call()
-                    .content();
-        } catch (RuntimeException e) {
-            String detail = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "辅助模型调用失败：" + detail);
+        List<String> candidates = modelCandidates();
+        RuntimeException lastError = null;
+        for (String modelCode : candidates) {
+            try {
+                ChatClient client = resolveClient(vendor, modelCode);
+                String content = client.prompt()
+                        .system(systemPrompt)
+                        .user(userPrompt)
+                        .options(optionsOf(vendor, modelCode))
+                        .call()
+                        .content();
+                if (!modelCode.equals(auxProps.getModelCode())) {
+                    log.warn("辅助模型 {} 不可用，已回退到 {} 成功", auxProps.getModelCode(), modelCode);
+                }
+                return content;
+            } catch (RuntimeException e) {
+                lastError = e;
+                log.warn("辅助模型调用失败：vendor={}, model={}, reason={}",
+                        vendor, modelCode, e.getMessage());
+                if (log.isDebugEnabled()) {
+                    log.debug("辅助模型调用失败堆栈", e);
+                }
+            }
         }
+        String detail = lastError == null
+                ? "未配置任何辅助模型"
+                : (lastError.getMessage() == null ? lastError.getClass().getSimpleName() : lastError.getMessage());
+        throw new BusinessException(ErrorCode.SYSTEM_ERROR, "辅助模型调用失败：" + detail);
+    }
+
+    /** 主模型 + 兜底模型，去空去重 */
+    private List<String> modelCandidates() {
+        List<String> list = new ArrayList<>();
+        addCandidate(list, auxProps.getModelCode());
+        if (auxProps.getFallbackModelCodes() != null) {
+            for (String code : auxProps.getFallbackModelCodes()) {
+                addCandidate(list, code);
+            }
+        }
+        return list;
+    }
+
+    private static void addCandidate(List<String> list, String code) {
+        if (code == null) {
+            return;
+        }
+        String trimmed = code.trim();
+        if (trimmed.isEmpty() || list.contains(trimmed)) {
+            return;
+        }
+        list.add(trimmed);
     }
 
     /** 当前辅助模型标识，便于日志定位 */
