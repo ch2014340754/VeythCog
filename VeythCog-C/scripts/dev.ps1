@@ -350,6 +350,14 @@ function Get-NpmPath {
 function Invoke-BackendBuild($mvn) {
     if ($SkipBuild) { Write-Step '跳过编译（-SkipBuild），直接用现有 jar'; return }
     $mvnArgs = @('-pl', 'vc-app', '-am', '-DskipTests')
+    # 显式使用 Maven 自带的 conf/settings.xml，避免 ~/.m2/settings.xml 里的公司 mirror 干扰本项目
+    $mvnHome = Split-Path -Parent (Split-Path -Parent $mvn)
+    $globalSettings = Join-Path $mvnHome 'conf\settings.xml'
+    if (Test-Path -LiteralPath $globalSettings) {
+        $mvnArgs = @('-s', $globalSettings) + $mvnArgs
+    } else {
+        Write-Note "没找到 Maven 自带的 settings.xml: $globalSettings（继续用默认 settings）"
+    }
     if (-not $Online) { $mvnArgs = @('-o') + $mvnArgs }
     Write-Step ('打包中：mvn ' + ($mvnArgs -join ' ') + ' package（首次约 1 分钟）')
     Push-Location $RepoRoot
