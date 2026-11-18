@@ -37,9 +37,12 @@ llm:
   # 辅助小模型：知识库摘要/标签生成 + RAG 检索 rerank，与用户对话模型解耦
   aux-model:
     vendor: dashscope
-    # 当前账号实测：qwen-turbo 返回 429（限流/未开通），qwen-plus 返回 403（无权限），
-    # 仅 deepseek-v4-pro-0813 可用，故先指向它；账号开通 qwen 系列后改回 qwen-turbo 即可。
-    model-code: deepseek-v4-pro-0813
+
+    model-code: qwen-flash
+    # 主模型失败时按顺序兜底，避免单个模型配额耗尽把增强能力整体拖死
+    fallback-model-codes:
+      - qwen3.8-flash
+      - qwen3.5-flash
     temperature: 0.1
     max-input-chars: 3000
   vendors:

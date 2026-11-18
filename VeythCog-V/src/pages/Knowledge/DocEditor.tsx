@@ -14,6 +14,8 @@ import { Icon } from '@iconify/react';
 import listTreeIcon from '@iconify-icons/lucide/list-tree';
 import { Tooltip } from 'antd';
 import { useTheme } from '@/contexts/ThemeContext';
+import { CODE_BLOCK_LANGUAGES } from './codeBlockLanguages';
+import { mountCodeBlockOverlay } from './codeBlockDecorator';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
 import './doc-editor.css';
@@ -112,16 +114,128 @@ function extractTitle(blocks: unknown): string {
   return (h1 ?? headings[0])?.text ?? '';
 }
 
+// ---- 代码块：头部控件（收起、名称、语言）----
+// 头部控件由 codeBlockDecorator 纯 DOM 注入，收起状态与名称另存：
+// - 收起状态：只影响显示，按 docId + blockId 记在 localStorage；
+// - 名称：没有扩展 BlockNote schema，随 blockData 以 `props.title` 形式落盘
+//   （BlockNote 解析时会忽略 schema 之外的 props，但 JSON 能完整往返）。
+
+const codeCollapseKey = (docId: number) => `veythcog:doc:code-collapse:${docId}`;
+const codeWrapKey = (docId: number) => `veythcog:doc:code-wrap:${docId}`;
+const codeTitleKey = (docId: number) => `veythcog:doc:code-title:${docId}`;
+
+function readIdSet(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((item): item is string => typeof item === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeIdSet(key: string, ids: Set<string>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify([...ids]));
+  } catch {
+    // localStorage 不可用时静默忽略，状态只在本轮有效
+  }
+}
+
+const readCollapsedIds = (docId: number) => readIdSet(codeCollapseKey(docId));
+const writeCollapsedIds = (docId: number, ids: Set<string>) => writeIdSet(codeCollapseKey(docId), ids);
+const readWrappedIds = (docId: number) => readIdSet(codeWrapKey(docId));
+const writeWrappedIds = (docId: number, ids: Set<string>) => writeIdSet(codeWrapKey(docId), ids);
+
+/** 从 blockData 的代码块 `props.title` 里收集名称（上次保存过的） */
+function collectTitles(blocks: unknown, into: Map<string, string>): void {
+  if (!Array.isArray(blocks)) return;
+  for (const raw of blocks) {
+    if (!raw || typeof raw !== 'object') continue;
+    const block = raw as { id?: unknown; type?: unknown; props?: unknown; children?: unknown };
+    if (block.type === 'codeBlock' && typeof block.id === 'string') {
+      const title = (block.props as { title?: unknown } | undefined)?.title;
+      if (typeof title === 'string' && title.trim()) into.set(block.id, title);
+    }
+    collectTitles(block.children, into);
+  }
+}
+
+function readTitles(docId: number, blockData?: string): Map<string, string> {
+  const titles = new Map<string, string>();
+  try {
+    if (blockData) collectTitles(JSON.parse(blockData), titles);
+  } catch {
+    // 脏 blockData 走 md 兜底，这里忽略
+  }
+  // 本地未保存的编辑优先，blockData 可能还停在上一版
+  try {
+    const raw = localStorage.getItem(codeTitleKey(docId));
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === 'object') {
+      Object.entries(parsed as Record<string, unknown>).forEach(([id, value]) => {
+        if (typeof value === 'string') titles.set(id, value);
+      });
+    }
+  } catch {
+    // localStorage 不可用
+  }
+  return titles;
+}
+
+function writeTitles(docId: number, titles: Map<string, string>): void {
+  try {
+    localStorage.setItem(codeTitleKey(docId), JSON.stringify(Object.fromEntries(titles)));
+  } catch {
+    // localStorage 不可用
+  }
+}
+
+/** 保存时把名称写回 blockData（空名称则移除该字段） */
+function applyTitlesToBlocks(blocks: unknown, titles: Map<string, string>): void {
+  if (!Array.isArray(blocks)) return;
+  for (const raw of blocks) {
+    if (!raw || typeof raw !== 'object') continue;
+    const block = raw as { id?: unknown; type?: unknown; props?: unknown; children?: unknown };
+    if (block.type === 'codeBlock' && typeof block.id === 'string') {
+      const props = (block.props && typeof block.props === 'object' ? block.props : {}) as Record<string, unknown>;
+      const title = titles.get(block.id);
+      if (title) props.title = title;
+      else delete props.title;
+      block.props = props;
+    }
+    applyTitlesToBlocks(block.children, titles);
+  }
+}
+
 const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor(
   { docId, blockData, markdownText, onTitleChange },
   ref,
 ) {
   const { isDark } = useTheme();
-  const editor = useCreateBlockNote({ dictionary: zh });
+  const editor = useCreateBlockNote({
+    dictionary: zh,
+    codeBlock: {
+      defaultLanguage: 'text',
+      supportedLanguages: CODE_BLOCK_LANGUAGES,
+      // shiki 走动态 import：只有文档里真的出现代码块时才会拉语法高亮那一包
+      createHighlighter: async () => {
+        const { createHighlighter } = await import('shiki');
+        return createHighlighter({ themes: ['github-dark'], langs: [] });
+      },
+    },
+  });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [outlineOpen, setOutlineOpen] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(null);
+  /** 已收起的代码块 id（按 docId 持久化，blockData 里的 id 稳定，刷新后仍生效） */
+  const collapsedRef = useRef<Set<string>>(new Set());
+  /** 开启了自动换行的代码块 id（默认不换行） */
+  const wrappedRef = useRef<Set<string>>(new Set());
+  /** 代码块名称：blockId → title（随 blockData 的 props.title 落盘，localStorage 兜住未保存的编辑） */
+  const titlesRef = useRef<Map<string, string>>(new Map());
   // 点目录跳转时把高亮"锁"在目标标题上：平滑滚动期间容器每一帧都触发 onScroll，
   // 滚动监听会不停重算"当前标题"，高亮就会在中间的标题之间来回闪/跳，
   // 落地后还可能被上一次滚动算出的值盖掉。锁到滚动停稳（末次 scroll 后 240ms）为止。
@@ -137,6 +251,9 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   // 文档切换时加载内容：优先权威 blockData，降级解析 markdown
   useEffect(() => {
     let cancelled = false;
+    collapsedRef.current = readCollapsedIds(docId);
+    wrappedRef.current = readWrappedIds(docId);
+    titlesRef.current = readTitles(docId, blockData);
     const apply = async () => {
       const blocks = parseBlockJson(blockData);
       if (blocks) {
@@ -174,6 +291,41 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
     };
   }, [editor, syncTitle]);
 
+  // 代码块头部控件（收起 / 名称 / 语言）：做成编辑器外层的浮层。
+  // 直接往 BlockNote 节点视图里插 DOM 会被 ProseMirror 判定为外部改动并重建节点视图，控件会被清掉。
+  useEffect(
+    () =>
+      mountCodeBlockOverlay(
+        editor,
+        () => scrollRef.current?.parentElement ?? null,
+        {
+          isCollapsed: (blockId) => collapsedRef.current.has(blockId),
+          toggleCollapsed: (blockId) => {
+            const next = !collapsedRef.current.has(blockId);
+            if (next) collapsedRef.current.add(blockId);
+            else collapsedRef.current.delete(blockId);
+            writeCollapsedIds(docId, collapsedRef.current);
+            return next;
+          },
+          isWrapped: (blockId) => wrappedRef.current.has(blockId),
+          toggleWrapped: (blockId) => {
+            const next = !wrappedRef.current.has(blockId);
+            if (next) wrappedRef.current.add(blockId);
+            else wrappedRef.current.delete(blockId);
+            writeWrappedIds(docId, wrappedRef.current);
+            return next;
+          },
+          getTitle: (blockId) => titlesRef.current.get(blockId) ?? '',
+          setTitle: (blockId, title) => {
+            if (title) titlesRef.current.set(blockId, title);
+            else titlesRef.current.delete(blockId);
+            writeTitles(docId, titlesRef.current);
+          },
+        },
+      ),
+    [editor, docId],
+  );
+
   const scrollToHeading = useCallback(
     (id: string) => {
       const el = editor.domElement?.querySelector<HTMLElement>(`[data-id="${id}"]`);
@@ -203,10 +355,15 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   useImperativeHandle(
     ref,
     () => ({
-      snapshot: async () => ({
-        blockData: JSON.stringify(editor.document),
-        markdownText: await editor.blocksToMarkdownLossy(),
-      }),
+      snapshot: async () => {
+        // 深拷贝后再补 props.title，别把额外字段塞进 editor.document
+        const blocks: unknown = JSON.parse(JSON.stringify(editor.document));
+        applyTitlesToBlocks(blocks, titlesRef.current);
+        return {
+          blockData: JSON.stringify(blocks),
+          markdownText: await editor.blocksToMarkdownLossy(),
+        };
+      },
       focusTitle: () => {
         const headings = extractOutline(editor.document);
         const target = headings.find((h) => h.level === 1) ?? headings[0];
