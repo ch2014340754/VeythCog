@@ -13,6 +13,8 @@ export interface TodoItem {
   overdue: boolean;
   linkUrl: string | null;
   linkDocId: number | null;
+  /** 所属列表 id；null = 未归类 */
+  listId: number | null;
   createdAt: number;
   updatedAt: number;
   completedAt: number | null;
@@ -25,6 +27,15 @@ export interface TodoPage {
   pageSize: number;
 }
 
+/** 待办列表（自定义分组），带未完成 / 已完成计数 */
+export interface TodoListView {
+  id: number;
+  name: string;
+  sortOrder: number;
+  openCount: number;
+  doneCount: number;
+}
+
 export interface TodoCreatePayload {
   title: string;
   note?: string;
@@ -32,6 +43,7 @@ export interface TodoCreatePayload {
   dueDate?: string | null;
   linkUrl?: string | null;
   linkDocId?: number | null;
+  listId?: number | null;
 }
 
 /** 局部更新：只传要改的字段；清空字段写进 clear */
@@ -42,7 +54,8 @@ export interface TodoPatchPayload {
   dueDate?: string;
   linkUrl?: string;
   linkDocId?: number;
-  clear?: Array<'dueDate' | 'linkUrl' | 'linkDocId' | 'note'>;
+  listId?: number;
+  clear?: Array<'dueDate' | 'linkUrl' | 'linkDocId' | 'note' | 'listId'>;
 }
 
 export type TodoStatusFilter = 'all' | 'open' | 'done';
@@ -50,12 +63,15 @@ export type TodoStatusFilter = 'all' | 'open' | 'done';
 export const listTodos = (params: {
   status?: TodoStatusFilter;
   keyword?: string;
+  /** 限定某个列表；不传 = 全部 */
+  listId?: number;
   current?: number;
   pageSize?: number;
 }) =>
   http.get<TodoPage>('/todo/items', {
     status: params.status ?? 'all',
     keyword: params.keyword || undefined,
+    listId: params.listId ?? undefined,
     current: params.current ?? 1,
     pageSize: params.pageSize ?? 100,
   });
@@ -68,3 +84,13 @@ export const updateTodo = (id: number, payload: TodoPatchPayload) =>
 export const toggleTodo = (id: number) => http.post<TodoItem>(`/todo/items/${id}/toggle`);
 
 export const deleteTodo = (id: number) => http.del<void>(`/todo/items/${id}`);
+
+/** 列表清单（含计数） */
+export const listTodoLists = () => http.get<TodoListView[]>('/todo/lists');
+
+export const createTodoList = (name: string) => http.post<number>('/todo/lists', { name });
+
+export const renameTodoList = (id: number, name: string) =>
+  http.put<void>(`/todo/lists/${id}`, { name });
+
+export const deleteTodoList = (id: number) => http.del<void>(`/todo/lists/${id}`);

@@ -102,23 +102,23 @@ const TodayView: React.FC = () => {
         </header>
 
         <div className="vc-today__stats">
-          <div className="vc-today-stat" onClick={() => navigate('/todo')} role="button" tabIndex={0}>
+          <div className="vc-today-stat vc-today-stat--todo" onClick={() => navigate('/todo')} role="button" tabIndex={0}>
             <span className="vc-today-stat__value">{loading && !stats ? '–' : stats?.openTodos ?? 0}</span>
             <span className="vc-today-stat__label">未完成待办</span>
           </div>
-          <div className="vc-today-stat" onClick={() => navigate('/todo')} role="button" tabIndex={0}>
+          <div className="vc-today-stat vc-today-stat--due" onClick={() => navigate('/todo')} role="button" tabIndex={0}>
             <span className="vc-today-stat__value">
               {loading && !stats ? '–' : stats?.todayDueTodos ?? 0}
             </span>
             <span className="vc-today-stat__label">今日到期</span>
           </div>
-          <div className="vc-today-stat" onClick={() => navigate('/inbox?status=pending')} role="button" tabIndex={0}>
+          <div className="vc-today-stat vc-today-stat--inbox" onClick={() => navigate('/inbox?status=pending')} role="button" tabIndex={0}>
             <span className="vc-today-stat__value">
               {loading && !stats ? '–' : stats?.unreadClips ?? 0}
             </span>
             <span className="vc-today-stat__label">剪藏待处理</span>
           </div>
-          <div className="vc-today-stat" onClick={() => navigate('/knowledge')} role="button" tabIndex={0}>
+          <div className="vc-today-stat vc-today-stat--docs" onClick={() => navigate('/knowledge')} role="button" tabIndex={0}>
             <span className="vc-today-stat__value">
               {loading && !stats ? '–' : stats?.totalDocs ?? 0}
             </span>
@@ -173,6 +173,7 @@ const TodayView: React.FC = () => {
                       overdue: item.overdue,
                       linkUrl: null,
                       linkDocId: null,
+                      listId: null,
                       createdAt: 0,
                       updatedAt: 0,
                       completedAt: null,

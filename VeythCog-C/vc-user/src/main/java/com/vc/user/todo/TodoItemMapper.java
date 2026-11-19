@@ -13,17 +13,19 @@ import java.util.List;
 @Mapper
 public interface TodoItemMapper extends BaseMapper<TodoItem> {
 
-    /** 分页列表（status=all 表示不过滤；keyword 匹配 title/note） */
+    /** 分页列表（status=all 表示不过滤；keyword 匹配 title/note；listId 为 null 表示不按列表过滤） */
     List<TodoItem> selectPage(@Param("userId") Long userId,
                               @Param("status") String status,
                               @Param("keyword") String keyword,
+                              @Param("listId") Long listId,
                               @Param("limit") int limit,
                               @Param("offset") int offset);
 
     /** 与 selectPage 同条件的总数 */
     long countByFilter(@Param("userId") Long userId,
                        @Param("status") String status,
-                       @Param("keyword") String keyword);
+                       @Param("keyword") String keyword,
+                       @Param("listId") Long listId);
 
     /** 首页今日视图：未完成前 N 条 */
     List<TodoItem> selectOpenBrief(@Param("userId") Long userId, @Param("limit") int limit);

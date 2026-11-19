@@ -95,6 +95,8 @@ const ViewSwitch: React.FC<{ view: HomeView; onSwitch: (view: HomeView) => void 
 const HomePage: React.FC = () => {
   /** 双视图：today（工作台）/ nav（书签墙）；本机 localStorage 优先，服务端偏好兜底 */
   const [view, setView] = React.useState<HomeView>(() => readHomeView());
+  /** 正在切向的目标视图；非空表示过渡进行中，旧内容按该方向淡出 */
+  const [leavingTo, setLeavingTo] = React.useState<HomeView | null>(null);
   useDocumentTitle(view === 'today' ? '今日' : '导航首页');
 
   React.useEffect(() => {
@@ -105,10 +107,31 @@ const HomePage: React.FC = () => {
   }, []);
 
   const switchView = (next: HomeView) => {
-    if (next === view) return;
-    setView(next);
-    persistHomeView(next);
+    if (next === view || leavingTo) return;
+    // 用户要求减少动效时直接切换，不做过渡
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setView(next);
+      persistHomeView(next);
+      return;
+    }
+    // 旧内容朝目标方向淡出 150ms → 换视图 → 新内容从目标方向滑入
+    setLeavingTo(next);
+    window.setTimeout(() => {
+      setView(next);
+      persistHomeView(next);
+      setLeavingTo(null);
+    }, 150);
   };
+
+  /**
+   * 容器类名：
+   * vc-home--{view} 决定入场方向（今日从左、导航从右），
+   * is-leaving-to-{target} 决定旧内容的退出方向。
+   */
+  const homeClass =
+    'vc-home' +
+    ` vc-home--${view}` +
+    (leavingTo ? ` is-leaving is-leaving-to-${leavingTo}` : '');
 
   const navigate = useNavigate();
   const loadHome = useNavStore((s) => s.loadHome);
@@ -334,10 +357,10 @@ const HomePage: React.FC = () => {
   };
 
 
-  // 今日视图：整页工作台（不渲染书签墙 / 侧栏 / 底部工具条）
+  // 今日视图：整页工作台（不渲染书签墙 / 侧栏），底部工具条与导航视图保持同一位置
   if (view === 'today') {
     return (
-      <div className="vc-home" onContextMenu={handlePageContextMenu}>
+      <div className={homeClass} onContextMenu={handlePageContextMenu}>
         <div className="vc-home__topbar">
           <ViewSwitch view={view} onSwitch={switchView} />
           {!isMobile && (
@@ -352,12 +375,20 @@ const HomePage: React.FC = () => {
           </div>
         )}
         <TodayView />
+        <HomeDock
+          // 今日视图没有书签墙，第一项固定按"未显示"呈现，点击即回到导航视图并展开版块
+          gridVisible={false}
+          onToggleGrid={() => {
+            setGridVisible(true);
+            switchView('nav');
+          }}
+        />
       </div>
     );
   }
 
   return (
-    <div className="vc-home" onWheel={handleWheel} onContextMenu={handlePageContextMenu}>
+    <div className={homeClass} onWheel={handleWheel} onContextMenu={handlePageContextMenu}>
       <div className="vc-home__topbar">
         <ViewSwitch view={view} onSwitch={switchView} />
       </div>

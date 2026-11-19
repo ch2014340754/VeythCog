@@ -14,6 +14,7 @@ import MusicPickerModal from '@/components/MusicPickerModal';
 import SelectionAsk from '@/components/SelectionAsk';
 import PageLoadingBar from '@/components/PageLoadingBar';
 import { PAGE_MODULES, schedulePreloadPages } from '@/routes/lazyPages';
+import { installWindowDrag } from '@/utils/dragWindows';
 import { useAuthStore } from '@/stores/authStore';
 import { useClipStore } from '@/stores/clipStore';
 import { useNavStore } from '@/stores/navStore';
@@ -216,6 +217,9 @@ const AppContent: React.FC = () => {
 
   // 首屏渲染稳定后把其余路由 chunk 预取掉：切页时不再现拉资源、也就不会闪
   React.useEffect(() => schedulePreloadPages(), []);
+
+  // 全站弹窗拖拽：一次注册对 antd Modal / 待办浮窗 / 音乐选择器统一生效
+  React.useEffect(() => installWindowDrag(), []);
 
   const antdTheme = useMemo(() => {
     const preset = getPreset(presetName, isDark);

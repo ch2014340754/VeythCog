@@ -30,6 +30,9 @@ public class TodoItemView {
 
     private Long linkDocId;
 
+    /** 所属列表 id；null = 未归类 */
+    private Long listId;
+
     private Long createdAt;
 
     private Long updatedAt;

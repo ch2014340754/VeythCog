@@ -35,13 +35,15 @@ public class TodoController {
 
     private final TodoService todoService;
 
-    /** 分页列表：status=all/open/done，keyword 匹配标题与备注 */
+    /** 分页列表：status=all/open/done，keyword 匹配标题与备注，listId 限定某个列表 */
     @GetMapping
     public BaseResponse<TodoPage> list(@RequestParam(required = false) String status,
                                        @RequestParam(required = false) String keyword,
+                                       @RequestParam(required = false) Long listId,
                                        @RequestParam(defaultValue = "1") int current,
                                        @RequestParam(defaultValue = "20") int pageSize) {
-        return ResultUtils.success(todoService.list(currentUserId(), status, keyword, current, pageSize));
+        return ResultUtils.success(
+                todoService.list(currentUserId(), status, keyword, listId, current, pageSize));
     }
 
     /** 未完成待办简报（工作台 / 角标用，最多 limit 条，按优先级与截止日排序） */

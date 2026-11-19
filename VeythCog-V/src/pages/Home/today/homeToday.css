@@ -4,7 +4,9 @@
 .vc-today {
   height: 100vh;
   overflow-y: auto;
-  padding: 88px var(--space-lg) 40px;
+  /* 底部留白要容得下悬浮工具条（bottom 58px + 条高），否则最后一行会被压住 */
+  padding: 88px var(--space-lg) 136px;
+  /* 入场动画（横向滑入）由 page.css 的 .vc-home--today .vc-today 提供 */
 }
 
 .vc-today__inner {
@@ -52,13 +54,16 @@
 }
 
 .vc-today-stat {
+  /* 每张卡一个色相；具体色值由 --todo / --due / --inbox / --docs 覆盖 */
+  --stat-tone: var(--color-primary);
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 14px var(--space-md);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  background: var(--color-surface-overlay);
+  border-left: 2px solid var(--stat-tone);
+  background: color-mix(in srgb, var(--stat-tone) 7%, var(--color-surface-overlay));
   backdrop-filter: blur(14px) saturate(1.1);
   cursor: pointer;
   transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
@@ -66,16 +71,63 @@
 
 .vc-today-stat:hover {
   transform: translateY(-1px);
-  border-color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--stat-tone) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--stat-tone) 12%, var(--color-surface-overlay));
 }
 
 .vc-today-stat__value {
   font-family: var(--font-heading);
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 600;
-  line-height: 1.2;
-  color: var(--color-text);
+  /* 固定行盒：四张卡数字大小不同，但基线保持一致 */
+  line-height: 36px;
+  color: var(--stat-tone);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 四张统计卡：字号 / 字重 / 字族 / 色调各不相同，避免并排四块一个样 ---------- */
+
+.vc-today-stat--todo {
+  --stat-tone: #2f6fed;
+}
+
+.vc-today-stat--todo .vc-today-stat__value {
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.vc-today-stat--due {
+  --stat-tone: #b26a16;
+}
+
+.vc-today-stat--due .vc-today-stat__value {
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.vc-today-stat--inbox {
+  --stat-tone: #0f7c7c;
+}
+
+.vc-today-stat--inbox .vc-today-stat__value {
+  font-family: var(--font-heading);
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.vc-today-stat--docs {
+  --stat-tone: #2e7d5b;
+}
+
+.vc-today-stat--docs .vc-today-stat__value {
+  font-family: var(--font-heading);
+  font-size: 33px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .vc-today-stat__label {

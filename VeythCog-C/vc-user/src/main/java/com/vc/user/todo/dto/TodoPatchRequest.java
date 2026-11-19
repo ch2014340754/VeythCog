@@ -27,6 +27,9 @@ public class TodoPatchRequest {
 
     private Long linkDocId;
 
-    /** 允许清空的字段：dueDate / linkUrl / linkDocId / note */
+    /** 所属列表 id；null = 不修改，清空走 clear 里的 listId */
+    private Long listId;
+
+    /** 允许清空的字段：dueDate / linkUrl / linkDocId / note / listId */
     private List<String> clear;
 }

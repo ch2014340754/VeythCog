@@ -28,4 +28,7 @@ public class TodoCreateRequest {
 
     /** 关联知识库文档 id，可空 */
     private Long linkDocId;
+
+    /** 所属列表 id，可空（null = 未归类）；传入时服务层校验归属 */
+    private Long listId;
 }

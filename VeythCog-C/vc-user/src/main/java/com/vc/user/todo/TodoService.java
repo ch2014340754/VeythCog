@@ -36,12 +36,14 @@ public class TodoService {
     private static final Set<String> STATUSES = Set.of(STATUS_OPEN, STATUS_DONE);
 
     /** 允许 clear 显式置空的字段白名单 */
-    private static final Set<String> CLEARABLE_FIELDS = Set.of("dueDate", "linkUrl", "linkDocId", "note");
+    private static final Set<String> CLEARABLE_FIELDS = Set.of("dueDate", "linkUrl", "linkDocId", "note", "listId");
 
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_PAGE_SIZE = 100;
 
     private final TodoItemMapper todoMapper;
+
+    private final TodoListService todoListService;
 
     /**
      * 新建待办：默认 open、priority=1、无截止日。
@@ -54,6 +56,12 @@ public class TodoService {
         String title = normalizeTitle(req.getTitle());
         Integer priority = normalizePriority(req.getPriority());
         LocalDate dueDate = parseDate(req.getDueDate());
+        Long listId = null;
+        if (req.getListId() != null) {
+            // 挂列表前先校验归属，避免前端串用别人的列表 id
+            todoListService.require(userId, req.getListId());
+            listId = req.getListId();
+        }
 
         TodoItem item = new TodoItem();
         item.setUserId(userId);
@@ -64,6 +72,7 @@ public class TodoService {
         item.setDueDate(dueDate);
         item.setLinkUrl(trimToNull(req.getLinkUrl()));
         item.setLinkDocId(req.getLinkDocId());
+        item.setListId(listId);
         item.setSortOrder(0);
         item.setCompletedAt(null);
         item.setCreatedAt(OffsetDateTime.now());
@@ -74,17 +83,17 @@ public class TodoService {
     }
 
     /**
-     * 分页列表；status 缺省 all，pageSize 超过 100 按 100 处理。
+     * 分页列表；status 缺省 all，listId 为 null 表示不按列表过滤，pageSize 超过 100 按 100 处理。
      */
-    public TodoPage list(Long userId, String status, String keyword, int current, int pageSize) {
+    public TodoPage list(Long userId, String status, String keyword, Long listId, int current, int pageSize) {
         String normalizedStatus = normalizeStatusFilter(status);
         String normalizedKeyword = keyword == null ? "" : keyword.trim();
         int page = Math.max(1, current);
         int size = pageSize <= 0 ? DEFAULT_PAGE_SIZE : Math.min(pageSize, MAX_PAGE_SIZE);
         int offset = (page - 1) * size;
 
-        long total = todoMapper.countByFilter(userId, normalizedStatus, normalizedKeyword);
-        List<TodoItem> rows = todoMapper.selectPage(userId, normalizedStatus, normalizedKeyword, size, offset);
+        long total = todoMapper.countByFilter(userId, normalizedStatus, normalizedKeyword, listId);
+        List<TodoItem> rows = todoMapper.selectPage(userId, normalizedStatus, normalizedKeyword, listId, size, offset);
         List<TodoItemView> views = new ArrayList<>(rows.size());
         for (TodoItem row : rows) {
             views.add(toView(row));
@@ -132,6 +141,13 @@ public class TodoService {
         }
         if (clear.contains("linkDocId")) {
             item.setLinkDocId(null);
+        }
+        if (req.getListId() != null) {
+            todoListService.require(userId, req.getListId());
+            item.setListId(req.getListId());
+        }
+        if (clear.contains("listId")) {
+            item.setListId(null);
         }
 
         item.setUpdatedAt(OffsetDateTime.now());
@@ -213,6 +229,7 @@ public class TodoService {
                 && item.getDueDate().isBefore(LocalDate.now()));
         view.setLinkUrl(item.getLinkUrl());
         view.setLinkDocId(item.getLinkDocId());
+        view.setListId(item.getListId());
         view.setCreatedAt(toEpochMilli(item.getCreatedAt()));
         view.setUpdatedAt(toEpochMilli(item.getUpdatedAt()));
         view.setCompletedAt(toEpochMilli(item.getCompletedAt()));

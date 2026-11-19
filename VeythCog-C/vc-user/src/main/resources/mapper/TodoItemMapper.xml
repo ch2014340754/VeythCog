@@ -12,6 +12,7 @@
         <result column="due_date"     property="dueDate"/>
         <result column="link_url"     property="linkUrl"/>
         <result column="link_doc_id"  property="linkDocId"/>
+        <result column="list_id"      property="listId"/>
         <result column="sort_order"   property="sortOrder"/>
         <result column="completed_at" property="completedAt"/>
         <result column="created_at"   property="createdAt"/>
@@ -21,7 +22,7 @@
 
     <!-- 统一列清单：所有查询结果都套 TodoItemMap -->
     <sql id="Base_Columns">
-        id, user_id, title, note, status, priority, due_date, link_url, link_doc_id,
+        id, user_id, title, note, status, priority, due_date, link_url, link_doc_id, list_id,
         sort_order, completed_at, created_at, updated_at, deleted
     </sql>
 
@@ -32,6 +33,9 @@
         </if>
         <if test="keyword != null and keyword != ''">
             AND (title ILIKE '%' || #{keyword} || '%' OR note ILIKE '%' || #{keyword} || '%')
+        </if>
+        <if test="listId != null">
+            AND list_id = #{listId}
         </if>
     </sql>
 

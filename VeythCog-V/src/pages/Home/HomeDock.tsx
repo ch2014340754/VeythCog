@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@iconify/react';
 import layoutGridIcon from '@iconify-icons/lucide/layout-grid';
 import listMusicIcon from '@iconify-icons/lucide/list-music';
-import mailIcon from '@iconify-icons/lucide/mail';
+import checkSquareIcon from '@iconify-icons/lucide/check-square';
 import wrenchIcon from '@iconify-icons/lucide/wrench';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
 import settingsIcon from '@iconify-icons/lucide/settings';
-import { message } from 'antd';
 import { useMusicStore } from '@/stores/musicStore';
+import HomeTodoPanel from './HomeTodoPanel';
 
 interface DockAction {
   key: string;
@@ -37,6 +37,8 @@ const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = (
 }) => {
   const navigate = useNavigate();
   const openPicker = useMusicStore((s) => s.setPickerOpen);
+  /** 待办浮窗（拟态窗口）由工具条唤起，不跳页面 */
+  const [todoOpen, setTodoOpen] = React.useState(false);
 
   /** 空闲渐隐：与首页搜索框一致，鼠标未悬停 3 分钟后淡化为淡轮廓，进入即恢复 */
   const FADE_TIMEOUT_MS = 3 * 60 * 1000;
@@ -185,12 +187,7 @@ const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = (
       active: gridVisible,
     },
     { key: 'music', label: '歌单', icon: listMusicIcon, onClick: () => openPicker(true) },
-    {
-      key: 'mail',
-      label: '邮箱管理',
-      icon: mailIcon,
-      onClick: () => message.info('邮箱管理即将上线'),
-    },
+    { key: 'todo', label: '待办', icon: checkSquareIcon, onClick: () => setTodoOpen(true) },
     { key: 'tools', label: '工具集', icon: wrenchIcon, onClick: () => navigate('/tools') },
     { key: 'knowledge', label: '知识库', icon: bookOpenIcon, onClick: () => navigate('/knowledge') },
     { key: 'chat', label: '对话', icon: messageSquareIcon, onClick: () => navigate('/chat') },
@@ -198,37 +195,42 @@ const HomeDock: React.FC<{ gridVisible: boolean; onToggleGrid: () => void }> = (
   ];
 
   return (
-    <div
-      ref={dockRef}
-      className={`vc-dock${dimmed ? ' is-dimmed' : ''}`}
-      onPointerEnter={() => {
-        hoverRef.current = true;
-        wake();
-      }}
-      onPointerMove={handleDockPointerMove}
-      onPointerLeave={() => {
-        hoverRef.current = false;
-        scheduleFade();
-        resetDock();
-      }}
-    >
-      {actions.map((action, index) => (
-        <button
-          key={action.key}
-          ref={(el) => {
-            itemRefs.current[index] = el;
-          }}
-          type="button"
-          className={`vc-dock__item${action.active ? ' is-active' : ''}`}
-          title={action.label}
-          aria-label={action.label}
-          aria-pressed={action.active ? true : undefined}
-          onClick={action.onClick}
-        >
-          <Icon icon={action.icon} width={22} />
-        </button>
-      ))}
-    </div>
+    <>
+      <div
+        ref={dockRef}
+        className={`vc-dock${dimmed ? ' is-dimmed' : ''}`}
+        onPointerEnter={() => {
+          hoverRef.current = true;
+          wake();
+        }}
+        onPointerMove={handleDockPointerMove}
+        onPointerLeave={() => {
+          hoverRef.current = false;
+          scheduleFade();
+          resetDock();
+        }}
+      >
+        {actions.map((action, index) => (
+          <button
+            key={action.key}
+            ref={(el) => {
+              itemRefs.current[index] = el;
+            }}
+            type="button"
+            className={`vc-dock__item${action.active ? ' is-active' : ''}`}
+            title={action.label}
+            aria-label={action.label}
+            aria-pressed={action.active ? true : undefined}
+            onClick={action.onClick}
+          >
+            <Icon icon={action.icon} width={22} />
+          </button>
+        ))}
+      </div>
+
+      {/* 待办浮窗：固定在屏幕中央，与工具条位置无关 */}
+      <HomeTodoPanel open={todoOpen} onClose={() => setTodoOpen(false)} />
+    </>
   );
 };
 

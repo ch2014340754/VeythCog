@@ -3,7 +3,7 @@ import searchIcon from '@iconify-icons/lucide/search';
 import { Icon } from '@iconify/react';
 import { Button, Input, Modal, message } from 'antd';
 import React from 'react';
-import { listTodos, deleteTodo, toggleTodo, type TodoItem, type TodoStatusFilter } from '@/api/todo';
+import { listTodos, deleteTodo, toggleTodo, updateTodo, type TodoItem, type TodoStatusFilter } from '@/api/todo';
 import PageHeader from '@/components/PageHeader';
 import ListSentinel from '@/components/ListSentinel';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -40,6 +40,10 @@ const TodoPage: React.FC = () => {
 
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<TodoItem | null>(null);
+
+  /** 双击标题 → 行内重命名（不改其它字段） */
+  const [renamingId, setRenamingId] = React.useState<number | null>(null);
+  const cancelledRef = React.useRef(false);
 
   /** 丢弃过期响应：快速切筛选时后到的旧结果不能覆盖新结果 */
   const seqRef = React.useRef(0);
@@ -136,6 +140,25 @@ const TodoPage: React.FC = () => {
 
   const openCount = React.useMemo(() => rows.filter((r) => r.status === 'open').length, [rows]);
 
+  /** 双击标题后按 Enter / 失焦保存；Esc 取消 */
+  const commitRename = async (item: TodoItem, raw: string) => {
+    if (cancelledRef.current) {
+      cancelledRef.current = false;
+      setRenamingId(null);
+      return;
+    }
+    const title = raw.trim();
+    setRenamingId(null);
+    if (!title || title === item.title) return;
+    try {
+      await updateTodo(item.id, { title });
+      setRows((prev) => prev.map((row) => (row.id === item.id ? { ...row, title } : row)));
+    } catch {
+      message.error('重命名失败');
+      void load(true);
+    }
+  };
+
   return (
     <div className="vc-page vc-todo-page">
       <PageHeader
@@ -206,16 +229,34 @@ const TodoPage: React.FC = () => {
               {total > rows.length && ` · 仅显示最近 ${rows.length} 条`}
             </div>
             <div className="vc-todo-list">
-              {visible.map((item) => (
-                <TodoRow
-                  key={item.id}
-                  item={item}
-                  busy={busyId === item.id}
-                  onToggle={handleToggle}
-                  onEdit={openEdit}
-                  onDelete={handleDelete}
-                />
-              ))}
+              {visible.map((item) =>
+                renamingId === item.id ? (
+                  <div key={item.id} className="vc-todo-rename">
+                    <input
+                      autoFocus
+                      defaultValue={item.title}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                        if (e.key === 'Escape') {
+                          cancelledRef.current = true;
+                          setRenamingId(null);
+                        }
+                      }}
+                      onBlur={(e) => void commitRename(item, e.currentTarget.value)}
+                    />
+                  </div>
+                ) : (
+                  <TodoRow
+                    key={item.id}
+                    item={item}
+                    busy={busyId === item.id}
+                    onToggle={handleToggle}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                    onTitleDoubleClick={() => setRenamingId(item.id)}
+                  />
+                ),
+              )}
             </div>
             <ListSentinel total={rows.length} shown={visible.length} hasMore={hasMore} sentinelRef={sentinelRef} />
           </>

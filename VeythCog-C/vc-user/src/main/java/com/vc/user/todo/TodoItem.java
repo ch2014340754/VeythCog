@@ -45,6 +45,13 @@ public class TodoItem implements Serializable {
     /** 关联知识库文档 id；弱引用，不建外键 */
     private Long linkDocId;
 
+    /**
+     * 所属列表 id；null = 未归类（只出现在「所有」）。
+     * <p>updateStrategy=ALWAYS：解绑列表时要把 null 写回库，默认 NOT_NULL 策略会跳过。</p>
+     */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long listId;
+
     /** 预留手动排序，v1 不启用 */
     private Integer sortOrder;
 

@@ -13,11 +13,15 @@ export type HomeView = 'today' | 'nav';
 
 const KEY = 'vc:home:view';
 
+/** 没有任何偏好记录时以导航视图为主 */
+const DEFAULT_VIEW: HomeView = 'nav';
+
 export function readHomeView(): HomeView {
   try {
-    return localStorage.getItem(KEY) === 'nav' ? 'nav' : 'today';
+    const saved = localStorage.getItem(KEY);
+    return saved === 'today' || saved === 'nav' ? saved : DEFAULT_VIEW;
   } catch {
-    return 'today';
+    return DEFAULT_VIEW;
   }
 }
 
@@ -34,7 +38,7 @@ export async function syncHomeViewFromServer(): Promise<HomeView | null> {
   if (hasLocal()) return null;
   try {
     const setting = await getUserSetting();
-    const view: HomeView = setting.homeView === 'nav' ? 'nav' : 'today';
+    const view: HomeView = setting.homeView === 'today' ? 'today' : DEFAULT_VIEW;
     localStorage.setItem(KEY, view);
     return view;
   } catch {

@@ -5830,8 +5830,79 @@ body.has-bg .vc-search__icon-btn {
    内页每次挂载都从 opacity 0 淡入 = 点一次菜单闪一下，和"切页要无感"冲突，
    所以内页不再做整页入场；列表/表格的行错峰仍保留（幅度小，看不出空档）。 */
 
+/*
+ * 首屏入场只做淡入，不做位移：
+ * 带 transform 的入场动画在 fill-mode: both 下会把 transform 留在元素上，
+ * 使 .vc-home 成为 position: fixed 的包含块 —— 底部工具条的 bottom: 58px
+ * 就会相对 .vc-home 的内容高度而不是视口定位，导航 / 今日两视图的
+ * 条位置也会随内容高度不同而错开。
+ */
 .vc-home {
-  animation: vc-fade-up var(--motion-duration-slow) var(--motion-ease-out) both;
+  animation: vc-home-fadein var(--motion-duration-slow) var(--motion-ease-out) both;
+}
+
+@keyframes vc-home-fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * 今日 / 导航 视图切换动效：整块内容上滑 + 淡入。
+ * 位移只加在内容层（.vc-home__content / .vc-today），底部工具条与它们同级且 fixed，
+ * 不受这层 transform 影响；backwards 保证动画结束后不残留 transform。
+ */
+/*
+ * 今日 / 导航 视图切换：横向滑入 + 淡入。
+ * 两个视图是并列的两个 tab，按顺序给方向：切到「导航」(右) 从右侧滑入，
+ * 回到「今日」从左侧滑入；旧内容朝反方向退出，形成"推过去"的过渡。
+ * 位移只加在内容层（.vc-home__content / .vc-today），底部工具条与它们同级且 fixed，
+ * 不受这层 transform 影响；backwards 保证动画结束后不残留 transform。
+ */
+@keyframes vc-view-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(56px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes vc-view-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-56px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.vc-home--nav .vc-home__content {
+  animation: vc-view-in-right 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.vc-home--today .vc-today {
+  animation: vc-view-in-left 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* 第一步：旧内容朝目标方向退出（淡出 + 反向位移 24px），150ms 后才换成目标视图 */
+.vc-home.is-leaving-to-nav .vc-today {
+  opacity: 0;
+  transform: translateX(-24px);
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in;
+}
+
+.vc-home.is-leaving-to-today .vc-home__content {
+  opacity: 0;
+  transform: translateX(24px);
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in;
 }
 
 /* ---------- 列表 / 网格：错峰淡入 ----------
@@ -7164,4 +7235,59 @@ body.dark .vc-panel.vc-table-card::after {
     padding: 7px 11px;
     font-size: 12px;
   }
+}
+
+/* ---------- 全站弹窗：默认屏幕居中 + 可拖拽 ---------- */
+
+/*
+ * 1) 居中。把 antd 的 .ant-modal-wrap 统一做成「伪元素 100% 高度 + inline-block 垂直对齐」，
+ *    效果等同每个 Modal 都传 centered，这样 Modal.confirm / Modal.info 这类静态弹窗
+ *    以及各处手写的 <Modal> 都不必逐个补 prop。
+ *    需要 !important：antd 5 的样式是运行时注入的 CSS-in-JS，注入时机晚于本文件。
+ */
+.ant-modal-root .ant-modal-wrap {
+  text-align: center;
+}
+
+.ant-modal-root .ant-modal-wrap::before {
+  display: inline-block;
+  width: 0;
+  height: 100%;
+  vertical-align: middle;
+  content: '';
+}
+
+.ant-modal-root .ant-modal {
+  top: 0 !important;
+  display: inline-block;
+  margin: 0 auto !important;
+  padding-bottom: 0 !important;
+  text-align: left;
+  vertical-align: middle;
+}
+
+/*
+ * 2) 拖拽位移。只叠加一层 translate，变量默认 0，
+ *    拖拽逻辑在 utils/dragWindows.ts 里写入 --vc-drag-x / --vc-drag-y。
+ *    不加 !important 也能覆盖，因为 antd 的 .ant-modal 自身不设 transform；
+ *    入场缩放动画（keyframes）优先级更高，打开动画不受影响。
+ */
+.ant-modal,
+.vc-todopanel {
+  transform: translate(var(--vc-drag-x, 0px), var(--vc-drag-y, 0px));
+}
+
+/* 可以按住的把手给个移动手型，让用户知道这里能拖 */
+.ant-modal-header,
+.ant-modal-confirm-title,
+.vc-todopanel__head,
+.vc-picker__head,
+.vc-modal-head__title,
+[data-drag-handle] {
+  cursor: move;
+}
+
+.ant-modal-confirm-title {
+  display: block;
+  user-select: none;
 }

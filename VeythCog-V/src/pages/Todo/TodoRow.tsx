@@ -16,6 +16,8 @@ interface Props {
   onToggle: (item: TodoItem) => void;
   onEdit?: (item: TodoItem) => void;
   onDelete?: (item: TodoItem) => void;
+  /** 双击标题：交给调用方做行内重命名 */
+  onTitleDoubleClick?: (item: TodoItem) => void;
 }
 
 const PRIORITY_LABEL: Record<number, string> = { 0: '低', 1: '普通', 2: '高' };
@@ -38,7 +40,15 @@ function describeDue(dueDate: string): { text: string; tone: 'normal' | 'soon' |
  * 单条待办：勾选圆圈 + 标题 + 截止日 + 优先级点。
  * 未完成与已完成在同一行样式内切换（删除线 + 降透明度），不重排列表。
  */
-const TodoRow: React.FC<Props> = ({ item, compact = false, busy = false, onToggle, onEdit, onDelete }) => {
+const TodoRow: React.FC<Props> = ({
+  item,
+  compact = false,
+  busy = false,
+  onToggle,
+  onEdit,
+  onDelete,
+  onTitleDoubleClick,
+}) => {
   const done = item.status === 'done';
   const due = item.dueDate ? describeDue(item.dueDate) : null;
   const dueTone = item.overdue ? 'overdue' : due?.tone ?? 'normal';
@@ -61,7 +71,7 @@ const TodoRow: React.FC<Props> = ({ item, compact = false, busy = false, onToggl
       </button>
 
       <div className="vc-todo-main">
-        <div className="vc-todo-title" title={item.title}>
+        <div className="vc-todo-title" title={item.title} onDoubleClick={() => onTitleDoubleClick?.(item)}>
           {item.title}
         </div>
         {(due || item.linkUrl || item.linkDocId) && (

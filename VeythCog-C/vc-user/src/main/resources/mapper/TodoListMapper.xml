@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vc.user.todo.TodoListMapper">
+
+    <resultMap id="TodoListViewMap" type="com.vc.user.todo.dto.TodoListView">
+        <id     column="id"         property="id"/>
+        <result column="name"       property="name"/>
+        <result column="sort_order" property="sortOrder"/>
+        <result column="open_count" property="openCount"/>
+        <result column="done_count" property="doneCount"/>
+    </resultMap>
+
+    <!-- 列表 + 计数：一次聚合，避免前端为每个列表单独请求 -->
+    <select id="selectWithCounts" resultMap="TodoListViewMap">
+        SELECT l.id,
+               l.name,
+               l.sort_order,
+               COUNT(*) FILTER (WHERE i.id IS NOT NULL AND i.status = 'open') AS open_count,
+               COUNT(*) FILTER (WHERE i.id IS NOT NULL AND i.status = 'done') AS done_count
+        FROM todo_list l
+        LEFT JOIN todo_item i
+               ON i.list_id = l.id
+              AND i.user_id = #{userId}
+              AND i.deleted = false
+        WHERE l.user_id = #{userId} AND l.deleted = false
+        GROUP BY l.id, l.name, l.sort_order
+        ORDER BY l.sort_order ASC, l.id ASC
+    </select>
+
+    <select id="maxSortOrder" resultType="int">
+        SELECT COALESCE(MAX(sort_order), 0) FROM todo_list
+        WHERE user_id = #{userId} AND deleted = false
+    </select>
+
+    <update id="clearItemList">
+        UPDATE todo_item SET list_id = NULL, updated_at = now()
+        WHERE user_id = #{userId} AND list_id = #{listId} AND deleted = false
+    </update>
+</mapper>

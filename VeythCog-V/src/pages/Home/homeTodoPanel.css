@@ -1,0 +1,635 @@
+/* ---------- 首页底部工具条 · 待办浮窗 ----------
+   配色全部走主题变量（ThemeContext 注入的 --color-* / --glass-*），
+   这样亮色、暗色与配色预设切换时都自动跟随，不写死任何颜色。
+------------------------------------------------- */
+
+.vc-todopanel__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background: color-mix(in srgb, var(--color-text) 26%, transparent);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: vc-todopanel-fade 0.2s ease;
+}
+
+@keyframes vc-todopanel-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.vc-todopanel {
+  width: min(780px, 100%);
+  height: min(560px, 86vh);
+  display: flex;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border, var(--color-border));
+  /* 面板要能看清内容：底色按主题 surface 做到近乎实色，只留一点透感给背景壁纸 */
+  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: var(--shadow-xl);
+  animation: vc-todopanel-in 0.28s var(--motion-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+@keyframes vc-todopanel-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- 左栏 ---------- */
+
+.vc-todopanel__side {
+  flex: 0 0 188px;
+  box-sizing: border-box;
+  /* flex 项默认 min-width:auto，会被内部不换行的导航项撑宽，必须显式归零 */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  /* 左栏用实色混合做出层次，不再依赖透明叠色，长文本也读得清 */
+  background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface));
+  border-right: 1px solid var(--color-divider);
+}
+
+.vc-todopanel__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  color: var(--color-text-tertiary);
+}
+
+.vc-todopanel__search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.vc-todopanel__search input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.vc-todopanel__nav,
+.vc-todopanel__listbtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px 0 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.vc-todopanel__nav:hover,
+.vc-todopanel__listbtn:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
+.vc-todopanel__nav.is-active,
+.vc-todopanel__listitem.is-active .vc-todopanel__listbtn {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 选中项左侧那道主色指示 */
+.vc-todopanel__nav.is-active::before,
+.vc-todopanel__listitem.is-active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-primary);
+  z-index: 1;
+}
+
+.vc-todopanel__nav-ic {
+  display: inline-flex;
+  color: var(--color-text-tertiary);
+}
+
+.vc-todopanel__nav.is-active .vc-todopanel__nav-ic,
+.vc-todopanel__listitem.is-active .vc-todopanel__nav-ic {
+  color: var(--color-primary);
+}
+
+.vc-todopanel__nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-todopanel__nav-count {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.16s ease;
+}
+
+.vc-todopanel__nav-sep {
+  height: 1px;
+  margin: 8px 10px;
+  background: var(--color-divider);
+}
+
+/* 自定义列表区 */
+.vc-todopanel__lists {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.vc-todopanel__listitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+}
+
+.vc-todopanel__listacts {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.vc-todopanel__listitem:hover .vc-todopanel__listacts {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vc-todopanel__listitem:hover .vc-todopanel__nav-count {
+  opacity: 0;
+}
+
+.vc-todopanel__listacts button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.vc-todopanel__listacts button:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+.vc-todopanel__listinput {
+  width: 100%;
+  height: 28px;
+  margin: 4px 0;
+  padding: 0 8px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  font-size: 13px;
+  outline: none;
+}
+
+.vc-todopanel__listinput.is-new {
+  margin-top: auto;
+  border-color: var(--color-border);
+}
+
+.vc-todopanel__newlist {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.vc-todopanel__newlist:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-10);
+}
+
+/* ---------- 主区 ---------- */
+
+.vc-todopanel__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px 10px;
+}
+
+.vc-todopanel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 2px 12px;
+}
+
+.vc-todopanel__titles {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vc-todopanel__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-todopanel__date-text {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.vc-todopanel__close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.vc-todopanel__close:hover {
+  background: color-mix(in srgb, var(--color-text) 14%, transparent);
+  color: var(--color-text);
+}
+
+/* 添加任务条 */
+.vc-todopanel__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 8px 0 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-primary);
+}
+
+.vc-todopanel__add input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.vc-todopanel__add input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* 日期按钮 + 内联日历 */
+.vc-todopanel__date {
+  position: relative;
+  z-index: 10;
+  flex: 0 0 auto;
+}
+
+.vc-todopanel__datebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.vc-todopanel__datebtn:hover {
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  color: var(--color-text);
+}
+
+.vc-todopanel__datebtn.is-on {
+  background: var(--color-primary-10);
+  color: var(--color-primary);
+}
+
+.vc-cal {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 238px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+}
+
+.vc-cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.vc-cal__head button {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.vc-cal__head button:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+.vc-cal__head span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vc-cal__week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.vc-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.vc-cal__day {
+  height: 28px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.vc-cal__day:hover {
+  background: var(--color-primary-10);
+}
+
+.vc-cal__day.is-out {
+  color: var(--color-text-tertiary);
+  opacity: 0.55;
+}
+
+.vc-cal__day.is-today {
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.vc-cal__day.is-selected {
+  background: var(--color-primary);
+  color: var(--color-text-inverse, #fff);
+}
+
+.vc-cal__foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.vc-cal__foot button {
+  flex: 1;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.vc-cal__foot button:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* 列表 */
+.vc-todopanel__rows {
+  flex: 1;
+  min-height: 0;
+  margin-top: 8px;
+  padding: 2px 2px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vc-todopanel__rows::-webkit-scrollbar {
+  width: 8px;
+}
+
+.vc-todopanel__rows::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-text) 18%, transparent);
+  border-radius: 4px;
+}
+
+.vc-todopanel__rows::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 行：去掉页面版的底边线，改成圆角悬停块 */
+.vc-todopanel__rows .vc-todo-row {
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  padding: 10px 8px;
+  border-bottom: none;
+  border-radius: var(--radius-md);
+}
+
+.vc-todopanel__rows .vc-todo-row:hover {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+/* 双击标题后的行内重命名框：与行等高、对齐复选框右侧 */
+.vc-todopanel__rename {
+  padding: 10px 8px;
+}
+
+.vc-todopanel__rename input {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px 0 30px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  font-size: 14px;
+  outline: none;
+}
+
+/* 空状态 */
+.vc-todopanel__empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding-bottom: 40px;
+}
+
+.vc-todopanel__empty-art {
+  position: relative;
+  width: 108px;
+  height: 88px;
+}
+
+.vc-todopanel__empty-box {
+  position: absolute;
+  left: 12px;
+  bottom: 6px;
+  width: 84px;
+  height: 56px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-text) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+  box-shadow: var(--shadow-md);
+}
+
+.vc-todopanel__empty-lid {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 108px;
+  height: 34px;
+  border-radius: 7px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  transform: rotate(-7deg);
+  box-shadow: var(--shadow-md);
+}
+
+.vc-todopanel__empty-shadow {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 12px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+  opacity: 0.5;
+}
+
+.vc-todopanel__empty-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+.vc-todopanel__loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 40px;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+@media (max-width: 720px) {
+  .vc-todopanel__backdrop {
+    padding: 16px;
+  }
+
+  .vc-todopanel {
+    height: min(72vh, 560px);
+  }
+
+  .vc-todopanel__side {
+    flex-basis: 148px;
+  }
+}
