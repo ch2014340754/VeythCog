@@ -1,5 +1,6 @@
 import SettingsModal, { type SettingsTab } from '@/components/SettingsModal';
 import { useAuthStore } from '@/stores/authStore';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import birdIcon from '@iconify-icons/lucide/bird';
 import logInIcon from '@iconify-icons/lucide/log-in';
 import logOutIcon from '@iconify-icons/lucide/log-out';
@@ -18,6 +19,7 @@ const UserMenu: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('account');
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   const initial = (user?.name ?? '?').trim().charAt(0).toUpperCase();
   const loggedIn = !!user;
@@ -118,7 +120,7 @@ const UserMenu: React.FC = () => {
       <Popover
         content={content}
         trigger="click"
-        placement="rightTop"
+        placement={isMobile ? 'bottomRight' : 'rightTop'}
         arrow={false}
         open={open}
         onOpenChange={setOpen}

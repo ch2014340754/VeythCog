@@ -426,9 +426,40 @@ body.glass-on .vc-subnav-layout--unified .vc-provider {
   .vc-subnav-content__inner { max-width: 1040px; }
 }
 
-@media (max-width: 720px) {
-  .vc-subnav { width: 168px; padding: var(--space-md) 6px; }
-  .vc-subnav-content { padding: var(--space-lg) var(--space-md) var(--space-xl); }
+@media (max-width: 768px) {
+  .vc-subnav-layout {
+    flex-direction: column;
+  }
+  .vc-subnav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-divider);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .vc-subnav__back,
+  .vc-subnav__head,
+  .vc-subnav__foot {
+    display: none;
+  }
+  .vc-subnav__item {
+    flex-shrink: 0;
+    width: auto;
+    height: 36px;
+    margin-bottom: 0;
+    padding: 0 14px;
+    white-space: nowrap;
+  }
+  .vc-subnav-content {
+    flex: 1;
+    min-width: 0;
+    padding: var(--space-md) var(--space-md) var(--space-xl);
+  }
 }
 
 /* ---------- 卡片 / 网格 / 工具栏 ---------- */
@@ -1836,6 +1867,10 @@ body.dark .vc-dialog-scrim {
   border-bottom: 1px solid var(--color-divider);
 }
 
+.vc-doc-head__menu {
+  display: none;
+}
+
 .vc-doc-head__title {
   flex: 1;
   min-width: 200px;
@@ -2640,6 +2675,11 @@ body.dark .vc-panel.vc-table-card {
   min-width: 0;
 }
 
+.vc-chat-head__menu {
+  display: none;
+  flex-shrink: 0;
+}
+
 .vc-chat-head__icon {
   flex-shrink: 0;
   color: var(--color-primary);
@@ -3016,6 +3056,42 @@ body.dark .vc-composer {
   color: var(--color-text-tertiary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 对话页移动端：会话列表走抽屉，头部/消息/输入区收窄间距 */
+@media (max-width: 768px) {
+  .vc-chat-head {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .vc-chat-head__menu {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .vc-chat-scroll {
+    padding: var(--space-md) var(--space-md) var(--space-sm);
+  }
+  .vc-composer-wrap {
+    padding: 0 var(--space-md) var(--space-md);
+  }
+  .vc-chat-nav-drawer .ant-drawer-body {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  .vc-chat-nav-drawer .vc-chat-nav__head {
+    padding: 16px 12px 12px;
+  }
+  .vc-chat-nav-drawer .vc-chat-list {
+    flex: 1;
+  }
 }
 
 .vc-kb-list {
@@ -4172,6 +4248,11 @@ body.dark .vc-composer {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
 }
 
+/* 移动端顶栏（窄屏显示，桌面端由左侧 rail 承担导航） */
+.vc-mobile-header {
+  display: none;
+}
+
 /* ---------- 内页环境光（第 1 阶：静止画面也有"底光"） ----------
    两团极淡的品牌色径向光贴在内容卡左上 / 右下，9s 呼吸（只动 opacity）。
    作用等同登录页的 __core：让玻璃面板有"底"可透，页面不再是纯色平板。
@@ -4303,6 +4384,9 @@ body.has-bg .vc-shell__canvas::before {
 .vc-rail__spacer {
   flex: 1;
 }
+.vc-rail__label {
+  display: none;
+}
 /* 导航角标（收件箱待处理数）：贴在图标右上角，深色/壁纸下都用主色底 + 白字保证可读 */
 .vc-rail__badge {
   position: absolute;
@@ -4348,6 +4432,327 @@ body.has-bg .vc-rail__admin.is-active {
 }
 .vc-rail__admin.is-active .iconify {
   color: var(--color-primary);
+}
+
+/* ============ 移动端（≤768px）：顶栏 + 底部标签栏 ============ */
+@media (max-width: 768px) {
+  .vc-mobile-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: var(--z-fixed);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+    pointer-events: none;
+  }
+  .vc-mobile-header__logo,
+  .vc-mobile-header__actions {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .vc-mobile-header__logo {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  .vc-mobile-header__icon {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: none;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .vc-shell {
+    flex-direction: column;
+  }
+  .vc-shell__main {
+    margin-left: 0;
+    padding: calc(60px + env(safe-area-inset-top)) 8px calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .vc-rail {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    gap: 4px;
+    padding: 6px 8px;
+    border-radius: var(--radius-lg);
+  }
+  .vc-rail__logo,
+  .vc-rail__btn--search,
+  .vc-rail__spacer,
+  .vc-rail__user {
+    display: none;
+  }
+
+  .vc-rail__btn {
+    position: relative;
+    flex: 1 1 0;
+    width: auto;
+    height: 56px;
+    flex-direction: column;
+    gap: 3px;
+    border-radius: var(--radius-md);
+    touch-action: manipulation;
+  }
+  .vc-rail__label {
+    display: block;
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }
+  .vc-rail__indicator {
+    left: 50%;
+    top: auto;
+    bottom: 3px;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+  }
+  .vc-rail__badge {
+    top: 6px;
+    right: 10px;
+  }
+
+  /* 知识库：树抽屉化，目录收起在左侧 */
+  .vc-knowledge__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: rgba(0, 0, 0, 0.38);
+  }
+  .vc-knowledge .vc-knowledge-nav {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 901;
+    width: min(300px, 86vw);
+    flex-direction: column;
+    align-items: stretch;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-right: 1px solid var(--color-divider);
+    transform: translateX(-100%);
+    transition: transform 0.25s var(--ease-out);
+  }
+  .vc-knowledge--tree-open .vc-knowledge-nav {
+    transform: translateX(0);
+  }
+  .vc-doc-head__menu {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+  .vc-doc-head__title {
+    min-width: 0;
+  }
+
+  /* 首页：底部导航常驻，隐藏 hover 浮层 / 工具条 / 右侧分类栏 */
+  .vc-rail--float {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .vc-rail__hotzone,
+  .vc-catnav,
+  .vc-catnav__hotzone,
+  .vc-dock {
+    display: none;
+  }
+  .vc-home-mobile-actions {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top));
+    right: 12px;
+    z-index: 20;
+  }
+  .vc-home__content {
+    padding: 64px 12px calc(96px + env(safe-area-inset-bottom));
+  }
+  .vc-clock__time {
+    font-size: 56px;
+  }
+  .vc-clock__date {
+    font-size: 13px;
+  }
+
+  .vc-home-cats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 640px;
+    margin: 0 auto 16px;
+  }
+  .vc-home-cats__scroll {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .vc-home-cats__scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .vc-home-cats__item {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .vc-home-cats__item.is-active {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+  .vc-home-cats__add {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--color-divider);
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-text-secondary);
+  }
+
+  .vc-bookmark-grid-wrap {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 4px;
+  }
+  .vc-bookmark-grid {
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    grid-auto-rows: 88px;
+    gap: 10px;
+    min-height: 0;
+    max-height: calc(100vh - 320px);
+  }
+
+  /* 工具集：侧栏分组收成顶部横向标签条 */
+  .vc-tools-head {
+    display: none;
+  }
+  .vc-tools-nav__scroll {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .vc-tools-nav__scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .vc-tools-group {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+  }
+  .vc-tools-group__label {
+    display: none;
+  }
+  .vc-tools-group .vc-subnav__item {
+    flex-shrink: 0;
+    width: auto;
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  /* 页面 / 面板 / 表格 / 弹窗 / 表单触控适配 */
+  .vc-page__body {
+    padding: var(--space-md) var(--space-md) var(--space-xl);
+  }
+  .vc-panel {
+    padding: var(--space-md);
+  }
+
+  .ant-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: 100%;
+    top: 12px;
+  }
+  .ant-modal-content {
+    padding: 16px;
+  }
+  .ant-modal-body {
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+  }
+
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+  .ant-table-wrapper .ant-table {
+    min-width: 560px;
+  }
+
+  .ant-btn {
+    min-height: 36px;
+  }
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  .vc-provider__block .vc-toolbar,
+  .vc-provider__foot .vc-toolbar {
+    flex-wrap: wrap !important;
+  }
+  .vc-provider__url {
+    max-width: 100%;
+  }
+  .vc-model-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .vc-toolbar .ant-select,
+  .vc-toolbar .ant-input-affix-wrapper,
+  .vc-toolbar .ant-input {
+    width: 100% !important;
+  }
+  .vc-toolbar .ant-segmented {
+    max-width: 100%;
+  }
+  .ant-space {
+    flex-wrap: wrap;
+  }
 }
 
 /* ---------- 首页（Home） ---------- */
@@ -4525,8 +4930,11 @@ body.has-bg .vc-dock__item.is-active {
 }
 
 /* 书签网格 */
+/* 图标墙宽度由 2/3 屏加宽到 73vw：单元格最小 80px + 12px 间距，
+   1463 / 1440 下由 10 列变 11 列、1920 下由 13 列变 15 列，
+   左右两侧的 rail（左侧 72px）/ 分类竖栏（右侧 64px）仍留有余量，不会被压住。 */
 .vc-bookmark-grid-wrap {
-  width: 66.6667vw;
+  width: 73vw;
   min-width: 320px;
   max-width: calc(100vw - 48px);
   margin: 0 auto;
@@ -6476,4 +6884,201 @@ body.dark .vc-panel.vc-table-card::after {
   background: color-mix(in srgb, var(--color-error) 14%, transparent);
   border-color: color-mix(in srgb, var(--color-error) 48%, transparent);
   color: var(--color-error);
+}
+/* ---------- 移动端收口覆盖：仅作用于 ≤768px，桌面端不参与 ---------- */
+@media (max-width: 768px) {
+  /* 桌面侧栏浮动播放器、首页 Dock 在手机端移除；音乐库入口仍由底部导航提供 */
+  .vc-player {
+    display: none !important;
+  }
+
+  .vc-dock {
+    display: none !important;
+  }
+
+  /* 设置弹窗：左侧导航收窄为纯图标，把横向空间留给右侧表单 */
+  .vc-settings-modal__nav {
+    width: 58px;
+    flex: 0 0 58px;
+    padding: 12px 8px;
+    gap: 6px;
+  }
+
+  .vc-settings-modal__title {
+    display: none;
+  }
+
+  .vc-settings-modal__item {
+    justify-content: center;
+    gap: 0;
+    height: 42px;
+    padding: 0;
+  }
+
+  .vc-settings-modal__label {
+    display: none;
+  }
+
+  .vc-settings-modal .ant-modal-body {
+    min-height: 0 !important;
+    height: calc(100vh - 24px) !important;
+  }
+
+  /* 工具集：分类导航改为顶部横向条；右侧标签栏和内容区占满剩余宽度 */
+  .vc-subnav-layout {
+    flex-direction: column;
+  }
+
+  .vc-tools-nav {
+    width: 100% !important;
+    flex: 0 0 auto;
+    padding: 0;
+    border-right: 0;
+    overflow: hidden;
+  }
+
+  .vc-tools-nav__scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 10px;
+  }
+
+  .vc-tools-group {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+    margin-bottom: 0;
+  }
+
+  .vc-tools-group__label {
+    display: none;
+  }
+
+  .vc-tools-group .vc-subnav__item {
+    flex-shrink: 0;
+    height: 34px;
+    margin-bottom: 0;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  .vc-subnav-layout > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .vc-tabbar {
+    height: 40px;
+    padding: 0 10px;
+    gap: 4px;
+  }
+
+  .vc-tab {
+    height: 32px;
+    max-width: 120px;
+  }
+
+  .vc-tab__close {
+    flex: 0 0 auto;
+  }
+
+  /* 首屏：隐藏底部文案轮播 */
+  .vc-quote {
+    display: none !important;
+  }
+
+  /* 首屏：压缩时钟上方与组件间距，让搜索、分类和图标墙整体上移 */
+  .vc-home__content {
+    padding-top: 24px;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+
+  .vc-clock {
+    margin-bottom: 10px;
+  }
+
+  .vc-clock__date {
+    margin-top: 4px;
+  }
+
+  .vc-search {
+    margin-bottom: 14px;
+  }
+
+  .vc-home__grid-pop {
+    padding-top: 10px;
+  }
+
+  /* 底部导航：固定在书签层之上，使用接近不透明的表面避免图标透出压字 */
+  .vc-rail--float,
+  .vc-shell > .vc-rail {
+    z-index: var(--z-fixed);
+    background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
+  }
+
+  /* 首屏图标墙：重置桌面居中宽度，固定一行五列并沿屏幕宽度均衡铺开 */
+  .vc-bookmark-grid-wrap {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 0 4px;
+  }
+
+  .vc-bookmark-grid {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    max-height: calc(100dvh - 280px);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-rows: 82px;
+    gap: 8px;
+    justify-content: stretch;
+    align-content: start;
+    padding-right: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .vc-bookmark-grid::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  .vc-bookmark,
+  .vc-bookmark__add {
+    padding: 6px 2px;
+    gap: 6px;
+  }
+
+  .vc-bookmark__label {
+    max-width: 100%;
+    font-size: 12px;
+  }
+
+  .vc-iconpreview {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  .vc-bookmark__add-plus {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+  }
+
+  /* 知识库抽屉：使用不透明表面，避免壁纸透出导致文字看不清 */
+  .vc-knowledge .vc-knowledge-nav {
+    background: var(--color-surface) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.14);
+  }
 }

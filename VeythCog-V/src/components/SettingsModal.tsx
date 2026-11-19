@@ -73,7 +73,7 @@ const SettingsModal: React.FC<Props> = ({ open, onClose, defaultTab = 'account' 
               className={'vc-settings-modal__item' + (tab === item.key ? ' is-active' : '')}
             >
               <Icon icon={item.icon} width={16} />
-              {item.label}
+              <span className="vc-settings-modal__label">{item.label}</span>
             </button>
           ))}
         </aside>

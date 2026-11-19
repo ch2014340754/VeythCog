@@ -87,6 +87,7 @@ const HomeSidebar: React.FC = () => {
               aria-current={active ? 'page' : undefined}
             >
               <Icon icon={item.icon} width={22} />
+              <span className="vc-rail__label">{item.label}</span>
               {active && <span className="vc-rail__indicator" aria-hidden />}
               {item.badge === 'clipPending' && clipPending > 0 && (
                 <span className="vc-rail__badge" aria-label={`${clipPending} 条待处理`}>
@@ -108,11 +109,14 @@ const HomeSidebar: React.FC = () => {
             aria-current={isActive('/admin') ? 'page' : undefined}
           >
             <Icon icon={shieldIcon} width={22} />
+            <span className="vc-rail__label">管理</span>
             {isActive('/admin') && <span className="vc-rail__indicator" aria-hidden />}
           </button>
         )}
 
-        <UserMenu />
+        <div className="vc-rail__user">
+          <UserMenu />
+        </div>
       </nav>
     </>
   );

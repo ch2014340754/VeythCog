@@ -6,9 +6,11 @@ import { ModelModalityIcons } from '@/components/ModelTypeTag';
 import type { DocListItem, Conversation, Message } from '@/types';
 import { modelId, useSettingsStore } from '@/stores/settingsStore';
 import { formatRelativeTime } from '@/utils/formatTime';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import databaseIcon from '@iconify-icons/lucide/database';
 import globeIcon from '@iconify-icons/lucide/globe';
+import menuIcon from '@iconify-icons/lucide/menu';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
 import micIcon from '@iconify-icons/lucide/mic';
 import moreHorizontalIcon from '@iconify-icons/lucide/more-horizontal';
@@ -73,6 +75,10 @@ const ChatPage: React.FC = () => {
   const [kbDrawerOpen, setKbDrawerOpen] = useState(false);
   const [kbDocs, setKbDocs] = useState<DocListItem[]>([]);
   const [kbLoading, setKbLoading] = useState(false);
+
+  // 移动端会话列表抽屉
+  const [navOpen, setNavOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   // 当前活跃会话
   const activeConv = conversations.find((c) => c.id === activeConvId) || null;
@@ -209,6 +215,7 @@ const ChatPage: React.FC = () => {
       const newConv = await createConversation('新对话', model);
       setConversations((prev) => [newConv, ...prev]);
       setActiveConvId(newConv.id);
+      setNavOpen(false);
       setTimeout(() => inputRef.current?.focus(), 0);
     } catch (e) {
       message.error(e instanceof Error ? e.message : '新建对话失败');
@@ -500,82 +507,104 @@ const ChatPage: React.FC = () => {
     return list[index - 1].role !== 'assistant';
   };
 
-  return (
-    <div className="vc-subnav-layout vc-chat">
-      {/* 左侧面板 - 会话列表（可折叠） */}
-      <CollapsibleSidebar width={SIDEBAR_WIDTH}>
-        <div className="vc-chat-nav__head">
-          <Input
-            prefix={<Icon icon={searchIcon} width={14} className="vc-search-icon" />}
-            placeholder="搜索对话..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            allowClear
-          />
-          <Button icon={<Icon icon={plusIcon} width={14} />} onClick={handleCreate} block>
-            新建对话
-          </Button>
-        </div>
+  /** 会话列表内容：桌面侧栏与移动端抽屉复用同一份渲染 */
+  const renderConvNav = () => (
+    <>
+      <div className="vc-chat-nav__head">
+        <Input
+          prefix={<Icon icon={searchIcon} width={14} className="vc-search-icon" />}
+          placeholder="搜索对话..."
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          allowClear
+        />
+        <Button icon={<Icon icon={plusIcon} width={14} />} onClick={handleCreate} block>
+          新建对话
+        </Button>
+      </div>
 
-        <div className="vc-chat-list">
-          {loading ? (
-            <div className="vc-chat-list__loading">
-              <Spin />
-            </div>
-          ) : filteredConvs.length === 0 ? (
-            <div className="vc-chat-list__empty">暂无对话</div>
-          ) : (
-            filteredConvs.map((conv) => {
-              const isActive = conv.id === activeConvId;
-              const isHovered = conv.id === hoveredConvId;
-              return (
+      <div className="vc-chat-list">
+        {loading ? (
+          <div className="vc-chat-list__loading">
+            <Spin />
+          </div>
+        ) : filteredConvs.length === 0 ? (
+          <div className="vc-chat-list__empty">暂无对话</div>
+        ) : (
+          filteredConvs.map((conv) => {
+            const isActive = conv.id === activeConvId;
+            const isHovered = conv.id === hoveredConvId;
+            return (
+              <div
+                key={conv.id}
+                className="vc-conv-item-wrap"
+                onMouseEnter={() => setHoveredConvId(conv.id)}
+                onMouseLeave={() => setHoveredConvId(null)}
+              >
                 <div
-                  key={conv.id}
-                  className="vc-conv-item-wrap"
-                  onMouseEnter={() => setHoveredConvId(conv.id)}
-                  onMouseLeave={() => setHoveredConvId(null)}
+                  className={'vc-conv-item' + (isActive ? ' is-active' : '') + (isHovered ? ' is-hovered' : '')}
+                  onClick={() => {
+                    setActiveConvId(conv.id);
+                    setNavOpen(false);
+                  }}
                 >
-                  <div
-                    className={'vc-conv-item' + (isActive ? ' is-active' : '') + (isHovered ? ' is-hovered' : '')}
-                    onClick={() => setActiveConvId(conv.id)}
-                  >
-                    <div className="vc-conv-item__row">
-                      <Icon icon={messageSquareIcon} width={14} className="vc-conv-item__icon" />
-                      <span className="vc-conv-item__title">{conv.title}</span>
-                    </div>
-                    <div className="vc-conv-item__preview">{conv.lastMessage || '暂无消息'}</div>
-                    <div className="vc-conv-item__meta">
-                      <span className="vc-conv-item__time">{formatRelativeTime(conv.createdAt)}</span>
-                      {conv.knowledgeBaseId && (
-                        <span className="vc-conv-item__badge">
-                          <Icon icon={bookOpenIcon} width={10} />
-                          知识库
-                        </span>
-                      )}
-                    </div>
+                  <div className="vc-conv-item__row">
+                    <Icon icon={messageSquareIcon} width={14} className="vc-conv-item__icon" />
+                    <span className="vc-conv-item__title">{conv.title}</span>
                   </div>
-
-                  {/* 删除按钮：垂直居中浮在右侧，hover 时随内容右缩淡入 */}
-                  <div className={'vc-conv-item__delete' + (isHovered ? ' is-shown' : '')}>
-                    <Popconfirm
-                      title="删除对话"
-                      description="删除后不可恢复，确认删除？"
-                      onConfirm={() => handleDelete(conv.id)}
-                      okText="删除"
-                      cancelText="取消"
-                      placement="left"
-                    >
-                      <button onClick={(e) => e.stopPropagation()} aria-label="删除对话">
-                        <Icon icon={trashIcon} width={14} />
-                      </button>
-                    </Popconfirm>
+                  <div className="vc-conv-item__preview">{conv.lastMessage || '暂无消息'}</div>
+                  <div className="vc-conv-item__meta">
+                    <span className="vc-conv-item__time">{formatRelativeTime(conv.createdAt)}</span>
+                    {conv.knowledgeBaseId && (
+                      <span className="vc-conv-item__badge">
+                        <Icon icon={bookOpenIcon} width={10} />
+                        知识库
+                      </span>
+                    )}
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
-      </CollapsibleSidebar>
+
+                {/* 删除按钮：垂直居中浮在右侧，hover 时随内容右缩淡入 */}
+                <div className={'vc-conv-item__delete' + (isHovered ? ' is-shown' : '')}>
+                  <Popconfirm
+                    title="删除对话"
+                    description="删除后不可恢复，确认删除？"
+                    onConfirm={() => handleDelete(conv.id)}
+                    okText="删除"
+                    cancelText="取消"
+                    placement="left"
+                  >
+                    <button onClick={(e) => e.stopPropagation()} aria-label="删除对话">
+                      <Icon icon={trashIcon} width={14} />
+                    </button>
+                  </Popconfirm>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="vc-subnav-layout vc-chat">
+      {/* 左侧面板：桌面可折叠侧栏，移动端抽屉 */}
+      {isMobile ? (
+        <Drawer
+          className="vc-chat-nav-drawer"
+          placement="left"
+          width={Math.min(320, Math.round(window.innerWidth * 0.85))}
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
+          title="对话"
+          closable
+        >
+          {renderConvNav()}
+        </Drawer>
+      ) : (
+        <CollapsibleSidebar width={SIDEBAR_WIDTH}>{renderConvNav()}</CollapsibleSidebar>
+      )}
 
       {/* 右侧聊天窗口 */}
       <div className="vc-chat-main">
@@ -583,6 +612,14 @@ const ChatPage: React.FC = () => {
           <>
             {/* 聊天标题栏 */}
             <div key={`header-${activeConv.id}`} className="vc-chat-head chat-panel-fade-in">
+              <button
+                type="button"
+                className="vc-chat-head__menu"
+                onClick={() => setNavOpen(true)}
+                aria-label="打开对话列表"
+              >
+                <Icon icon={menuIcon} width={18} />
+              </button>
               <div className="vc-chat-head__main">
                 <Icon icon={messageSquareIcon} width={18} className="vc-chat-head__icon" />
                 <span className="vc-chat-head__title">{activeConv.title}</span>

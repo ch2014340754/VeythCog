@@ -142,7 +142,7 @@
 }
 
 /* 窄屏：两列折叠成单列 */
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .vc-config-row {
     grid-template-columns: minmax(0, 1fr);
     row-gap: var(--space-sm);

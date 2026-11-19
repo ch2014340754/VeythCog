@@ -30,6 +30,8 @@ import zapIcon from '@iconify-icons/lucide/zap';
 import zapOffIcon from '@iconify-icons/lucide/zap-off';
 import { Icon } from '@iconify/react';
 import { Button, Input, message, Modal, Popconfirm, Tag, Tooltip, Upload } from 'antd';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import menuIcon from '@iconify-icons/lucide/menu';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 import DocEditor, { type DocEditorHandle } from './DocEditor';
@@ -49,6 +51,9 @@ const KnowledgePage: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeDocId, setActiveDocId] = useState<number | null>(null);
+  /** 移动端知识树抽屉 */
+  const [treeOpen, setTreeOpen] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 768px)');
   /** 当前选中的目录：新建文档 / 导入的默认落点 */
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
   /** 树里 Ctrl / ⌘ 攒出来的导出选集（与「当前打开」无关） */
@@ -219,6 +224,7 @@ const KnowledgePage: React.FC = () => {
     }
     if (!silent) {
       setActiveDocId(id);
+      setTreeOpen(false);
       setDetailLoading(true);
     }
     try {
@@ -594,7 +600,10 @@ const KnowledgePage: React.FC = () => {
       : tree?.folders.find((f) => f.id === createFolderId)?.name ?? '根目录';
 
   return (
-    <div className="vc-subnav-layout vc-knowledge">
+    <div className={`vc-subnav-layout vc-knowledge${treeOpen ? ' vc-knowledge--tree-open' : ''}`}>
+      {isMobile && treeOpen && (
+        <div className="vc-knowledge__scrim" onClick={() => setTreeOpen(false)} aria-hidden />
+      )}
       <aside className="vc-subnav vc-knowledge-nav">
         <div className="vc-knowledge-nav__head">
           <span className="vc-eyebrow">Knowledge</span>
@@ -725,6 +734,11 @@ const KnowledgePage: React.FC = () => {
             <Button type="primary" icon={<Icon icon={plusIcon} width={14} />} onClick={() => openCreateDoc(activeFolderId)}>
               新建文档
             </Button>
+            {isMobile && (
+              <Button icon={<Icon icon={filesIcon} width={14} />} onClick={() => setTreeOpen(true)}>
+                浏览文档
+              </Button>
+            )}
             <Upload
               showUploadList={false}
               accept=".md"
@@ -741,6 +755,14 @@ const KnowledgePage: React.FC = () => {
           <>
             {detailLoading && <SlimProgress />}
             <header className="vc-doc-head">
+              <button
+                type="button"
+                className="vc-doc-head__menu"
+                onClick={() => setTreeOpen(true)}
+                aria-label="打开文档目录"
+              >
+                <Icon icon={menuIcon} width={18} />
+              </button>
               <button
                 type="button"
                 className="vc-doc-head__title"

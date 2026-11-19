@@ -1,6 +1,7 @@
 import type { NavBookmark } from '@/api/nav';
 import { syncIcons } from '@/api/nav';
 import WallpaperManagerModal from '@/components/WallpaperManagerModal';
+import UserMenu from '@/components/UserMenu';
 import { useAuthStore } from '@/stores/authStore';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useNavStore } from '@/stores/navStore';
@@ -19,6 +20,8 @@ import { Icon } from '@iconify/react';
 import { message } from 'antd';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import MobileCategoryBar from './MobileCategoryBar';
 import BookmarkGrid from './BookmarkGrid';
 import BookmarkModal from './BookmarkModal';
 import CategoryManageModal from './CategoryManageModal';
@@ -78,6 +81,7 @@ const HomePage: React.FC = () => {
   const [wallpaperManagerOpen, setWallpaperManagerOpen] = React.useState(false);
   /** 书签图标版块显隐（底部工具条第一个开关，带过渡动画） */
   const [gridVisible, setGridVisible] = React.useState(true);
+  const isMobile = useMediaQuery('(max-width: 768px)');
   /** 右键菜单：书签菜单 / 空白区菜单，同一时间只允许一个 */
   const [menu, setMenu] = React.useState<
     | { kind: 'bookmark'; bookmark: NavBookmark; x: number; y: number }
@@ -282,12 +286,18 @@ const HomePage: React.FC = () => {
   return (
     <div className="vc-home" onWheel={handleWheel} onContextMenu={handlePageContextMenu}>
       <HomeSidebar />
+      {isMobile && (
+        <div className="vc-home-mobile-actions">
+          <UserMenu />
+        </div>
+      )}
 
       {/* 内容区：fading 只作用在下半的书签区，不作用在壁纸和上半固定区 */}
       <div className="vc-home__content">
         {/* 固定区：时钟 + 搜索框，滚轮切分类时保持不动 */}
         <Clock />
         <SearchBar />
+        {isMobile && <MobileCategoryBar onAddCategory={() => setCategoryManageOpen(true)} />}
 
         {/* 切换区：搜索框不参与，只有书签网格从底部弹入。
             key 取 dataCategoryId —— 新分类的书签真正到位时才重挂载、播一次；

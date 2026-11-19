@@ -47,7 +47,32 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="vc-shell">
-      {/* 左侧图标导航栏 - 浮动毛玻璃样式 */}
+      {/* 移动端顶栏：首页入口 + 全局搜索 + 账号菜单（桌面端隐藏） */}
+      <header className="vc-mobile-header">
+        <button
+          type="button"
+          className="vc-mobile-header__logo"
+          onClick={() => navigate('/home')}
+          title="回到导航首页"
+          aria-label="回到导航首页"
+        >
+          <VeythCogLogo primaryColor={colors.primary} accentColor={colors.accent} size={30} />
+        </button>
+        <div className="vc-mobile-header__actions">
+          <button
+            type="button"
+            className="vc-mobile-header__icon"
+            onClick={openPalette}
+            title="全局搜索（Ctrl+K）"
+            aria-label="全局搜索"
+          >
+            <Icon icon={searchIcon} width={20} />
+          </button>
+          <UserMenu />
+        </div>
+      </header>
+
+      {/* 左侧图标导航栏 - 浮动毛玻璃样式；窄屏转为底部标签栏 */}
       <nav className="vc-rail" aria-label="主导航">
         {/* Logo 区域 - 点击回 /home */}
         <button
@@ -62,7 +87,7 @@ const MainLayout: React.FC = () => {
         {/* 全局搜索：Ctrl/Cmd+K 的命令面板入口 */}
         <button
           type="button"
-          className="vc-rail__btn"
+          className="vc-rail__btn vc-rail__btn--search"
           onClick={openPalette}
           title="全局搜索（Ctrl+K）"
           aria-label="全局搜索"
@@ -82,6 +107,7 @@ const MainLayout: React.FC = () => {
               aria-current={active ? 'page' : undefined}
             >
               <Icon icon={item.icon} width={22} />
+              <span className="vc-rail__label">{item.label}</span>
               {active && <span className="vc-rail__indicator" aria-hidden />}
               {item.badge === 'clipPending' && clipPending > 0 && (
                 <span className="vc-rail__badge" aria-label={`${clipPending} 条待处理`}>
@@ -104,12 +130,15 @@ const MainLayout: React.FC = () => {
             aria-current={isActive('/admin') ? 'page' : undefined}
           >
             <Icon icon={shieldIcon} width={22} />
+            <span className="vc-rail__label">管理</span>
             {isActive('/admin') && <span className="vc-rail__indicator" aria-hidden />}
           </button>
         )}
 
-        {/* 用户菜单：头像下拉（账号/模型/飞书/外观/退出） */}
-        <UserMenu />
+        {/* 桌面端账号菜单；移动端账号菜单挂在顶栏 */}
+        <div className="vc-rail__user">
+          <UserMenu />
+        </div>
       </nav>
 
       {/* 右侧内容区 - 留出导航栏空间 */}
