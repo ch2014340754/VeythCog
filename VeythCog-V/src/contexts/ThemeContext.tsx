@@ -225,6 +225,11 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean, glassEnabled
     root.style.setProperty('--shadow-md', '0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3)');
     root.style.setProperty('--shadow-lg', '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3)');
     root.style.setProperty('--shadow-xl', '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4)');
+    // 浮层面板专用底色：不透明版 surface。毛玻璃模式下 --color-surface 是 0.55 透明度的，
+    // 拿它做「几乎实色」的浮窗会算出来只有一半不透明度、看着还是透。
+    root.style.setProperty('--panel-surface', surface);
+    // 浮层遮罩：暗色下把壁纸压暗，内容才站得住
+    root.style.setProperty('--color-scrim', 'rgba(0, 0, 0, 0.45)');
   } else {
     const lightSurface = glassEnabled ? 'rgba(255, 255, 255, 0.55)' : '#ffffff';
     const lightSurfaceElevated = glassEnabled ? 'rgba(255, 255, 255, 0.65)' : '#ffffff';
@@ -247,6 +252,9 @@ function applyCSSVariables(presetName: PresetName, isDark: boolean, glassEnabled
     root.style.setProperty('--shadow-md', '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)');
     root.style.setProperty('--shadow-lg', '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)');
     root.style.setProperty('--shadow-xl', '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)');
+    // 浮层面板专用底色（见暗色分支说明）：浅色下就是纯白，浮窗才不会透出壁纸
+    root.style.setProperty('--panel-surface', '#ffffff');
+    root.style.setProperty('--color-scrim', 'rgba(0, 0, 0, 0.28)');
   }
 }
 
