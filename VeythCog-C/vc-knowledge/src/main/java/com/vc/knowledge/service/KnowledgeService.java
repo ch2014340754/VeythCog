@@ -41,6 +41,17 @@ public interface KnowledgeService {
     void moveDoc(Long userId, Long docId, Long folderId);
 
     /**
+     * 最近更新的文档（首页工作台用）；只返回轻量字段。
+     */
+    List<DocListItem> recentDocs(int limit);
+
+    /**
+     * 待向量化文档数：未删除、is_vectorized=false 且正文长度 >= minChars。
+     * <p>阈值过滤掉过短的空白文档，避免首页提示长期挂着一个不值的数字。</p>
+     */
+    long countPendingVector(int minChars);
+
+    /**
      * 仅重命名文档标题：不动正文 / 摘要 / 标签，**不置** {@code isVectorized=false}。
      */
     void renameTitle(Long userId, Long docId, String title);

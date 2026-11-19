@@ -21,6 +21,7 @@ import com.vc.knowledge.dto.PageResult;
 import com.vc.knowledge.dto.RetrieveChunk;
 import com.vc.knowledge.dto.RetrieveRequest;
 import com.vc.knowledge.service.KnowledgeFolderService;
+import com.vc.knowledge.service.KnowledgeGraphService;
 import com.vc.knowledge.service.KnowledgeService;
 import com.vc.knowledge.service.VectorizeService;
 import jakarta.validation.Valid;
@@ -59,15 +60,18 @@ public class KnowledgeController {
     private final KnowledgeFolderService folderService;
     private final VectorizeService vectorizeService;
     private final KnowledgeMetadataOrchestrator metadataOrchestrator;
+    private final KnowledgeGraphService graphService;
 
     public KnowledgeController(KnowledgeService knowledgeService,
                                KnowledgeFolderService folderService,
                                VectorizeService vectorizeService,
-                               KnowledgeMetadataOrchestrator metadataOrchestrator) {
+                               KnowledgeMetadataOrchestrator metadataOrchestrator,
+                               KnowledgeGraphService graphService) {
         this.knowledgeService = knowledgeService;
         this.folderService = folderService;
         this.vectorizeService = vectorizeService;
         this.metadataOrchestrator = metadataOrchestrator;
+        this.graphService = graphService;
     }
 
     // ===================== 目录树（P1） =====================
@@ -258,8 +262,16 @@ public class KnowledgeController {
                 currentUserIdOrNull(), body.getDocIds(), body.getQuery(), body.getTopN()));
     }
 
-    private Long currentUserIdOrNull() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    /** 11. 知识地图：结构总览 + 语义星图 + 孤岛（后端只给结构，坐标由前端布局） */
+    @GetMapping("/graph")
+    public BaseResponse<com.vc.knowledge.dto.graph.GraphResponse> graph(
+            @RequestParam(required = false) Long folderId,
+            @RequestParam(required = false) Integer maxNodes,
+            @RequestParam(defaultValue = "true") boolean includeUnvectorized) {
+        return ResultUtils.success(graphService.graph(folderId, maxNodes, includeUnvectorized));
+    }
+
+    private Long currentUserIdOrNull() {        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !(auth.getPrincipal() instanceof Long userId)) {
             return null;
         }

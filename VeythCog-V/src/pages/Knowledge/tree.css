@@ -487,3 +487,103 @@
     transition: none;
   }
 }
+
+/* 知识库「仅看未向量化」聚焦条（首页待向量化提醒点进来时出现） */
+.vc-kb-focus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin: 8px 10px 2px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.vc-kb-focus__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.vc-kb-focus__clear {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+.vc-kb-focus__clear:hover {
+  background: var(--color-surface);
+}
+/* ===================== 知识库视图切换（文档 / 地图） ===================== */
+
+.vc-kb-viewswitch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  margin: 2px 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  width: fit-content;
+}
+
+.vc-kb-viewswitch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.vc-kb-viewswitch button:hover {
+  color: var(--color-text);
+}
+
+.vc-kb-viewswitch button.is-active {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 地图视图：文档区保留布局但隐藏（切回不必重建树与编辑器） */
+.vc-knowledge-docarea {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vc-knowledge-main.is-map {
+  display: flex;
+  flex-direction: column;
+}
+
+.vc-knowledge-main.is-map .vc-kmap {
+  flex: 1;
+  min-height: 0;
+}
+
+.vc-knowledge-main.is-map .vc-knowledge-docarea {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}

@@ -15,6 +15,7 @@ public class KnowledgeProperties {
     private Chunk chunk = new Chunk();
     private Retrieve retrieve = new Retrieve();
     private Embedding embedding = new Embedding();
+    private Graph graph = new Graph();
 
     @Data
     public static class Chunk {
@@ -52,5 +53,28 @@ public class KnowledgeProperties {
         private int dimensions = 1024;
         /** 批量 embedding 每批条数 */
         private int batchSize = 10;
+    }
+
+    /**
+     * 知识地图（knowledge.graph.*）：阈值与规模必须可配，不要写死在代码里。
+     */
+    @Data
+    public static class Graph {
+        /** 每个节点保留的近邻数 top-k */
+        private int k = 5;
+        /** 最低相似度（0-1，sim = 1 - L2/2），需用真实数据校准 */
+        private double minSimilarity = 0.55;
+        /** 节点上限，超过按一级目录聚合 */
+        private int maxNodes = 300;
+        /** 节点硬上限（接口 maxNodes 参数不得超过） */
+        private int hardMaxNodes = 500;
+        /** 结果缓存 TTL（秒） */
+        private int cacheTtlSeconds = 600;
+        /** 单次计算超时（毫秒），超时降级 */
+        private int timeoutMs = 3000;
+        /** 指定 embedding 模型；留空 = 自动取主导模型 */
+        private String model = "";
+        /** 质心算法：mean（均值）/ medoid（离均值最近的真实分片） */
+        private String centroidMode = "mean";
     }
 }

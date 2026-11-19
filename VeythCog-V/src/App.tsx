@@ -15,6 +15,7 @@ import SelectionAsk from '@/components/SelectionAsk';
 import PageLoadingBar from '@/components/PageLoadingBar';
 import { PAGE_MODULES, schedulePreloadPages } from '@/routes/lazyPages';
 import { useAuthStore } from '@/stores/authStore';
+import { useClipStore } from '@/stores/clipStore';
 import { useNavStore } from '@/stores/navStore';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 
@@ -23,6 +24,7 @@ import { useWallpaperStore } from '@/stores/wallpaperStore';
 // 懒加载清单集中在 routes/lazyPages，首屏稳定后会被预取一遍，切页不再等 chunk。
 const ChatPage = React.lazy(PAGE_MODULES.chat);
 const KnowledgePage = React.lazy(PAGE_MODULES.knowledge);
+const TodoPage = React.lazy(PAGE_MODULES.todo);
 const InboxPage = React.lazy(PAGE_MODULES.inbox);
 const MusicPage = React.lazy(PAGE_MODULES.music);
 const ToolsLayout = React.lazy(PAGE_MODULES.tools);
@@ -100,12 +102,33 @@ const GlobalSelectionAsk: React.FC = () => {
 };
 
 /**
+ * 收件箱角标数据源（全站唯一轮询点）。
+ *
+ * /home 不在 MainLayout 下（它有自己的滑入式 rail），因此轮询不能挂在布局里，
+ * 否则首页与内页各起一个定时器。这里统一 60s 一次，两处 rail 只读 store。
+ */
+const ClipBadgeSync: React.FC = () => {
+  const token = useAuthStore((s) => s.token);
+  const refreshPending = useClipStore((s) => s.refreshPending);
+
+  React.useEffect(() => {
+    if (!token) return;
+    void refreshPending();
+    const timer = window.setInterval(() => void refreshPending(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [token, refreshPending]);
+
+  return null;
+};
+
+/**
  * 根布局：全局组件需要在 Router 上下文内才能用 useLocation / useNavigate，
  * 因此放进最外层路由的 layout 里，而不是 RouterProvider 之外。
  */
 const RootLayout: React.FC = () => (
   <>
     <WallpaperRouteSync />
+    <ClipBadgeSync />
     <GlobalMusic />
     <GlobalSelectionAsk />
     <CommandPalette />
@@ -128,6 +151,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/chat', element: <ChatPage /> },
       { path: '/knowledge', element: <KnowledgePage /> },
+      { path: '/todo', element: <TodoPage /> },
       { path: '/inbox', element: <InboxPage /> },
       { path: '/music', element: <MusicPage /> },
       { path: '/tools/*', element: <ToolsLayout /> },

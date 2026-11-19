@@ -71,6 +71,31 @@ const ChatPage: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, []);
 
+  /**
+   * 深链意图（首帧读一次，读后清掉 query）：
+   * - ?c=<conversationId>：打开指定会话（首页最近对话点进来）
+   * - ?docs=1,2,3：把这几篇知识库文档设为本次会话的 RAG 范围（知识地图「就它提问」）
+   */
+  const bootIntentRef = useRef<{ convId?: string; docIds?: number[] }>({});
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const c = params.get('c');
+    const docs = params.get('docs');
+    const docIds = docs
+      ? docs
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (c || docIds.length > 0) {
+      bootIntentRef.current = { convId: c || undefined, docIds: docIds.length ? docIds : undefined };
+      params.delete('c');
+      params.delete('docs');
+      const rest = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+    }
+  }, []);
+
   // 知识库抽屉状态
   const [kbDrawerOpen, setKbDrawerOpen] = useState(false);
   const [kbDocs, setKbDocs] = useState<DocListItem[]>([]);
@@ -109,8 +134,38 @@ const ChatPage: React.FC = () => {
     try {
       const data = await getConversations();
       setConversations(data);
-      if (data.length > 0 && !activeConvId) {
+      const boot = bootIntentRef.current;
+      const target = boot.convId && data.some((c) => c.id === boot.convId) ? boot.convId : null;
+      if (target) {
+        setActiveConvId(target);
+      } else if (data.length > 0 && !activeConvId) {
         setActiveConvId(data[0].id);
+      }
+
+      // 深链带来的文档范围：绑定到目标会话；没有任何会话时新建一个并预置范围
+      if (boot.docIds && boot.docIds.length > 0) {
+        const scope = boot.docIds;
+        bootIntentRef.current = {};
+        const bindTo = target ?? data[0]?.id ?? null;
+        if (bindTo) {
+          try {
+            await updateConversation(bindTo, { docIds: scope });
+            setConversations((prev) =>
+              prev.map((c) => (c.id === bindTo ? { ...c, knowledgeDocIds: scope } : c))
+            );
+          } catch {
+            message.warning('已打开会话，但知识库范围绑定失败');
+          }
+        } else {
+          const [vendor, modelCode] = (useSettingsStore.getState().currentModelId ?? '').split(':');
+          const conv = await createConversation(
+            '基于知识地图提问',
+            vendor && modelCode ? { vendor, modelCode } : undefined,
+            scope
+          );
+          setConversations([conv]);
+          setActiveConvId(conv.id);
+        }
       }
     } catch (e) {
       // 列表拉取失败不阻塞页面（新会话仍可创建与发送）

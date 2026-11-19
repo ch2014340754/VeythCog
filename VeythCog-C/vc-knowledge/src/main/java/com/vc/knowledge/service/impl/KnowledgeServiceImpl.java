@@ -220,6 +220,17 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         return plain.length() <= SUMMARY_LENGTH ? plain : plain.substring(0, SUMMARY_LENGTH);
     }
 
+    @Override
+    public List<DocListItem> recentDocs(int limit) {
+        int safeLimit = Math.min(Math.max(1, limit), 20);
+        return docMapper.selectRecent(safeLimit).stream().map(this::toListItem).toList();
+    }
+
+    @Override
+    public long countPendingVector(int minChars) {
+        return docMapper.countPendingVector(Math.max(0, minChars));
+    }
+
     private DocListItem toListItem(KnowledgeDoc doc) {
         DocListItem item = new DocListItem();
         item.setId(doc.getId());

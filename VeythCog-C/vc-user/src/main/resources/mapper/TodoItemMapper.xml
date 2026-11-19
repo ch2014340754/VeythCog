@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vc.user.todo.TodoItemMapper">
+
+    <resultMap id="TodoItemMap" type="com.vc.user.todo.TodoItem">
+        <id     column="id"           property="id"/>
+        <result column="user_id"      property="userId"/>
+        <result column="title"        property="title"/>
+        <result column="note"         property="note"/>
+        <result column="status"       property="status"/>
+        <result column="priority"     property="priority"/>
+        <result column="due_date"     property="dueDate"/>
+        <result column="link_url"     property="linkUrl"/>
+        <result column="link_doc_id"  property="linkDocId"/>
+        <result column="sort_order"   property="sortOrder"/>
+        <result column="completed_at" property="completedAt"/>
+        <result column="created_at"   property="createdAt"/>
+        <result column="updated_at"   property="updatedAt"/>
+        <result column="deleted"      property="deleted"/>
+    </resultMap>
+
+    <!-- 统一列清单：所有查询结果都套 TodoItemMap -->
+    <sql id="Base_Columns">
+        id, user_id, title, note, status, priority, due_date, link_url, link_doc_id,
+        sort_order, completed_at, created_at, updated_at, deleted
+    </sql>
+
+    <sql id="Filter_Where">
+        WHERE user_id = #{userId} AND deleted = false
+        <if test="status != null and status != '' and status != 'all'">
+            AND status = #{status}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (title ILIKE '%' || #{keyword} || '%' OR note ILIKE '%' || #{keyword} || '%')
+        </if>
+    </sql>
+
+    <!--
+      排序规则（列表与首页共用）：
+        1) open 在前
+        2) open 组：due_date 升序，NULL 排最后
+        3) open 组：priority 降序
+        4) open 组：created_at 降序；done 组：completed_at 降序
+    -->
+    <select id="selectPage" resultMap="TodoItemMap">
+        SELECT <include refid="Base_Columns"/>
+        FROM todo_item
+        <include refid="Filter_Where"/>
+        ORDER BY
+            CASE WHEN status = 'open' THEN 0 ELSE 1 END,
+            CASE WHEN status = 'open' THEN CASE WHEN due_date IS NULL THEN 1 ELSE 0 END ELSE 0 END,
+            CASE WHEN status = 'open' THEN due_date END ASC,
+            CASE WHEN status = 'open' THEN priority END DESC,
+            CASE WHEN status = 'open' THEN created_at ELSE completed_at END DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByFilter" resultType="long">
+        SELECT count(*) FROM todo_item
+        <include refid="Filter_Where"/>
+    </select>
+
+    <select id="selectOpenBrief" resultMap="TodoItemMap">
+        SELECT <include refid="Base_Columns"/>
+        FROM todo_item
+        WHERE user_id = #{userId} AND deleted = false AND status = 'open'
+        ORDER BY
+            CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,
+            due_date ASC,
+            priority DESC,
+            created_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countOpen" resultType="long">
+        SELECT count(*) FROM todo_item
+        WHERE user_id = #{userId} AND deleted = false AND status = 'open'
+    </select>
+
+    <select id="countDueToday" resultType="long">
+        SELECT count(*) FROM todo_item
+        WHERE user_id = #{userId} AND deleted = false AND status = 'open'
+          AND due_date IS NOT NULL AND due_date &lt;= #{today}
+    </select>
+</mapper>

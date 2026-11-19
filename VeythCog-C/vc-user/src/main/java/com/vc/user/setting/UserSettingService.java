@@ -27,6 +27,9 @@ public class UserSettingService {
     /** 支持的搜索引擎（与前端 SearchBar 一致） */
     private static final Set<String> SEARCH_ENGINES = Set.of("baidu", "google", "bing");
 
+    /** 首页可选视图（今日 / 导航）；存量行或非法值按 today 兜底 */
+    private static final Set<String> HOME_VIEWS = Set.of("today", "nav");
+
     /** 允许被 clear 显式置空的字段白名单（新增可空字段时记得加进来） */
     private static final Set<String> CLEARABLE_FIELDS = Set.of("activeCategoryId", "currentWallpaperKey");
 
@@ -65,6 +68,14 @@ public class UserSettingService {
         }
         if (req != null && req.getActiveCategoryId() != null) {
             setting.setActiveCategoryId(req.getActiveCategoryId());
+        }
+        String homeView = req == null ? null : req.getHomeView();
+        if (homeView != null) {
+            String normalized = homeView.trim().toLowerCase(Locale.ROOT);
+            if (!HOME_VIEWS.contains(normalized)) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的首页视图：" + homeView);
+            }
+            setting.setHomeView(normalized);
         }
         if (clear.contains("activeCategoryId")) {
             setting.setActiveCategoryId(null);
@@ -112,6 +123,7 @@ public class UserSettingService {
         UserSetting setting = new UserSetting();
         setting.setUserId(userId);
         setting.setSearchEngine("baidu");
+        setting.setHomeView("today");
         return setting;
     }
 
@@ -139,6 +151,8 @@ public class UserSettingService {
         view.setSearchEngine(setting.getSearchEngine());
         view.setCurrentWallpaperKey(setting.getCurrentWallpaperKey());
         view.setActiveCategoryId(setting.getActiveCategoryId());
+        // 存量行可能为 null（025 之前的历史数据），读取时统一兜底 today
+        view.setHomeView(HOME_VIEWS.contains(setting.getHomeView()) ? setting.getHomeView() : "today");
         view.setUpdatedAt(setting.getUpdatedAt());
         return view;
     }

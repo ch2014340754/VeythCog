@@ -205,6 +205,47 @@
 - `DELETE /api/chat/conversations/{conversationId}` → `BaseResponse<boolean>`（物理删除该会话记忆行）
 - 已知限制：记忆为 `MessageWindowChatMemory`（窗口 20 条）全量覆盖写，超长会话的早期消息会被窗口裁掉，接口只能回显库中现存部分
 
+### 3.6 知识地图（P1 · `p1-knowledge-map`）
+
+`GET /knowledge/graph`
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `folderId` | long | 否 | 下钻只看该目录子树（含全部子孙）；省略 = 全库 |
+| `maxNodes` | int | 否 | 本次节点上限，缺省取配置 300，硬上限 500 |
+| `includeUnvectorized` | bool | 否 | 默认 true；false 时 `islands.unvectorized` 为空 |
+
+响应：`{ nodes, edges, clusters, islands, meta }`（**不包含 x/y 坐标**，布局由前端负责）
+
+```jsonc
+{
+  "nodes": [{"id": 12, "title": "…", "folderId": 3, "folderPath": "技术/中间件",
+             "chunkCount": 8, "charCount": 4200, "vectorized": true,
+             "degree": 3, "clusterId": 0, "colorKey": 5}],
+  "edges": [{"source": 12, "target": 18, "similarity": 0.72, "sharedTags": ["后端"]}],
+  "clusters": [{"id": 0, "label": "…", "size": 4, "folderId": 3, "colorKey": 5}],
+  "islands": {"isolated": [12], "unvectorized": [ {/* 同 node，vectorized=false */} ]},
+  "meta": {"model": "qwen3.7-text-embedding-flash", "docCount": 2, "nodeCount": 1,
+           "edgeCount": 0, "degraded": false, "maxNodes": 300, "computedAt": 1795…, "elapsedMs": 37}
+}
+```
+
+**口径（实现按此为准）**
+
+| 项 | 规则 |
+|---|---|
+| 相似度 | 文档质心单位化后 `d = ‖ĉi − ĉj‖₂ ∈ [0,2]`，`sim = 1 − d/2`；与 RAG 检索同为 L2，保证"图上连着的 = 会一起召回的那批" |
+| 质心 | 分片向量均值（`knowledge.graph.centroid-mode=mean`，可切 `medoid`） |
+| 建边 | 每个节点保留 `sim ≥ minSimilarity(0.55)` 的前 `k(5)` 个近邻，无向去重 |
+| 聚类 | 邻接表 BFS 连通分量，`label` = 分量内 degree 最高文档标题（截 12 字） |
+| 孤岛 | `degree == 0` 的已向量化节点 → `islands.isolated` |
+| 规模保护 | `N > maxNodes` 按一级目录聚合，簇节点 `id = -folderId`（根级 `-1`），`meta.degraded = true`；点簇节点带 `folderId` 下钻 |
+| 缓存 | LRU 8 条 + TTL 600s，key = `model\|maxUpdatedAt\|docCount\|maxNodes\|folderId\|centroidMode\|includeUnvectorized`；同 key 单飞；降级结果不写缓存 |
+| 超时 | 计算 3s 超时 → 返回目录聚合无图 + `degraded = true`，不让前端等 30s |
+| 模型 | `knowledge.graph.model` 非空则用之，否则取库内出现最多的 `embedding_model`；均无 → 空图（`nodes=[]`，`islands.unvectorized` 全量） |
+| 维度 | 分片向量长度必须等于 `knowledge.embedding.dimensions`，否则报错提示"向量模型变更需重新向量化"，**禁止静默截断** |
+| 类型映射 | `selectVectorsByModel` **必须** `resultMap` + `VectorTypeHandler`；`resultType` 会把 `float[]` 解成 `String` 导致 `ClassCastException` |
+
 ## 4. 幂等与防御
 
 - 向量化以 `doc_id` 为幂等键，先删后插，重复调用结果一致。

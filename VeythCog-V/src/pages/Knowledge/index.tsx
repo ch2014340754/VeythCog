@@ -32,10 +32,12 @@ import { Icon } from '@iconify/react';
 import { Button, Input, message, Modal, Popconfirm, Tag, Tooltip, Upload } from 'antd';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import menuIcon from '@iconify-icons/lucide/menu';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import networkIcon from '@iconify-icons/lucide/network';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 import DocEditor, { type DocEditorHandle } from './DocEditor';
 import DocTree, { type DocTreeHandle } from './DocTree';
+import KnowledgeMap from './map';
 
 /** 切换文档时的顶部细进度条：不遮挡内容，仅在右上角提示加载中 */
 const SlimProgress: React.FC = () => (
@@ -58,7 +60,26 @@ const KnowledgePage: React.FC = () => {
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
   /** 树里 Ctrl / ⌘ 攒出来的导出选集（与「当前打开」无关） */
   const [selectedCount, setSelectedCount] = useState(0);
+  /** 只看未向量化文档（首页「待向量化」提醒点进来时的聚焦态） */
+  const [onlyUnvectorized, setOnlyUnvectorized] = useState(false);
+  /** 视图：文档树（默认）/ 知识地图（?view=map） */
+  const [view, setView] = useState<'doc' | 'map'>(() =>
+    new URLSearchParams(window.location.search).get('view') === 'map' ? 'map' : 'doc'
+  );
   const docTreeRef = useRef<DocTreeHandle>(null);
+
+  /** 切换视图：写回 URL（不新增历史，刷新后仍停在同一个视图） */
+  const switchView = useCallback((next: 'doc' | 'map') => {
+    setView(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === 'map') {
+      params.set('view', 'map');
+    } else {
+      params.delete('view');
+    }
+    const rest = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+  }, []);
 
   const [detail, setDetail] = useState<DocDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -245,17 +266,34 @@ const KnowledgePage: React.FC = () => {
   };
 
   // 外部深链：/knowledge?docId=12（收件箱入库后直接跳过来看文档）
-  // 只在首帧读一次，之后清掉 query，避免刷新/返回时反复触发
+  //        /knowledge?filter=unvectorized（首页「待向量化」提醒点进来时只显示待处理文档）
+  //        /knowledge?view=map（首页知识地图入口；保留在 URL 里，刷新不回退到文档视图）
+  // 只在首帧读一次，之后清掉其余 query，避免刷新/返回时反复触发
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    if (params.get('filter') === 'unvectorized') {
+      setOnlyUnvectorized(true);
+      params.delete('filter');
+    }
     const raw = params.get('docId');
-    if (!raw || !/^\d+$/.test(raw)) return;
-    void selectDoc(Number(raw), { silent: true });
-    params.delete('docId');
+    if (raw && /^\d+$/.test(raw)) {
+      // 深链打开文档同样走完整流程（加载态、activeDocId 同步、树高亮）
+      void selectDoc(Number(raw));
+      params.delete('docId');
+    }
     const rest = params.toString();
-    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+    if (rest !== window.location.search.replace(/^\?/, '')) {
+      window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** 聚焦「未向量化」时只过滤文档集，目录结构保持原样（空目录提示更直观） */
+  const displayTree = useMemo(() => {
+    if (!onlyUnvectorized || !tree) return tree;
+    const docs = tree.docs.filter((doc) => !doc.isVectorized);
+    return { ...tree, docs, matchedCount: docs.length };
+  }, [tree, onlyUnvectorized]);
 
   /**
    * 保存文档（标题 / 摘要 / 标签 / 正文）。
@@ -302,6 +340,8 @@ const KnowledgePage: React.FC = () => {
       await inFlight;
       lastSavedFingerprintRef.current = fingerprint;
       setDirtyState(false);
+      // 落库的内容成为新的干净基线：之后改回该版本不应再被判定为"有未保存改动"
+      editorRef.current?.markBaseline?.();
       // 本地乐观更新：只改元信息，不重新拉详情（重拉会让 DocEditor 重解析 blockData 造成闪动）
       setDetail((prev) =>
         prev ? { ...prev, title: payload.title, summary: payload.summary, tags, isVectorized: false } : prev
@@ -330,19 +370,31 @@ const KnowledgePage: React.FC = () => {
   detailRef.current = detail;
 
   /**
-   * 内容变更回调：
+   * 内容变更回调（`hasChanges` 来自编辑器与干净基线的比对结果）：
+   * - 内容改回原样：清掉"未保存"标识，并取消待触发的自动保存；
    * - 未向量化文档：3 秒无新编辑后静默自动保存；
    * - 已向量化文档：不自动落库（保存会让向量索引失效），只标记有未保存改动，离开时提醒手动保存。
    */
-  const scheduleAutoSave = useCallback(() => {
-    setDirtyState(true);
-    if (detailRef.current?.isVectorized) return;
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      autoSaveTimerRef.current = null;
-      void handleSaveRef.current?.(undefined, { silent: true });
-    }, 3000);
-  }, [setDirtyState]);
+  const handleContentChange = useCallback(
+    (hasChanges: boolean) => {
+      if (!hasChanges) {
+        setDirtyState(false);
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+          autoSaveTimerRef.current = null;
+        }
+        return;
+      }
+      setDirtyState(true);
+      if (detailRef.current?.isVectorized) return;
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = setTimeout(() => {
+        autoSaveTimerRef.current = null;
+        void handleSaveRef.current?.(undefined, { silent: true });
+      }, 3000);
+    },
+    [setDirtyState]
+  );
 
   // 切换文档 / 卸载时：清掉未触发的防抖定时器；若有进行中的保存则等待其落库，避免丢改动
   useEffect(() => {
@@ -614,6 +666,28 @@ const KnowledgePage: React.FC = () => {
               {keyword.trim() && tree ? ` · 命中 ${tree.matchedCount}` : ''}
             </span>
           </div>
+          <div className="vc-kb-viewswitch" role="tablist" aria-label="知识库视图">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'doc'}
+              className={view === 'doc' ? 'is-active' : ''}
+              onClick={() => switchView('doc')}
+            >
+              <Icon icon={fileTextIcon} width={13} />
+              文档
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'map'}
+              className={view === 'map' ? 'is-active' : ''}
+              onClick={() => switchView('map')}
+            >
+              <Icon icon={networkIcon} width={13} />
+              地图
+            </button>
+          </div>
           <Input
             prefix={<Icon icon={searchIcon} width={14} className="vc-search-icon" />}
             placeholder="搜索文档..."
@@ -707,9 +781,20 @@ const KnowledgePage: React.FC = () => {
           />
         </div>
 
+        {onlyUnvectorized && (
+          <div className="vc-kb-focus">
+            <span className="vc-kb-focus__label">
+              <Icon icon={zapOffIcon} width={13} /> 仅看未向量化 · {displayTree?.docs.length ?? 0} 篇
+            </span>
+            <button type="button" className="vc-kb-focus__clear" onClick={() => setOnlyUnvectorized(false)}>
+              取消
+            </button>
+          </div>
+        )}
+
         <DocTree
           ref={docTreeRef}
-          tree={tree}
+          tree={displayTree}
           loading={loading}
           keyword={keyword}
           activeDocId={activeDocId}
@@ -724,7 +809,23 @@ const KnowledgePage: React.FC = () => {
         />
       </aside>
 
-      <div className="vc-knowledge-main">
+      <div className={`vc-knowledge-main${view === 'map' ? ' is-map' : ''}`}>
+        {view === 'map' && (
+          <KnowledgeMap
+            onOpenDoc={(id) => {
+              // 折叠的目录节点（id 为负）没有实体文档，直接提示而不发请求
+              if (id < 0) {
+                message.info('这是折叠的目录节点，请先下钻到具体文档');
+                return;
+              }
+              // 正常打开流程：切回文档视图 + 走 selectDoc 的完整路径
+              //（加载态、activeDocId 同步、树高亮、脏数据确认都要）
+              switchView('doc');
+              void selectDoc(id);
+            }}
+          />
+        )}
+        <div className="vc-knowledge-docarea">
         {!detail ? (
           <EmptyState
             icon={bookOpenIcon}
@@ -875,11 +976,12 @@ const KnowledgePage: React.FC = () => {
                 blockData={detail.blockData ?? '[]'}
                 markdownText={detail.markdownText ?? ''}
                 onTitleChange={setTitle}
-                onContentChange={scheduleAutoSave}
+                onContentChange={handleContentChange}
               />
             </div>
           </>
         )}
+        </div>
       </div>
 
       <Modal

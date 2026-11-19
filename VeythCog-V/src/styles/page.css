@@ -3591,6 +3591,18 @@ body.dark .vc-composer {
   display: flex;
   align-items: stretch;
   filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.16));
+  /*
+   * 容器本身只负责定位，不接收指针事件：
+   * 卡片收起时会被 translateX 推到屏幕外，但容器（约 340×181）仍压在原位置，
+   * 一旦容器能接收事件，就会吃掉它下方页面（如知识地图抽屉底部的操作按钮）的点击。
+   */
+  pointer-events: none;
+}
+
+/* 只有真正可交互的子元素恢复命中 */
+.vc-player__card,
+.vc-player__handle {
+  pointer-events: auto;
 }
 
 .vc-player.is-dragging {
@@ -7080,5 +7092,76 @@ body.dark .vc-panel.vc-table-card::after {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     box-shadow: 8px 0 24px rgba(0, 0, 0, 0.14);
+  }
+}
+
+
+/* ============================================================
+   首页视图切换（今日 / 导航）
+   胶囊分段控件 + 右上角固定容器；壁纸上用玻璃底，浅色下用实底。
+   ============================================================ */
+
+.vc-home__topbar {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top));
+  right: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.vc-home__account {
+  display: flex;
+  align-items: center;
+}
+
+.vc-home__viewswitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px) saturate(1.1);
+}
+
+.vc-home__viewswitch-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.vc-home__viewswitch-btn:hover {
+  color: var(--color-text);
+}
+
+.vc-home__viewswitch-btn.is-active {
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+@media (max-width: 768px) {
+  .vc-home__topbar {
+    top: calc(10px + env(safe-area-inset-top));
+    left: 12px;
+    right: auto;
+  }
+
+  .vc-home__viewswitch-btn {
+    padding: 7px 11px;
+    font-size: 12px;
   }
 }

@@ -200,7 +200,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | `knowledge_embedding` | 文档分片向量 | embedding vector(1024)（IVFFlat `vector_l2_ops` 索引）+ `embedding_model` 标识（禁止不同模型向量混查）；doc_id 外键（软删除时显式清理，不依赖级联）。⚠️ `embedding_model` 由 `010` 补充，服务器库已执行 |
 | `nav_category` | 导航分类（iTab 右侧竖栏） | 按 user_id 隔离；sort_order 排序 |
 | `nav_bookmark` | 导航书签 | `icon_type`（auto/upload/text，CHECK 约束）、`icon_key`（`public-icons` 对象 key）、`icon_text`、`icon_color`、`icon_synced_at`；`013_nav_bookmark_icon.sql` 幂等增量 |
-| `user_setting` | 用户偏好统一表（一人一行，PK `user_id`，2026-11-15 起取代 `nav_setting`） | `search_engine`（baidu/google/bing，服务层白名单）/ `current_wallpaper_key`（NULL=随机）/ `active_category_id`（上次选中分类）/ `created_at` / `updated_at`；新增偏好**只加列不加表**（动作见 §3.2 vc-user）；**只放偏好，不放业务数据** |
+| `user_setting` | 用户偏好统一表（一人一行，PK `user_id`，2026-11-15 起取代 `nav_setting`） | `search_engine`（baidu/google/bing，服务层白名单）/ `current_wallpaper_key`（NULL=随机）/ `active_category_id`（上次选中分类）/ `home_view`（`today`\|`nav`，`025`，首页双视图偏好，非法值 40000）/ `created_at` / `updated_at`；新增偏好**只加列不加表**（动作见 §3.2 vc-user）；**只放偏好，不放业务数据** |
+| `todo_item` | 待办（2026-11-19，`026_todo_item.sql`） | `owner_id` 账号隔离（跨用户 40400）；`title`(≤255) / `note` / `status`（open\|done）/ `priority`（0 低 / 1 普通 / 2 高）/ `due_date` DATE（NULL=无截止）/ `link_url` / `link_doc_id` / `completed_at`（toggle 置空需 `FieldStrategy.ALWAYS`）/ `deleted` 软删；索引 `idx_todo_user_status(owner_id, status, deleted)` |
 | `music_track` | 音乐曲库（2026-11-16，`023_music.sql`） | `owner_id` 账号隔离（列表/详情/删除强制带 owner，跨账号 40400）；`object_key` 存 S3 `music` 私有桶 key；`cover_color` jsonb 双色渐变；`source`（UPLOAD/AI_GEN/JAMENDO/AIGEI_CC/AI_OTHER）、`license`（CC0/CC-BY/OWNED/AI_GEN/LICENSED，**CC-BY-NC 不入库**）、`attribution`、`ai_disclosure` + `ai_model`、`tags` text[]、`ambient_enabled` + `ambient_order`（池上限 8）、`status`（published/hidden）、`deleted` 软删；索引 `(owner_id, deleted)`、部分索引 `(owner_id, ambient_enabled, ambient_order) WHERE deleted=false`、`title||artist` GIN |
 | `sys_api_sample` | 接口调用单请求明细（2026-11-13，`016_observability.sql`） | rid / user_id / ip / method / route（归一化 pattern）/ handler / status / biz_code / cost_ms / stream / error_msg；按时间 + 路由检索 |
 | `sys_api_metric_minute` | 接口分钟桶聚合 | unique(bucket, method, route)；calls / errors / 6 档耗时直方图（p95 由直方图估算），采集时 `ON CONFLICT` 累加 |
@@ -293,6 +294,14 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 | POST | `/admin/monitor/sessions/{sid}/kick` | - | 仅 admin（置 kicked，该 token 下一次请求 401） |
 | GET | `/admin/monitor/resources` | - | 仅 admin（CPU/内存/Swap/JVM 堆/线程/磁盘，缺失为 -1） |
 | GET | `/admin/monitor/status` | - | 仅 admin（采集队列深度/丢弃计数） |
+| GET | `/knowledge/graph` | query: folderId?, maxNodes?, includeUnvectorized=true | 是（知识地图：返回 `{nodes, edges, clusters, islands, meta}`，**只给结构不下发坐标**；文档质心 → L2 → `sim=1-d/2` → top-k(5) → 连通分量 → 孤岛；`N>maxNodes(300)` 按一级目录聚合，簇节点 `id=-folderId`；缓存 10min + 同 key 单飞 + 3s 超时降级；`meta.degraded` 标记折叠/降级；维度与配置不符报错禁止静默截断） |
+| GET | `/todo/items` | query: status=all\|open\|done, keyword?, current=1, pageSize≤100 | 是（按优先级 + 截止日 + 创建时间排序；`overdue` 由服务端算；ILIKE 搜标题/备注） |
+| POST | `/todo/items` | {title(≤255), note?, priority?(0低/1普通/2高), dueDate?("yyyy-MM-dd"), linkUrl?, linkDocId?} | 是（返回新 id） |
+| PUT | `/todo/items/{id}` | 同上 + `clear?:["dueDate"\|"linkUrl"\|"linkDocId"\|"note"]` | 是（null/省略=不改；跨用户 40400；`status` 只能走 toggle） |
+| POST | `/todo/items/{id}/toggle` | - | 是（open ⇄ done，写 `completed_at`；返回整行视图） |
+| DELETE | `/todo/items/{id}` | - | 是（软删除） |
+| GET | `/todo/items/open` | query: limit=5 | 是（未完成待办简报，按优先级 + 截止日排序；上限 50，供工作台/角标） |
+| GET | `/workbench/overview` | - | 是（统一工作台聚合：`{generatedAt, partial, stats, tasks, todos, recentDocs, unreadClips, recentConversations}`；6 个查询并行 + 单任务 800ms 超时，失败只置 `partial` 不整单失败） |
 | GET | `/health` | - | 否 |
 
 统一返回 `BaseResponse<T>`：`{ code, data, message }`，`code===0` 成功；未登录 401（`ErrorCode.NOT_LOGIN_ERROR`）。
@@ -368,6 +377,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - **移动端触屏适配（2026-11-19 第一批）**：断点 `≤768px`，`hooks/useMediaQuery.ts` 统一监听；`MainLayout` 窄屏改顶部栏 + 底部标签栏；对话会话列表改 antd `Drawer`；知识库树改左侧抽屉 + 遮罩；二级导航 / 工具集转横向滚动；首页分类改横向 chips，隐藏 hover 浮层、Dock 与右侧竖栏；Modal / 表格 / 表单 / 工具栏做收窄与触控兜底。已过 `npm run build`；登录后窄屏真机走查、书签右键/拖拽的触屏等价操作、管理表格卡片化、BlockNote 编辑器窄屏降级仍待后续。
 - **移动端收口（2026-11-19 第二批）**：仅在 `≤768px` 覆盖：隐藏桌面侧栏浮动音乐播放器 `.vc-player` 与首页 Dock `.vc-dock`；`SettingsModal` 左侧导航收窄为 58px 纯图标栏、隐藏标题与文案标签；工具集布局改纵向堆叠，分类导航占满宽度并横向滚动，已打开工具标签栏占满剩余宽度。覆盖规则放在 `page.css` 末尾媒体查询内，避免被后置基础规则覆盖；桌面端规则未改。已过 `npm run build`。
 - **移动端首屏与知识库抽屉（2026-11-19 第三批）**：仅在 `≤768px` 覆盖：隐藏首屏底部文案轮播 `.vc-quote`；书签网格固定一行五列，磁贴行高 82px、图标压到 48px；知识库左侧抽屉 `.vc-knowledge-nav` 改为不透明 `--color-surface` 并关闭毛玻璃，避免壁纸透出导致目录文字看不清。随后又在窄屏重置网格容器的桌面 73vw / 320px 最小宽 / 居中规则，改为 100% 宽、五列 `1fr` 均衡铺满。第四批继续压缩时钟上方与搜索/分类/图标墙间距，底部导航抬高层级并使用 94% 不透明表面预留安全区；书签网格隐藏滚动条，保留纵向触屏滑动。已过 `npm run build`。
+- **统一工作台 + 待办（2026-11-19，`p1-unified-workbench`）**：`/home` 拆双视图——「今日」（`Tab` 之外的本地偏好 `vc:home:view` + `user_setting.home_view` 兜底）与「导航」（原 iTab 首页）；今日视图 = 问候语 + 4 个数字卡（未读剪藏 / 待向量化 / 未完成待办 / 今日到期）+ 待办卡（内联回车新增）+ 最近文档 / 对话 / 待读剪藏 + 两个快捷入口，数据来自 `GET /workbench/overview`（`useWorkbenchOverview` 按 userId 隔离 sessionStorage、静默刷新、失败保留旧图只置 error）。待办独立表 `todo_item` 与 `/todo` 页（筛选 pill / 300ms 防抖 / `seqRef` 丢弃过期响应 / 乐观 toggle + 失败回滚 / 骨架 + 细进度条）；rail 新增 `/todo` 入口（`navItems.ts` + `checkSquare` 图标）。剪藏角标轮询统一上移到 `App.tsx` 的 `ClipBadgeSync`，`MainLayout` / `HomeSidebar` 只读 store。深链约定：`/knowledge?docId=`、`/knowledge?filter=unvectorized`、`/knowledge?view=map`、`/chat?c=`、`/chat?docs=`、`/chat?prefill=`，均在页面首帧解析后 `replaceState` 清参数（`view` 保留）。
+- **知识地图（2026-11-19，`p1-knowledge-map`）**：`/knowledge?view=map` 在知识库页以「文档 / 地图」胶囊切换；`pages/Knowledge/map/*`（`index.tsx` + `MapCanvas` + `NodeDrawer` + `map.css`）。后端 `GET /knowledge/graph` 只给结构，前端用 `react-force-graph-2d`（**只在 `MapCanvas.tsx` 内 `await import`**，独立 chunk 202KB/gzip70KB，文档视图不加载）力导向绘制；孤岛不发光、hover 高亮邻居、点簇节点（`id<0`）按目录下钻；抽屉给摘要 / 关联 Top3 / 「打开文档」「就它提问（→ `/chat?docs=`）」「向量化」；窄屏或无 `requestAnimationFrame` 降级为列表视图（孤岛分组 + Top3 关联行，功能等价）。切换地图时文档树/编辑器不卸载，只 `visibility:hidden`。
 
 ---
 

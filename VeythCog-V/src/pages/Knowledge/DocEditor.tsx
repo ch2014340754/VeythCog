@@ -49,6 +49,11 @@ export interface DocEditorHandle {
   snapshot: () => Promise<{ blockData: string; markdownText: string }>;
   /** 聚焦文档首个标题块（供顶部标题点击定位） */
   focusTitle: () => void;
+  /**
+   * 把"当前文档内容"记为新的干净基线。
+   * 保存成功后必须调用：否则用户把内容改回上一次保存的版本时，会被误判成"仍有未保存改动"。
+   */
+  markBaseline: () => void;
 }
 
 // ---- 自定义拖拽手柄菜单：第一项「转换为」直接把当前块切成指定类型 ----
@@ -282,8 +287,8 @@ interface DocEditorProps {
   markdownText: string;
   /** 文档标题（首个 H1，缺省回退首个任意标题）变化时回调，用于顶部标题同步 */
   onTitleChange?: (title: string) => void;
-  /** 正文内容发生编辑时回调（用于父级防抖自动保存） */
-  onContentChange?: () => void;
+  /** 正文内容变化时回调：与干净基线一致时传 false（用于父级清掉"未保存"标识） */
+  onContentChange?: (dirty: boolean) => void;
 }
 
 interface OutlineItem {
@@ -494,6 +499,13 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   onTitleChangeRef.current = onTitleChange;
   const onContentChangeRef = useRef(onContentChange);
   onContentChangeRef.current = onContentChange;
+  /**
+   * 加载闸门：切换文档时 replaceBlocks 会触发 onChange，若不拦住，
+   * 一打开文档就会被判成"有未保存改动"（markdown 兜底分支是异步的，更容易踩）。
+   */
+  const loadingRef = useRef(true);
+  /** 加载完成时的文档快照：与它完全一致就不算改动（兜住异步时序里漏放的 onChange） */
+  const baselineRef = useRef<string | null>(null);
 
   const syncTitle = useCallback(() => {
     onTitleChangeRef.current?.(extractTitle(editor.document));
@@ -502,9 +514,24 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
   // 文档切换时加载内容：优先权威 blockData，降级解析 markdown
   useEffect(() => {
     let cancelled = false;
+    loadingRef.current = true;
+    baselineRef.current = null;
     collapsedRef.current = readCollapsedIds(docId);
     wrappedRef.current = readWrappedIds(docId);
     titlesRef.current = readTitles(docId, blockData);
+    /** 内容灌入结束后建基线并放行：只把"加载这一步"产生的变更挡掉 */
+    const finishLoad = () => {
+      if (cancelled) return;
+      try {
+        baselineRef.current = JSON.stringify(editor.document);
+      } catch {
+        baselineRef.current = null;
+      }
+      // replaceBlocks 的 onChange 是同步触发的，这里再放一个宏任务兜异步批处理的情况
+      window.setTimeout(() => {
+        if (!cancelled) loadingRef.current = false;
+      }, 0);
+    };
     const apply = async () => {
       const blocks = parseBlockJson(blockData);
       if (blocks) {
@@ -512,6 +539,7 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
         setOutline(extractOutline(editor.document));
         syncTitle();
         setActiveId(null);
+        finishLoad();
         return;
       }
       try {
@@ -521,8 +549,10 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
         setOutline(extractOutline(editor.document));
         syncTitle();
         setActiveId(null);
+        finishLoad();
       } catch {
         // 解析失败保持空文档，不阻塞编辑
+        finishLoad();
       }
     };
     void apply();
@@ -531,12 +561,23 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
     };
   }, [editor, docId, blockData, markdownText, syncTitle]);
 
-  // 内容变化时同步侧目录
+  // 内容变化时同步侧目录，并把"是否真的与干净基线不同"上报给父级
   useEffect(() => {
     const unsub = editor.onChange(() => {
-      setOutline(extractOutline(editor.document));
+      const blocks = editor.document;
+      setOutline(extractOutline(blocks));
       syncTitle();
-      onContentChangeRef.current?.();
+      if (loadingRef.current) return;
+      let sameAsBaseline = false;
+      if (baselineRef.current != null && blocks.length <= 800) {
+        try {
+          sameAsBaseline = JSON.stringify(blocks) === baselineRef.current;
+        } catch {
+          // 序列化失败时按有改动处理，避免吞掉真实编辑
+          sameAsBaseline = false;
+        }
+      }
+      onContentChangeRef.current?.(!sameAsBaseline);
     });
     return () => {
       unsub?.();
@@ -620,6 +661,13 @@ const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function DocEditor
         const headings = extractOutline(editor.document);
         const target = headings.find((h) => h.level === 1) ?? headings[0];
         if (target) scrollToHeading(target.id);
+      },
+      markBaseline: () => {
+        try {
+          baselineRef.current = JSON.stringify(editor.document);
+        } catch {
+          baselineRef.current = null;
+        }
       },
     }),
     [editor, scrollToHeading],

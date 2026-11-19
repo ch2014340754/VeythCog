@@ -429,6 +429,25 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 
 ---
 
+## 12.1 知识地图与统一工作台（2026-11-19）
+
+新增页面的少量补充约定，其余规则（令牌取色、动效、暗色适配）照上文执行。
+
+| 元素 | 规则 | 实现位置 |
+|---|---|---|
+| 视图切换胶囊 | `.vc-kb-viewswitch`：`border-radius: var(--radius-full)`，内边距 2px；选中态用 `--color-surface-elevated` + `--shadow-sm`，**不用主色填充**（避免紫色胶囊抢注意力） | `pages/Knowledge/tree.css` |
+| 细进度条 | 2px 高、渐变透明度扫光（`vc-kmap-flow` 1.1s linear），只在请求进行时渲染，不遮内容；等价于「静默刷新」在图表页的落地 | `pages/Knowledge/map/map.css` |
+| 抽屉 | `translateX(16px) → 0` + `opacity`，时长 220ms；**禁止 `transition: all`**；窄屏改 `position:absolute` 覆盖不挤压画布 | 同上 |
+| 画布调色 | 分类色板（蓝 `#5B8FF9` / 青绿 `#5AD8A6` / 黄 `#F6BD16` / 橙红 `#E8684A` / 天蓝 `#6DC8EC` / 紫 `#9270CA` / 橙 `#FF9D4D` / 深青 `#269A99`），节点色由后端 `colorKey` 索引；字色按底色亮度自动在 `#FFFFFF` / `#2A2F3A` 间切换 | `map/MapCanvas.tsx` |
+| 节点与标签 | **标签写在圆内**（`textBaseline: middle` + `fitLabel` 截到 54px），半径 = `文字宽/2 + 9`（16–34 之间，degree 高的略大），保证"圆形刚好包住字"；不使用圆外标签，不使用 `shadowBlur` 发光 | 同上 |
+| 分组布局 | 每个语义簇（连通分量）与每篇孤岛各算一个锚点，大簇排内环（R=168）、小簇与孤岛排外环（R=330），组内再绕副环摊开；锚点力 `0.16 × alpha` 主导分组，charge 负责组内不重叠，link strength 压到 0.12 | 同上 |
+| 视图切换不卸载 | 切到地图时文档树/编辑器保留在 DOM，`visibility:hidden + pointer-events:none`，切回无需重建 BlockNote | `pages/Knowledge/index.tsx` + `tree.css` |
+| 深链参数 | `?docId=` / `?filter=` / `?c=` / `?docs=` / `?prefill=` 首帧解析后 `replaceState` 清掉；`?view=map` **保留**（刷新不回退）。解析写在各自页面，不抽公共工具 | `Chat/index.tsx`、`Knowledge/index.tsx` |
+
+> 反模式提醒：不要给 `.vc-kmap` 加 `transition: all`，也不要让 `MapCanvas` 在文档视图被 import —— `react-force-graph-2d` 必须留在 `MapCanvas.tsx` 内的动态 `import()`，否则文档视图会白拉 200KB。
+
+---
+
 ## 13. 验收与工具
 
 - **类型检查**：`cd VeythCog-V && npx tsc --noEmit`（必须 exit 0）。

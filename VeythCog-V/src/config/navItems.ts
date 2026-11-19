@@ -2,6 +2,7 @@ import bookOpenIcon from '@iconify-icons/lucide/book-open';
 import inboxIcon from '@iconify-icons/lucide/inbox';
 import messageSquareIcon from '@iconify-icons/lucide/message-square';
 import musicIcon from '@iconify-icons/lucide/music';
+import checkSquareIcon from '@iconify-icons/lucide/check-square';
 import wrenchIcon from '@iconify-icons/lucide/wrench';
 
 /** 左侧导航项：icon 为 @iconify-icons 的图标数据 */
@@ -22,6 +23,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { path: '/chat', icon: messageSquareIcon, label: '对话' },
   { path: '/knowledge', icon: bookOpenIcon, label: '知识库' },
+  { path: '/todo', icon: checkSquareIcon, label: '待办' },
   { path: '/inbox', icon: inboxIcon, label: '收件箱', badge: 'clipPending' },
   { path: '/music', icon: musicIcon, label: '音乐库' },
   { path: '/tools', icon: wrenchIcon, label: '工具集' },

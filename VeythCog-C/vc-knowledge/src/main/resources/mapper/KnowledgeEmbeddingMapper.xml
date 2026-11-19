@@ -41,4 +41,34 @@
         ORDER BY score ASC
         LIMIT #{limit}
     </select>
+    <!-- 知识地图：必须走 resultMap + VectorTypeHandler，否则 float[] 会拿到 String 而 ClassCastException -->
+    <resultMap id="DocChunkVectorMap" type="com.vc.knowledge.dto.graph.DocChunkVector">
+        <result column="doc_id" property="docId"/>
+        <result column="embedding" property="embedding"
+                typeHandler="com.vc.knowledge.handler.VectorTypeHandler"/>
+    </resultMap>
+
+    <select id="selectVectorsByModel" resultMap="DocChunkVectorMap">
+        SELECT e.doc_id, e.embedding
+        FROM knowledge_embedding e
+        JOIN knowledge_doc d ON d.id = e.doc_id
+        WHERE d.deleted = false
+          AND d.is_vectorized = true
+          AND e.embedding_model = #{model}
+        <if test="folderIds != null and folderIds.size() > 0">
+          AND d.folder_id IN
+          <foreach collection="folderIds" item="f" open="(" separator="," close=")">#{f}</foreach>
+        </if>
+        ORDER BY e.doc_id, e.chunk_index
+    </select>
+
+    <select id="selectDominantModel" resultType="java.lang.String">
+        SELECT e.embedding_model
+        FROM knowledge_embedding e
+        JOIN knowledge_doc d ON d.id = e.doc_id
+        WHERE d.deleted = false AND d.is_vectorized = true
+        GROUP BY e.embedding_model
+        ORDER BY count(*) DESC
+        LIMIT 1
+    </select>
 </mapper>

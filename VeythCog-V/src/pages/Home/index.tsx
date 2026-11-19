@@ -12,9 +12,11 @@ import { categoryIconFor } from '@/utils/categoryIcon';
 import externalLinkIcon from '@iconify-icons/lucide/external-link';
 import folderInputIcon from '@iconify-icons/lucide/folder-input';
 import imageIcon from '@iconify-icons/lucide/image';
+import layoutGridIcon from '@iconify-icons/lucide/layout-grid';
 import pencilIcon from '@iconify-icons/lucide/pencil';
 import plusIcon from '@iconify-icons/lucide/plus';
 import refreshIcon from '@iconify-icons/lucide/refresh-cw';
+import sunIcon from '@iconify-icons/lucide/sun';
 import trashIcon from '@iconify-icons/lucide/trash-2';
 import { Icon } from '@iconify/react';
 import { message } from 'antd';
@@ -31,6 +33,8 @@ import HomeDock from './HomeDock';
 import HomeSidebar from './HomeSidebar';
 import QuoteBar from './QuoteBar';
 import SearchBar from './SearchBar';
+import TodayView from './today/TodayView';
+import { persistHomeView, readHomeView, syncHomeViewFromServer, type HomeView } from '@/utils/homeView';
 
 /**
  * 右键菜单单项：文字在左，图标在右（参照 iTab）
@@ -55,12 +59,57 @@ const MenuItem: React.FC<MenuItemProps> = ({ label, icon, danger = false, onSele
 );
 
 /**
+ * 首页视图切换（今日 / 导航）。
+ * 胶囊形分段控件：当前选中项反白，切换只改视图不改路由，避免整页跳转。
+ */
+const ViewSwitch: React.FC<{ view: HomeView; onSwitch: (view: HomeView) => void }> = ({ view, onSwitch }) => (
+  <div className="vc-home__viewswitch" role="tablist" aria-label="首页视图">
+    <button
+      type="button"
+      role="tab"
+      aria-selected={view === 'today'}
+      className={'vc-home__viewswitch-btn' + (view === 'today' ? ' is-active' : '')}
+      onClick={() => onSwitch('today')}
+    >
+      <Icon icon={sunIcon} width={14} />
+      <span>今日</span>
+    </button>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={view === 'nav'}
+      className={'vc-home__viewswitch-btn' + (view === 'nav' ? ' is-active' : '')}
+      onClick={() => onSwitch('nav')}
+    >
+      <Icon icon={layoutGridIcon} width={14} />
+      <span>导航</span>
+    </button>
+  </div>
+);
+
+/**
  * 导航首页（iTab 风格新标签页）
  * 滚轮热区全页面 + 循环切换
  * 右键菜单全局统一管理，跟随鼠标位置
  */
 const HomePage: React.FC = () => {
-  useDocumentTitle('导航首页');
+  /** 双视图：today（工作台）/ nav（书签墙）；本机 localStorage 优先，服务端偏好兜底 */
+  const [view, setView] = React.useState<HomeView>(() => readHomeView());
+  useDocumentTitle(view === 'today' ? '今日' : '导航首页');
+
+  React.useEffect(() => {
+    // 新设备 / 清过缓存：本机无记录才采用服务端偏好，避免把刚切换的结果又拉回去
+    void syncHomeViewFromServer().then((serverView) => {
+      if (serverView) setView(serverView);
+    });
+  }, []);
+
+  const switchView = (next: HomeView) => {
+    if (next === view) return;
+    setView(next);
+    persistHomeView(next);
+  };
+
   const navigate = useNavigate();
   const loadHome = useNavStore((s) => s.loadHome);
   const categories = useNavStore((s) => s.categories);
@@ -178,6 +227,8 @@ const HomePage: React.FC = () => {
 
   // 全页面滚轮切分类（循环）；书签网格可滚动时优先滚网格
   const handleWheel = (e: React.WheelEvent) => {
+    // 今日视图没有分类概念，滚轮只滚内容
+    if (view !== 'nav') return;
     const target = e.target as HTMLElement | null;
 
     // AntD Modal 走 portal 渲染，DOM 不在首页下，但 React 事件仍会沿组件树冒泡到这里。
@@ -283,8 +334,33 @@ const HomePage: React.FC = () => {
   };
 
 
+  // 今日视图：整页工作台（不渲染书签墙 / 侧栏 / 底部工具条）
+  if (view === 'today') {
+    return (
+      <div className="vc-home" onContextMenu={handlePageContextMenu}>
+        <div className="vc-home__topbar">
+          <ViewSwitch view={view} onSwitch={switchView} />
+          {!isMobile && (
+            <div className="vc-home__account">
+              <UserMenu />
+            </div>
+          )}
+        </div>
+        {isMobile && (
+          <div className="vc-home-mobile-actions">
+            <UserMenu />
+          </div>
+        )}
+        <TodayView />
+      </div>
+    );
+  }
+
   return (
     <div className="vc-home" onWheel={handleWheel} onContextMenu={handlePageContextMenu}>
+      <div className="vc-home__topbar">
+        <ViewSwitch view={view} onSwitch={switchView} />
+      </div>
       <HomeSidebar />
       {isMobile && (
         <div className="vc-home-mobile-actions">

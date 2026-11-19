@@ -29,6 +29,28 @@ public interface KnowledgeDocMapper extends BaseMapper<KnowledgeDoc> {
     List<KnowledgeDoc> selectTreeDocs(@Param("keyword") String keyword);
 
     /**
+     * 最近更新的文档（首页工作台用）：只取轻量字段，按 updated_at 倒序。
+     */
+    List<KnowledgeDoc> selectRecent(@Param("limit") int limit);
+
+    /**
+     * 待向量化文档数：未删除、is_vectorized=false、正文长度达到阈值（过短的不值得向量化）。
+     */
+    long countPendingVector(@Param("minChars") int minChars);
+
+    /**
+     * 知识地图：按向量化状态取文档轻量元信息（不含正文与 block_data）。
+     *
+     * @param vectorized true=已向量化（建图节点），false=未向量化（灰点清单）
+     * @param folderIds  null/空 = 全库；非空只取这些目录（下钻）
+     */
+    List<com.vc.knowledge.dto.graph.DocMeta> selectDocMeta(@Param("vectorized") boolean vectorized,
+                                                          @Param("folderIds") List<Long> folderIds);
+
+    /** 未删除文档总数（地图 meta 用） */
+    long countAll();
+
+    /**
      * 显式更新文档归属目录（folderId 允许为 null，故不用 updateById 的非空策略）。
      * <p>只改 folder_id，不动 updated_at：移动不算内容修改，不应把文档顶到更新时间倒序最前。</p>
      */

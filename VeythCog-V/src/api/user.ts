@@ -11,6 +11,8 @@ export interface UserSetting {
   searchEngine: 'baidu' | 'google' | 'bing';
   currentWallpaperKey: string | null;
   activeCategoryId: number | null;
+  /** 首页默认视图：today / nav */
+  homeView: 'today' | 'nav';
   updatedAt?: string;
 }
 
@@ -18,6 +20,7 @@ export interface UserSetting {
 export interface UserSettingPatch {
   searchEngine?: 'baidu' | 'google' | 'bing';
   activeCategoryId?: number;
+  homeView?: 'today' | 'nav';
   clear?: Array<'activeCategoryId' | 'currentWallpaperKey'>;
 }
 

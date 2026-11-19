@@ -32,4 +32,15 @@ public interface KnowledgeEmbeddingMapper extends BaseMapper<KnowledgeEmbedding>
                                     @Param("embeddingModel") String embeddingModel,
                                     @Param("distanceThreshold") Double distanceThreshold,
                                     @Param("limit") int limit);
+
+    /**
+     * 知识地图：某模型下全部已向量化文档的分片向量。
+     * <p>结果必须走 resultMap + VectorTypeHandler（float[] ← pgvector）。</p>
+     */
+    List<com.vc.knowledge.dto.graph.DocChunkVector> selectVectorsByModel(
+            @Param("model") String model,
+            @Param("folderIds") List<Long> folderIds);
+
+    /** 知识地图：库内出现最多的 embedding 模型（无向量时返回 null） */
+    String selectDominantModel();
 }

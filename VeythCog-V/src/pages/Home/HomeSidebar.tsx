@@ -22,14 +22,8 @@ const HomeSidebar: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
 
-  // 收件箱角标：与 MainLayout 同一份 store，首页/内页角标不会各拉各的
+  // 收件箱角标：轮询统一在 RootLayout 做（首页不在 MainLayout 下），这里只读同一份 store
   const clipPending = useClipStore((s) => s.pendingCount);
-  const refreshPending = useClipStore((s) => s.refreshPending);
-  React.useEffect(() => {
-    void refreshPending();
-    const timer = window.setInterval(() => void refreshPending(), 60_000);
-    return () => window.clearInterval(timer);
-  }, [refreshPending]);
 
   const [visible, setVisible] = React.useState(false);
   const hideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);

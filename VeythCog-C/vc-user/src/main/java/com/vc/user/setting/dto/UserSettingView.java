@@ -25,5 +25,8 @@ public class UserSettingView implements Serializable {
     /** 上次选中的导航分类 */
     private Long activeCategoryId;
 
+    /** 首页默认视图：today / nav；缺省按 today 下发 */
+    private String homeView;
+
     private OffsetDateTime updatedAt;
 }

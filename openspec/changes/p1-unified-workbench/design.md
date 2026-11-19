@@ -33,7 +33,38 @@ COMMENT ON COLUMN user_setting.home_view IS '首页默认视图：today / nav（
 - 存量用户默认 `today`：符合"第一屏有用"的目标；用户可随时切回「导航」。
 - 回滚：`ALTER TABLE user_setting DROP COLUMN IF EXISTS home_view;`（前端对字段缺失按 `today` 兜底）。
 
-### 1.2 派生待办的 SQL 口径
+### 1.2 `todo_item`（`026_todo_item.sql`，幂等）
+
+```sql
+CREATE TABLE IF NOT EXISTS todo_item (
+    id           BIGSERIAL    PRIMARY KEY,
+    user_id      BIGINT       NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    title        VARCHAR(255) NOT NULL,
+    note         TEXT         NOT NULL DEFAULT '',
+    status       VARCHAR(16)  NOT NULL DEFAULT 'open',   -- open / done（服务层白名单）
+    priority     SMALLINT     NOT NULL DEFAULT 1,        -- 0 低 / 1 普通 / 2 高
+    due_date     DATE         NULL,                      -- 截止日（只有日期，不含时间）
+    link_url     VARCHAR(1024) NULL,                     -- 外部链接（可选）
+    link_doc_id  BIGINT       NULL,                      -- 关联知识库文档（可选，弱引用不建 FK）
+    sort_order   INT          NOT NULL DEFAULT 0,        -- 预留，v1 不启用
+    completed_at TIMESTAMPTZ  NULL,
+    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    deleted      BOOLEAN      NOT NULL DEFAULT false
+);
+
+CREATE INDEX IF NOT EXISTS idx_todo_user_status
+    ON todo_item (user_id, status, deleted, due_date);
+
+COMMENT ON TABLE  todo_item IS '个人待办（用户级，软删除）';
+COMMENT ON COLUMN todo_item.status     IS 'open / done；done 时写 completed_at';
+COMMENT ON COLUMN todo_item.priority   IS '0 低 / 1 普通 / 2 高；列表排序参与';
+COMMENT ON COLUMN todo_item.link_doc_id IS '关联知识库文档 id；不建外键，文档删除后由前端判空';
+```
+
+**为什么建表而不是复用 `user_setting`**：待办是"一对多、会增删改"的业务数据，`user_setting` 是"一人一行、标量偏好"，022 头注释已明确业务数据不进该表。
+
+### 1.3 派生待办的 SQL 口径
 
 | 待办 | 口径 | 来源 |
 |---|---|---|
@@ -58,16 +89,28 @@ public class WorkbenchOverview {
     private long generatedAt;          // 服务端时间戳（ms），前端用于"x 分钟前"
     private boolean partial;           // 任一子查询降级为 true，前端顶部轻提示
     private Stats stats;
-    private List<TaskItem> tasks;
+    private List<TaskItem> tasks;      // 派生待处理（剪藏 / 待向量化）
+    private List<TodoBrief> todos;     // 我的待办：open 按排序规则取前 4 条
     private List<RecentDoc> recentDocs;
     private List<UnreadClip> unreadClips;
     private List<RecentConversation> recentConversations;
 }
 
 @Data
+public class TodoBrief {
+    private long id;
+    private String title;
+    private int priority;              // 0/1/2
+    private String dueDate;            // "2026-11-20"；null = 无截止日
+    private boolean overdue;           // dueDate < 今天且未完成
+}
+
+@Data
 public class Stats {
     private long unreadClips;          // 待处理剪藏
     private long pendingVectorDocs;    // 待向量化文档（≥200 字）
+    private long openTodos;            // 未完成待办总数
+    private long todayDueTodos;        // 今日到期（due_date <= 今天）的未完成待办
     private long totalDocs;            // 未删除文档总数
     private long totalBookmarks;       // 书签总数
     private long totalConversations;   // 会话总数（软删除除外）
@@ -119,7 +162,44 @@ public class RecentConversation {
 - 所有 `*At` 字段为 epoch millis（与现有 `DocListItem.updatedAt` 口径一致，前端不再换算）。
 - 空库：全部数组为空、`stats` 全 0、`partial=false`，**不是错误**。
 
-### 2.2 可选 `POST /workbench/briefing`
+### 2.2 待办接口（`/todo`，`vc-app/web/TodoController`）
+
+| 方法 | 路径 | 请求 | 响应 |
+|---|---|---|---|
+| GET | `/todo/items` | `status=open/done/all`、`keyword`、`current=1`、`pageSize=20` | `PageResult<TodoItemView>`（字段 `records/total/current/pageSize`，与知识库分页同构） |
+| POST | `/todo/items` | `TodoCreateRequest{title*, note, priority, dueDate, linkUrl, linkDocId}` | `id` |
+| PUT | `/todo/items/{id}` | `TodoPatchRequest{title?, note?, priority?, dueDate?, linkUrl?, linkDocId?}` | `void` |
+| POST | `/todo/items/{id}/toggle` | 空 body | `TodoItemView`（返回切换后的完整行） |
+| DELETE | `/todo/items/{id}` | 空 | `void`（软删除） |
+
+```java
+@Data
+public class TodoItemView {
+    private long id;
+    private String title;
+    private String note;
+    private String status;      // open / done
+    private int priority;
+    private String dueDate;     // yyyy-MM-dd；null = 无
+    private boolean overdue;    // 计算字段：dueDate < 今天 && status=open
+    private String linkUrl;
+    private Long linkDocId;
+    private long createdAt;
+    private long updatedAt;
+    private Long completedAt;   // null = 未完成
+}
+```
+
+**校验与边界**
+
+- `title` 去空格后非空、长度 ≤ 255，超出返回 `PARAMS_ERROR`；
+- `priority` 只接受 0/1/2；`dueDate` 必须 `yyyy-MM-dd`（`LocalDate.parse` 失败 → PARAMS_ERROR）；
+- `status` 白名单 `open|done`；**toggle 是唯一改状态入口**，`PUT` 不接受 `status`（避免两套写法）；
+- 越权：所有接口按 `user_id` 过滤，查不到（或不属于当前用户）→ `NOT_FOUND_ERROR`（不暴露存在性）；
+- `deleted=true` 的行对任何查询不可见，`toggle/update/delete` 一律 NOT_FOUND；
+- 排序（列表与 overview 共用同一规则）：`open` 在前 → `due_date` 升序且 NULL 排最后 → `priority` 降序 → `created_at` 降序；`done` 组按 `completed_at` 降序。
+
+### 2.3 可选 `POST /workbench/briefing`
 
 请求：空 body。响应：
 
@@ -136,7 +216,7 @@ public class BriefingResult {
 - 输入：最近 3 篇文档的标题+摘要、未读剪藏标题、最近 3 个会话标题；输出一句中文概述。
 - **降级**：无可用模型 / Key 未校验 / 调用超时（3s）→ 返回 `text=null`，前端不渲染该卡（不显示"生成失败"）。当前 DashScope 额度阻塞不影响主体交付。
 
-### 2.3 `PUT /user/setting` 扩展
+### 2.4 `PUT /user/setting` 扩展
 
 `UserSettingPatch` 增加 `homeView`（`today|nav`，非法值忽略并保持原值）；`UserSettingView` 增加同名字段。前端切换视图时**乐观更新**：先切 UI，再 `PUT`；失败静默回滚到上次值。
 
@@ -154,6 +234,12 @@ public class BriefingResult {
 | `vc-knowledge/service/KnowledgeService(+Impl)` | 加 `countPendingVector(minChars)`、`listRecent(int limit)` |
 | `vc-knowledge/mapper/KnowledgeDocMapper(+XML)` | 加两条只读 SQL（`countPendingVector`、`selectRecent`） |
 | `vc-chat/service/ChatService` | 加 `listRecentConversations(limit)`（抽现有 `ChatController` 查询逻辑，不复制） |
+| `vc-user/.../todo/TodoItem.java` | 实体（`@TableName("todo_item")`） |
+| `vc-user/.../todo/TodoMapper.java` + `resources/mapper/TodoItemMapper.xml` | Mapper + 分页/筛选/overview 取前 N 的 SQL |
+| `vc-user/.../todo/TodoService.java` | CRUD + toggle + `openBrief(limit)` + `countOpen()` / `countDueToday()` |
+| `vc-user/.../todo/dto/{TodoItemView, TodoCreateRequest, TodoPatchRequest}` | DTO |
+| `vc-app/web/TodoController.java` | 5 个接口 |
+| `vc-app/VcAppApplication.java` | `@MapperScan` 增补 `com.vc.user.todo` |
 
 > 依赖方向校对：`vc-app` 已依赖 `vc-chat` / `vc-knowledge`（`ChatController`、`KnowledgeController` 都在 vc-app），聚合层放 vc-app 不引入新依赖。
 
@@ -193,6 +279,33 @@ SELECT id, title, summary, folder_id, is_vectorized, updated_at
 - `totalBookmarks` 走 `NavBookmarkService.count()`（MyBatis-Plus 自带 `count`，无新方法）。
 - `totalConversations` 走现有会话查询的 count（软删除条件与 `ChatController` 一致）。
 
+**待办列表与 overview 共用同一条排序 SQL**（`TodoItemMapper.xml`）：
+
+```xml
+<select id="selectPage" resultMap="TodoItemViewMap">
+    SELECT id, title, note, status, priority, due_date, link_url, link_doc_id,
+           created_at, updated_at, completed_at
+      FROM todo_item
+     WHERE user_id = #{userId} AND deleted = false
+       <if test="status != null and status != 'all'">AND status = #{status}</if>
+       <if test="keyword != null and keyword != ''">
+           AND (title ILIKE '%' || #{keyword} || '%' OR note ILIKE '%' || #{keyword} || '%')
+       </if>
+     ORDER BY
+       CASE WHEN status = 'open' THEN 0 ELSE 1 END,
+       CASE WHEN status = 'open' THEN (due_date IS NULL) ELSE 0 END,
+       CASE WHEN status = 'open' THEN due_date END ASC,
+       CASE WHEN status = 'open' THEN priority END DESC,
+       CASE WHEN status = 'open' THEN created_at ELSE completed_at END DESC
+     LIMIT #{limit} OFFSET #{offset}
+</select>
+```
+
+- 为什么不用 MyBatis-Plus `QueryWrapper` 排序：多级 `CASE WHEN` 用 `orderBy` 拼易错；单条 XML 更可读，也便于 `due_date IS NULL` 置后。
+- `overdue` 不落库：由 `dueDate < LocalDate.now()` 在 DTO 转换时计算。
+- `keyword` 用 `ILIKE`（与知识库 P1 待办项 ⑥ 的结论一致：中文关键词 `tsquery` 命中差）。
+
+
 ### 3.4 错误码
 
 | 场景 | bizCode | 提示 |
@@ -210,14 +323,18 @@ pages/Home/
 ├── index.tsx              // 只保留：视图状态、书签墙原逻辑、切换 pill
 ├── today/
 │   ├── TodayView.tsx      // 12 栅格布局容器
-│   ├── TaskStrip.tsx      // 待办条（chips）
+│   ├── TaskCard.tsx       // 我的待办（前 4 条 + 内联新增）+ 待处理 chips
 │   ├── RecentDocs.tsx
 │   ├── UnreadClips.tsx
 │   ├── RecentChats.tsx
-│   ├── QuickActions.tsx   // 新建文档 / 新对话 / 打开收件箱 / 全局搜索
+│   ├── QuickActions.tsx   // 新建文档 / 新对话 / 新建待办 / 全局搜索
 │   ├── Greeting.tsx       // 问候 + 日期 + 轻统计
-│   ├── Briefing.tsx       // 可选，text 为 null 时整卡不渲染
-│   └── today.css
+│   └── homeToday.css
+pages/Todo/
+├── index.tsx              // 全屏列表：筛选 + 搜索 + 新增/编辑弹窗
+├── TodoEditModal.tsx      // 标题/备注/优先级/截止日/关联
+└── todo.css
+components/TodoRow.tsx     // 行组件（首页与 /todo 共用，compact 模式用于首页）
 ```
 
 ### 4.2 视图切换（不销毁、不闪）
@@ -253,11 +370,14 @@ pages/Home/
 
 | 区域 | 行为 |
 |---|---|
-| 待办 chip | 点击 `navigate(href)`；`href` 带 query，目标页需支持（Inbox 读 `status`、Knowledge 读 `filter`） |
-| 最近文档行 | 点击 `navigate('/knowledge?doc=id')`；新增文档参数支持（Knowledge 页读取并打开） |
+| 待办行 | 左侧勾选框（点击 toggle，乐观更新 + 失败回滚）；标题点击进 `/todo?edit=id`；`overdue` 显示红色日期 |
+| 待办内联新增 | 输入框回车即 `POST /todo/items`（默认 priority=1、无截止日）；成功后本地插入顶部，不重拉整页 |
+| 「查看全部」 | `navigate('/todo')` |
+| 待处理 chip | 点击 `navigate(href)`；`href` 带 query，目标页需支持（Inbox 读 `status`、Knowledge 读 `filter`） |
+| 最近文档行 | 点击 `navigate('/knowledge?doc=id')`；Knowledge 页读取并打开 |
 | 未读剪藏 | 点击进 `/inbox` 并定位条目（`?item=id`） |
 | 最近对话 | 点击 `navigate('/chat?c=id')`（Chat 已有 `prefill` 参数，新增 `c` 只做选中） |
-| 快捷动作 | 新建文档 / 新建对话 / 打开收件箱 / 打开命令面板（`veythcog:open-palette`） |
+| 快捷动作 | 新建文档 / 新建对话 / 新建待办（`/todo?new=1`）/ 打开命令面板（`veythcog:open-palette`） |
 
 > 三个 query 参数（`doc`、`item`、`c`）属于**轻量兼容改动**：目标页只在 `useEffect` 里读取一次并清理 URL 参数，不影响原有交互。
 > 与 `p1-knowledge-map` 的 `?docs=` 共用同一份解析工具 `src/utils/queryIntent.ts`（`takeQueryIntent()`：读取 → 清参数 → 返回结构化意图），两个 change 同批 apply 时先落地它。
@@ -300,4 +420,3 @@ pages/Home/
 | **合计** | **6.0**（不含晨报 5.5） |
 
 > 排期约束：`agent.md` §3 要求单阶段 ≤3 周；本 change 6 人日，可与 `p1-knowledge-map` 并行（后者仅依赖 `/knowledge` 页，互不改同一文件，除 `Knowledge/index.tsx` 需协调一次合并）。
-</content>

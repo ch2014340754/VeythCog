@@ -357,4 +357,3 @@ const docsParam = new URLSearchParams(window.location.search).get('docs');
 | **合计** | **8.0** |
 
 > 依赖关系：`p1-knowledge-map` 与 `p1-unified-workbench` 都会改 `Knowledge/index.tsx`（前者加 pill，后者加 `?doc=` 打开）与 `Chat/index.tsx`（前者加 `docs`，后者加 `c`）。**建议同批 apply**，先合 `p1-unified-workbench` 的 query 参数工具，再做地图，可省 0.5 人日重复劳动。
-</content>

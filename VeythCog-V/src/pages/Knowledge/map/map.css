@@ -1,0 +1,463 @@
+/* 知识地图（view=map）：结构总览 + 语义星图 + 孤岛
+   风格：黑白基底 + 克制科技蓝，容器半透明玻璃，动效只做位移与透明度，不用 transition: all */
+
+.vc-kmap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+}
+
+.vc-kmap__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--color-divider);
+  flex-wrap: wrap;
+}
+
+.vc-kmap__stats {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.vc-kmap__stats b {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-right: 3px;
+}
+
+.vc-kmap__stamp {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.vc-kmap__tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vc-kmap__folder {
+  min-width: 130px;
+}
+
+.vc-kmap__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 细进度条：只在请求进行时出现，不遮挡内容 */
+.vc-kmap__progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  overflow: hidden;
+  z-index: 3;
+  background: transparent;
+}
+
+.vc-kmap__progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  animation: vc-kmap-flow 1.1s linear infinite;
+}
+
+@keyframes vc-kmap-flow {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
+.vc-kmap__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  font-size: 12px;
+  color: var(--color-error);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.vc-kmap__notice {
+  margin: 0;
+  padding: 8px 18px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-surface);
+}
+
+.vc-kmap__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* 画布铺满容器：不参与 flex 收缩，尺寸完全交给 ResizeObserver + 组件自身 width/height */
+.vc-kmap__canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* 悬停提示：圆内标签按像素截断，全名放在这里补齐 */
+.vc-kmap__tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  max-width: 320px;
+  padding: 8px 11px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-overlay);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.vc-kmap__tooltip-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.vc-kmap__tooltip-meta {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-tertiary);
+}
+
+.vc-kmap__hint,
+.vc-kmap__muted {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.vc-kmap__skeleton {
+  flex: 1;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vc-kmap__canvas-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 32px 24px;
+}
+
+.vc-kmap__line {
+  height: 1px;
+  background: var(--color-divider);
+  width: 60%;
+}
+
+.vc-kmap__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 40px 24px;
+  color: var(--color-text-secondary);
+}
+
+.vc-kmap__empty h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.vc-kmap__empty p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+/* 窄屏 / 不支持 canvas：列表式等价视图 */
+.vc-kmap__list {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 18px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.vc-kmap__list-group h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.vc-kmap__list-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vc-kmap__list-group button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text);
+}
+
+.vc-kmap__list-group button:hover {
+  background: var(--color-surface);
+}
+
+.vc-kmap__list-group button span {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vc-kmap__list-group button em {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  max-width: 55%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 节点抽屉：浮层卡片，不参与 flex 挤压画布（否则 canvas 尺寸变化会让命中区错位） */
+.vc-kmap-drawer {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: min(340px, calc(100% - 24px));
+  z-index: 5;
+  overflow: hidden;
+  padding: 16px 18px 20px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-elevated, var(--color-surface));
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: vc-kmap-drawer-in 220ms var(--motion-ease, ease-out) both;
+}
+
+@keyframes vc-kmap-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.vc-kmap-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vc-kmap-drawer__close {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.vc-kmap-drawer__close:hover {
+  color: var(--color-text);
+  background: var(--color-surface-elevated);
+}
+
+.vc-kmap-drawer__title {
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.vc-kmap-drawer__title:hover {
+  color: var(--color-primary);
+}
+
+.vc-kmap-drawer__title:hover {
+  color: var(--color-primary);
+}
+
+.vc-kmap-drawer__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.vc-kmap-drawer__path {
+  margin: 0;
+}
+
+.vc-kmap-drawer__summary {
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--color-text-secondary);
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.vc-kmap-drawer__loading {
+  display: flex;
+  padding: 8px 0;
+}
+
+.vc-kmap-drawer__section h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.vc-kmap-drawer__relations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vc-kmap-drawer__relations button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vc-kmap-drawer__relations button:hover {
+  background: var(--color-surface-elevated);
+}
+
+.vc-kmap-drawer__relation-title {
+  font-size: 12px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vc-kmap-drawer__relation-sim {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 滚动区与操作区分开：内容再长也不会把按钮挤出可点区域 */
+.vc-kmap-drawer__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-right: 2px;
+}
+
+.vc-kmap-drawer__actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-divider);
+}
+
+@media (max-width: 900px) {
+  .vc-kmap-drawer {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 62%;
+    border-radius: var(--radius-lg);
+  }
+}

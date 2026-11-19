@@ -38,6 +38,9 @@ public class UserSetting implements Serializable {
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Long activeCategoryId;
 
+    /** 首页默认视图：today / nav（服务层白名单校验，非法值按 today 处理） */
+    private String homeView;
+
     private OffsetDateTime createdAt;
 
     private OffsetDateTime updatedAt;

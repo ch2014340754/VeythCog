@@ -61,6 +61,52 @@
         ORDER BY updated_at DESC, id DESC
     </select>
 
+    <!-- 首页工作台：最近更新文档（轻量字段，不带 block_data / markdown_text） -->
+    <select id="selectRecent" resultMap="KnowledgeDocMap">
+        SELECT id, title, folder_id, is_vectorized, updated_at
+        FROM knowledge_doc
+        WHERE deleted = false
+        ORDER BY updated_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 首页工作台：待向量化文档数（正文少于阈值的短文档不计入提醒） -->
+    <select id="countPendingVector" resultType="long">
+        SELECT count(*)
+        FROM knowledge_doc
+        WHERE deleted = false
+          AND is_vectorized = false
+          AND coalesce(markdown_text, '') &lt;&gt; ''
+          AND char_length(markdown_text) >= #{minChars}
+    </select>
+
+    <!-- 知识地图：文档轻量元信息（不含 block_data / markdown_text，只取字数） -->
+    <resultMap id="DocMetaMap" type="com.vc.knowledge.dto.graph.DocMeta">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="folderId" column="folder_id"/>
+        <result property="tags" column="tags" typeHandler="com.vc.knowledge.handler.StringArrayTypeHandler"/>
+        <result property="charCount" column="char_count"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="selectDocMeta" resultMap="DocMetaMap">
+        SELECT id, title, folder_id, tags,
+               char_length(coalesce(markdown_text, '')) AS char_count,
+               updated_at
+        FROM knowledge_doc
+        WHERE deleted = false
+          AND is_vectorized = #{vectorized}
+        <if test="folderIds != null and folderIds.size() > 0">
+          AND folder_id IN
+          <foreach collection="folderIds" item="f" open="(" separator="," close=")">#{f}</foreach>
+        </if>
+    </select>
+
+    <select id="countAll" resultType="long">
+        SELECT count(*) FROM knowledge_doc WHERE deleted = false
+    </select>
+
     <!-- 移动文档：只改归属；folderId 允许为 null（移回根级），故不能用 updateById 的非空策略 -->
     <update id="updateFolderId">
         UPDATE knowledge_doc

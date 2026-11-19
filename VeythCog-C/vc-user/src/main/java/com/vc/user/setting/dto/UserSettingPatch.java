@@ -20,6 +20,9 @@ public class UserSettingPatch implements Serializable {
     /** 上次选中的导航分类；null = 不改 */
     private Long activeCategoryId;
 
+    /** 首页默认视图：today / nav；null = 不改 */
+    private String homeView;
+
     /** 显式置 NULL 的字段名白名单（当前支持 activeCategoryId、currentWallpaperKey） */
     private List<String> clear;
 }

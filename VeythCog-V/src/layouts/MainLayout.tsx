@@ -25,14 +25,8 @@ const MainLayout: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
 
-  // 收件箱角标：进站拉一次 + 60s 轮询（入库/删除后 Inbox 页会主动 refresh，角标立即跟上）
+  // 收件箱角标：轮询在 RootLayout 的 ClipBadgeSync 统一做（/home 不在本布局下），这里只读
   const clipPending = useClipStore((s) => s.pendingCount);
-  const refreshPending = useClipStore((s) => s.refreshPending);
-  React.useEffect(() => {
-    void refreshPending();
-    const timer = window.setInterval(() => void refreshPending(), 60_000);
-    return () => window.clearInterval(timer);
-  }, [refreshPending]);
 
   // /tools/:id 的标题由 ToolsLayout 用工具名设置，这里让位避免父级覆盖
   const isToolDetail = location.pathname.startsWith('/tools/');
