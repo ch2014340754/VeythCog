@@ -170,15 +170,23 @@ function CustomDragHandleMenu(props: any) {
     editor.insertBlocks([cloneBlockWithoutId(block)], block, 'after');
   };
 
+  /**
+   * 上移 / 下移都要求「目标块就是选区所在块」。
+   * 注意不要用 editor.setSelection(block, block)：BlockNote 要求 anchor 与 head
+   * 是两个不同的块，同块会直接抛
+   * “Attempting to set selection with the same anchor and head blocks”，
+   * 表现就是右键菜单一点就报错、块也不动。
+   * 正解：先把光标落到该块，moveBlocksUp / moveBlocksDown 会以光标所在块为准。
+   */
   const moveUp = () => {
     editor.focus();
-    editor.setSelection(block, block);
+    editor.setTextCursorPosition(block, 'end');
     editor.moveBlocksUp();
   };
 
   const moveDown = () => {
     editor.focus();
-    editor.setSelection(block, block);
+    editor.setTextCursorPosition(block, 'end');
     editor.moveBlocksDown();
   };
 

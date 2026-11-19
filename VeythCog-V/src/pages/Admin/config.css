@@ -1,0 +1,158 @@
+/* ============================================================
+   系统管理 · 系统配置（表单布局）
+   ------------------------------------------------------------
+   - 只消费 --color-* / --space-* / --radius-* 令牌，不写死颜色；
+   - 两列栅格：左标签列定宽、右控件列自适应并设上限，控件不再各写宽度；
+   - ≤720px 折叠成单列（标签回到控件上方），暗色/玻璃模式自动跟随；
+   - 不写进 page.css（该文件体量大、多人共改）——与 Knowledge/tree.css 同一做法。
+   ============================================================ */
+
+.vc-page__body.vc-config__body {
+  max-width: 980px;
+}
+
+.vc-config__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* 表单容器：行间用发丝线分隔，首行不画线 */
+.vc-config-form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 一行 = 左标签 + 右控件。两列共用同一条顶边，控件右边缘不再参差 */
+.vc-config-row {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  column-gap: var(--space-lg);
+  align-items: start;
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+.vc-config-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.vc-config-row:last-child {
+  padding-bottom: 0;
+}
+
+/* 标签列：标题 14/600（规范 §4 Body-strong）+ 说明 12/1.7；
+   11px 顶距让标题基线与 40–44px 高的单行控件文字对齐 */
+.vc-config-row__label {
+  min-width: 0;
+  padding-top: 11px;
+}
+
+.vc-config-row__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.vc-config-row__desc {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-tertiary);
+}
+
+/* 控件列：统一限宽 520。所有控件共用同一条左边缘与右边缘，
+   避免早期「输入 300 / 下拉 180 / 下拉 240」那种参差；
+   宽内容区里也不会拉出一条超长输入框。 */
+.vc-config-row__control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+  max-width: 520px;
+}
+
+/* 开关行：开关 + 当前状态文案，最小高度与 40px 控件对齐 */
+.vc-config-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.vc-config-switch__state {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* 主题色板：复用全站 .vc-theme-item / .vc-theme-swatch（外观页同款），
+   这里只负责排成可换行网格，不另造色块组件 */
+.vc-config-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  justify-items: center;
+  gap: var(--space-md) var(--space-sm);
+}
+
+/* 下拉里的模型项：模态图标 + 展示名 + 编码 */
+.vc-config-model-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.vc-config-model-opt__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-config-model-opt__code {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+/* 页头操作区：未保存提示 + 撤销 + 保存 */
+.vc-config-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.vc-config-actions__dirty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.vc-config-actions__dirty::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-warning);
+}
+
+/* 窄屏：两列折叠成单列 */
+@media (max-width: 720px) {
+  .vc-config-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-sm);
+  }
+
+  .vc-config-row__label {
+    padding-top: 0;
+  }
+
+  .vc-config-row__control {
+    max-width: none;
+  }
+}

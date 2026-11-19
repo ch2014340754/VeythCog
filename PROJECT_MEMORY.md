@@ -2,7 +2,7 @@
 
 > **本文件用途**：给未来的 AI Agent（以及协作者）快速恢复项目心智模型，减少每次迭代重新摸底的成本。
 > **维护规则**：每次项目迭代（改架构、加接口、换库、迁移模块）后，由 Agent 在本文件同步更新，并保持与真实代码一致。
-> **信息基准**：2026-11-15，依据对仓库源码与配置的实际遍历（非仅凭 README）。
+> **信息基准**：2026-11-19（局部复核：Admin 系统配置页表单布局）；整体基线 2026-11-15，依据对仓库源码与配置的实际遍历（非仅凭 README）。
 
 ---
 
@@ -341,6 +341,8 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
   - **SSE 帧安全**：后端 token 改发 `event: token` + `data:{"t":"..."}`（`ChatController#tokenPayload`）；裸换行 token 会写出 `data:\n\n\n` 切坏帧，导致多行回答拼成一段、正文丢字。前端 `chat.ts` 按事件名分流，`JSON.parse` 失败回落裸文本（兼容旧后端）。
   - `global.css` 末尾 `.vc-msg .md-body p/li { white-space: pre-wrap }`：Markdown 单换行默认折成空格，对话里要保留换行。
 
+- **知识库编辑器手柄菜单（2026-11-19 修 bug）**：`DocEditor.tsx` 的 `CustomDragHandleMenu`「上移 / 下移」原先写 `editor.setSelection(block, block)`；BlockNote 的 `setSelection(anchor, head)` 强制要求两个**不同**的块，同块直接抛 `Attempting to set selection with the same anchor and head blocks (id …)`，表现为点一下控制台报错、块原地不动。已改为 `editor.setTextCursorPosition(block, 'end')` 再调 `editor.moveBlocksUp() / moveBlocksDown()`（这两个命令以光标所在块为准）。**单块操作不要用 `setSelection`，要么定位文本光标，要么传两个不同块。**
+
 ### 7.4 会话模型绑定策略（生产策略，已实现）
 新建会话可选模型并写入 `chat_session.vendor_code/model_code`；进入已有会话后**下拉禁用**（会话内禁切）。会话的模型 / 知识库文档集合 / 上下文压缩开关都持久化在后端，刷新不丢；`docIds` 或压缩开关改动即时 PUT。无有效模型（未绑定、非对话类型或未通过校验）→ 空态引导去模型配置页逐行校验。
 
@@ -361,6 +363,7 @@ vc-learn(独立学习沙箱，零依赖业务模块，可单独运行)
 - 可折叠侧栏（`CollapsibleSidebar`，物理裁剪把手，persist）。
 - 工具集：24+ 工具（`registry.tsx` 注册表，React.lazy 独立分包，多标签保留状态）。
 - **系统管理 · 系统监控页（2026-11-13 接真）**：`Admin/Monitoring.tsx` 由三块 mock 改为真实数据面板——概览卡（调用量 / 失败率 / P95 / Token / 在线会话 / LLM 调用）、调用趋势（24h 按小时、7d 按天，柱高=调用量、柱顶红字=错误数）、服务资源（系统/进程 CPU、物理内存、JVM 堆、磁盘、Swap、线程/运行时长）、接口排行（可按调用量/错误数/P95 切换）、LLM 用量（按供应商+模型）、在线会话（强制下线，Popconfirm）、最近错误（业务码/HTTP 状态/message/rid）。60s 自动静默刷新 + 手动刷新，首次加载才整块 Spin；`admin.ts` 对应函数在 bypass 模式仍返回本地假数据，其余走 `/admin/monitor/*`。
+- **系统管理 · 系统配置页（2026-11-19 表单布局重写）**：`Admin/Config.tsx` 原先把「标签 + 控件」塞进 `.vc-setting-row`（该类是纵向堆叠、给滑块用的），控件宽度还各写 300/180/240，右边缘参差。现改为两列栅格（`config.css` 的 `.vc-config-row`：左标签列 236px + 右控件列统一限宽 520px，≤720px 折叠单列；独立作用域 CSS，不入 `page.css`）。同时：面板拆成「注册与公告」「新用户默认值」；默认主题改 11 套色板点选（复用 `.vc-theme-swatch`）；默认模型下拉改从 `/admin/llm-models` 取**已上架 + 可对话**模型（按供应商分组，拉取失败只保留当前值并提示，不阻断页面）；补加载/错误态、脏状态（有改动才可保存 + 撤销）、保存只走顶部 2px 细进度条；页头 `flow={false}`。后端 `/admin/config` 仍未实现，`getSystemConfig/saveSystemConfig` 依旧 mock。
 - Admin 后台：`/admin/*` 中用户/角色、模型目录、系统监控已接真；审计、系统配置、定时任务仍 mock，role 由登录响应下发。
 
 ---

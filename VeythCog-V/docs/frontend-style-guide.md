@@ -239,6 +239,13 @@ App (ThemeProvider → ConfigProvider → WallpaperBackdrop → BrowserRouter �
 - 表格容器自带**边缘聚光**：1px 品牌紫渐变描边（`::before` + mask 只留描边）+ 外侧低强度扩散 + 顶部内高光，颜色全部由 `--color-primary` 派生，亮/暗/玻璃自动适配；页面内不得再自写描边或阴影覆盖。
 - 列表页统一 `.vc-page--list` + `.vc-table-card--fill` + `.vc-table-fill`：整屏高度、表体内部滚动、表头吸顶；`pagination={false}`，下滑用 `useInfiniteRows` + `ListSentinel` 懒加载。
 
+**配置表单（系统配置类页面，2026-11-19）**
+- 一屏表单统一走「左标签列 + 右控件列」两列栅格：标签列定宽 **236px**（标题 14/600 + 说明 12/1.7），控件列自适应但统一限宽 **520px**，所有控件共用同一条左边缘与右边缘。参考实现 `pages/Admin/Config.tsx` + `pages/Admin/config.css`（`.vc-config-row`，作用域 CSS 单独放文件，不写进 `page.css`）。
+- **不要**把横向的「标签 + 控件」塞进 `.vc-setting-row`：该类是 `flex-direction: column`，是给外观页的「标题在上、滑块在下」用的；横向表单进去后会变成标签在上、控件紧贴其下，且每个控件各写宽度（旧版系统配置页就是这样参差的）。
+- 开关行用 `.vc-config-switch`（开关 + 当前状态文案，`min-height: 40px`）与单行控件基线对齐；主题色板复用全站 `.vc-theme-item / .vc-theme-swatch`（外观页同款），不再造第二套色块。
+- 设置类页头关掉流光（`<PageHeader flow={false} />`）；撤销 / 保存放 `extra`，有改动才启用保存，并在操作区挂「有未保存的更改」提示；保存过程中只出顶部 2px `.vc-slim-progress`，不整块 `<Spin />` 替换。
+- ≤720px 栅格折叠为单列（标签回到控件上方、控件占满宽度）。
+
 **图标**
 - 一律 `@iconify/react` + `@iconify-icons/lucide`（已安装）；尺寸 16（行内）/ 20（rail、工具卡）/ 22（大按钮）。不要引第二套图标库。
 
